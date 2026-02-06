@@ -13,6 +13,7 @@ import Profile from "./pages/Profile";
 import StudentDashboard from "./pages/student/StudentDashboard";
 import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import IntegrityOverview from "./pages/admin/IntegrityOverview";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,7 +46,7 @@ const App = () => (
             {/* Admin Routes */}
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/users" element={<AdminDashboard />} />
-            <Route path="/admin/integrity" element={<AdminDashboard />} />
+            <Route path="/admin/integrity" element={<IntegrityOverview />} />
             <Route path="/admin/settings" element={<AdminDashboard />} />
             <Route path="/admin/reports" element={<AdminDashboard />} />
             
