@@ -21,6 +21,18 @@ import type { Exam, ExamStatus } from '@/types/exam';
 // Mock data
 const recentExams: (Exam & { submissionCount?: number; averageScore?: number })[] = [
   {
+    id: '4',
+    title: 'Operating Systems Final',
+    course: 'CS305',
+    duration: 120,
+    totalQuestions: 40,
+    status: 'ongoing',
+    scheduledAt: new Date(),
+    createdAt: addDays(new Date(), -2),
+    createdBy: '2',
+    submissionCount: 3,
+  },
+  {
     id: '1',
     title: 'Data Structures Final Exam',
     course: 'CS201',
@@ -225,6 +237,15 @@ export default function LecturerDashboard() {
                             <p className="text-xs text-muted-foreground">
                               Scheduled
                             </p>
+                          </div>
+                        )}
+                        {exam.status === 'ongoing' && (
+                          <div className="text-right">
+                            <Button size="sm" asChild>
+                              <Link to={`/lecturer/exam/${exam.id}/monitor`}>
+                                Giám sát
+                              </Link>
+                            </Button>
                           </div>
                         )}
                       </div>

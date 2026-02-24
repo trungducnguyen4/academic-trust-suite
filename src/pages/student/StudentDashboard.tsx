@@ -16,7 +16,7 @@ import { format, formatDistanceToNow, addDays, addHours } from 'date-fns';
 import { Link } from 'react-router-dom';
 import type { UpcomingExam, ExamHistoryItem } from '@/types/exam';
 
-// Mock data
+// Mock data with one exam today
 const upcomingExams: UpcomingExam[] = [
   {
     id: '1',
@@ -38,6 +38,13 @@ const upcomingExams: UpcomingExam[] = [
     course: 'CS401',
     scheduledAt: addDays(new Date(), 7),
     duration: 45,
+  },
+  {
+    id: '4',
+    title: 'Data Structures Final Exam',
+    course: 'CS201',
+    scheduledAt: new Date(),
+    duration: 120,
   },
 ];
 
@@ -167,33 +174,53 @@ export default function StudentDashboard() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  {upcomingExams.map((exam) => (
-                    <div
-                      key={exam.id}
-                      className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-secondary/50 transition-colors"
-                    >
-                      <div className="space-y-1">
-                        <h4 className="font-medium text-foreground">{exam.title}</h4>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <BookOpen className="h-3.5 w-3.5" />
-                            {exam.course}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3.5 w-3.5" />
-                            {format(exam.scheduledAt, 'MMM d, yyyy')}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="h-3.5 w-3.5" />
-                            {exam.duration} min
-                          </span>
+                  {upcomingExams.map((exam) => {
+                    const isToday = exam.scheduledAt.toDateString() === new Date().toDateString();
+                    const examCard = (
+                      <div
+                        className="flex items-center justify-between rounded-lg border border-border p-4 hover:bg-secondary/50 transition-colors cursor-pointer"
+                      >
+                        <div className="space-y-1">
+                          <h4 className="font-medium text-foreground">{exam.title}</h4>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <BookOpen className="h-3.5 w-3.5" />
+                              {exam.course}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3.5 w-3.5" />
+                              {format(exam.scheduledAt, 'MMM d, yyyy')}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3.5 w-3.5" />
+                              {exam.duration} min
+                            </span>
+                            {isToday ? (
+                              <span className="ml-2 px-2 py-0.5 text-xs bg-blue-200 text-blue-800 rounded">Today</span>
+                            ) : (
+                              <span className="ml-2 text-xs text-muted-foreground">{formatDistanceToNow(exam.scheduledAt, { addSuffix: true })}</span>
+                            )}
+                          </div>
                         </div>
+                        {isToday ? (
+                          <Button size="sm" asChild>
+                            <Link to="/student/exam-ready">Start Now</Link>
+                          </Button>
+                        ) : (
+                          <StatusBadge variant="info">
+                            {formatDistanceToNow(exam.scheduledAt, { addSuffix: true })}
+                          </StatusBadge>
+                        )}
                       </div>
-                      <StatusBadge variant="info">
-                        {formatDistanceToNow(exam.scheduledAt, { addSuffix: true })}
-                      </StatusBadge>
-                    </div>
-                  ))}
+                    );
+                    return isToday ? (
+                      <Link key={exam.id} to="/student/exam-ready" style={{ textDecoration: 'none' }}>
+                        {examCard}
+                      </Link>
+                    ) : (
+                      <div key={exam.id}>{examCard}</div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>

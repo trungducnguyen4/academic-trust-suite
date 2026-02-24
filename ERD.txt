@@ -1,0 +1,176 @@
+@startuml
+skinparam classAttributeIconSize 0
+
+' ================= USER DOMAIN =================
+class User {
+  +id: UUID <<PK>>
+  email: string
+  password_hash: string
+  full_name: string
+  role: enum
+  status: enum
+  created_at: datetime
+}
+
+class Course {
+  +id: UUID <<PK>>
+  name: string
+  code: string
+  semester: string
+  status: enum
+  instructor_id: UUID <<FK>>
+}
+
+class Enrollment {
+  +id: UUID <<PK>>
+  course_id: UUID <<FK>>
+  student_id: UUID <<FK>>
+  status: enum
+}
+
+User "1" -- "0..*" Course : teaches >
+User "1" -- "0..*" Enrollment : enrolls >
+Course "1" -- "0..*" Enrollment
+
+' ================= QUESTION DOMAIN =================
+class Question {
+  +id: UUID <<PK>>
+  course_id: UUID <<FK>>
+  current_version_id: UUID <<FK>>
+  created_by: UUID
+  approved: boolean
+  created_at: datetime
+}
+
+class QuestionVersion {
+  +id: UUID <<PK>>
+  question_id: UUID <<FK>>
+  version_number: int
+  type: enum
+  content_json: text
+  audio_url: string
+  manual_difficulty: float
+  ai_estimated_difficulty: float
+  status: enum
+  created_at: datetime
+}
+
+class QuestionStatistics {
+  +question_version_id: UUID <<PK, FK>>
+  total_attempts: int
+  correct_attempts: int
+  p_value: float
+  discrimination_index: float
+  last_updated: datetime
+}
+
+class QuestionAILog {
+  +id: UUID <<PK>>
+  question_version_id: UUID <<FK>>
+  prompt_text: text
+  ai_output: text
+  confidence_score: float
+  reviewed_by: UUID
+  approved: boolean
+  created_at: datetime
+}
+
+Course "1" -- "0..*" Question
+Question "1" -- "1..*" QuestionVersion
+QuestionVersion "1" -- "0..1" QuestionStatistics
+QuestionVersion "1" -- "0..*" QuestionAILog
+
+' ================= EXAM DOMAIN =================
+class Exam {
+  +id: UUID <<PK>>
+  course_id: UUID <<FK>>
+  title: string
+  start_time: datetime
+  end_time: datetime
+  duration_minutes: int
+  difficulty_ratio_json: text
+  shuffle_enabled: boolean
+  offline_enabled: boolean
+  lab_ip_restricted: boolean
+  immediate_scoring: boolean
+  status: enum
+}
+
+class ExamQuestion {
+  +id: UUID <<PK>>
+  exam_id: UUID <<FK>>
+  question_version_id: UUID <<FK>>
+  weight: float
+  order_index: int
+}
+
+class ExamInstance {
+  +id: UUID <<PK>>
+  exam_id: UUID <<FK>>
+  student_id: UUID <<FK>>
+  encrypted_payload: text
+  ip_address: string
+  started_at: datetime
+  submitted_at: datetime
+  total_score: float
+  anomaly_score: float
+  suspicious_flag: boolean
+  status: enum
+}
+
+Exam "1" -- "0..*" ExamQuestion
+Exam "1" -- "0..*" ExamInstance
+ExamQuestion "*" -- "1" QuestionVersion
+User "1" -- "0..*" ExamInstance : takes >
+
+' ================= ANSWER & INTEGRITY DOMAIN =================
+class ExamAnswer {
+  +id: UUID <<PK>>
+  exam_instance_id: UUID <<FK>>
+  question_version_id: UUID <<FK>>
+  answer_payload: text
+  score: float
+  response_time_seconds: int
+}
+
+class InteractionLog {
+  +id: UUID <<PK>>
+  exam_instance_id: UUID <<FK>>
+  event_type: enum
+  event_timestamp: datetime
+  metadata_json: text
+}
+
+class AnomalyFlag {
+  +id: UUID <<PK>>
+  exam_instance_id: UUID <<FK>>
+  reason: string
+  severity_score: float
+  created_at: datetime
+}
+
+ExamInstance "1" -- "0..*" ExamAnswer
+ExamInstance "1" -- "0..*" InteractionLog
+ExamInstance "1" -- "0..*" AnomalyFlag
+
+' ================= OFFLINE DOMAIN =================
+class OfflinePackage {
+  +id: UUID <<PK>>
+  exam_id: UUID <<FK>>
+  encrypted_blob: text
+  checksum: string
+  expires_at: datetime
+}
+
+class OfflineSyncLog {
+  +id: UUID <<PK>>
+  exam_instance_id: UUID <<FK>>
+  sync_time: datetime
+  verification_status: enum
+  integrity_score: float
+}
+
+Exam "1" -- "0..*" OfflinePackage
+ExamInstance "1" -- "0..*" OfflineSyncLog
+
+@enduml

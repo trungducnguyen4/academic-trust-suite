@@ -20,7 +20,8 @@
     --popover-foreground: 220 25% 10%;
 
     /* Primary - Deep slate blue (trust, academic) */
-    --primary: 220 30% 20%;
+    /* Security/Trust Blue */
+    --primary: 210 100% 50%;
     --primary-foreground: 0 0% 100%;
 
     /* Secondary - Light neutral */

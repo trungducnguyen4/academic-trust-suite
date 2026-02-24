@@ -1,0 +1,364 @@
+📄 REQUIREMENTS.TXT (Rewritten – Production-Oriented Version)
+1. Mục tiêu hệ thống
+
+Hệ thống là một nền tảng khảo thí trực tuyến có hỗ trợ AI, phục vụ:
+
+Tạo và quản lý ngân hàng câu hỏi
+
+Sinh đề thi tự động
+
+Xáo trộn đề theo từng sinh viên
+
+Chấm điểm tự động
+
+Theo dõi hành vi thi
+
+Phân tích kết quả & chất lượng câu hỏi
+
+Hệ thống ưu tiên:
+
+Tính ổn định
+
+Khả năng chịu tải
+
+Khả năng mở rộng
+
+Dễ bảo trì và triển khai production
+
+2. Phạm vi chức năng
+2.1 Quản lý người dùng
+
+Hệ thống hỗ trợ 3 vai trò:
+
+Student
+
+Instructor
+
+Admin
+
+Chức năng:
+
+Đăng nhập / xác thực
+
+Phân quyền theo role
+
+Quản lý vai trò và trạng thái tài khoản
+
+2.2 Quản lý môn học
+
+Instructor có thể:
+
+Tạo course
+
+Quản lý danh sách sinh viên
+
+Tái sử dụng câu hỏi giữa các kỳ
+
+2.3 Ngân hàng câu hỏi
+Hệ thống phải hỗ trợ nhiều loại câu hỏi:
+
+Trắc nghiệm (MCQ)
+
+Điền khuyết
+
+Nối khái niệm
+
+Tìm lỗi sai
+
+Tự luận (chấm bán tự động)
+
+Yêu cầu kỹ thuật:
+
+Lưu version câu hỏi (không sửa trực tiếp nội dung cũ)
+
+Lưu metadata:
+
+Chủ đề
+
+Độ khó
+
+Lịch sử sử dụng
+
+Lưu dữ liệu thống kê làm bài
+
+2.4 AI hỗ trợ tạo câu hỏi
+
+AI được sử dụng có kiểm soát:
+
+Input:
+
+Văn bản tài liệu
+
+Prompt cấu hình số lượng câu hỏi
+
+Output:
+
+Draft câu hỏi + đáp án gợi ý
+
+Bắt buộc:
+
+Instructor phải review và approve trước khi publish
+
+Hệ thống không cho phép auto-publish câu hỏi do AI sinh.
+
+2.5 Cấu hình & sinh đề thi
+
+Instructor có thể:
+
+Cấu hình số câu
+
+Định nghĩa tỷ lệ độ khó
+
+Bật/tắt shuffle
+
+Bật/tắt chấm điểm ngay
+
+Bật chế độ offline
+
+Bật giới hạn IP phòng lab
+
+Khi sinh đề:
+
+Random câu hỏi theo rule
+
+Random thứ tự đáp án
+
+Tạo ExamInstance riêng cho từng sinh viên
+
+Không tồn tại một đề chung cho toàn bộ thí sinh.
+
+2.6 Luồng thi của sinh viên
+
+Sinh viên có thể:
+
+Join exam qua link hoặc QR
+
+Download exam package (nếu bật offline)
+
+Start exam đúng thời gian
+
+Khi bắt đầu thi:
+
+Tạo ExamInstance
+
+Ghi nhận IP
+
+Xáo trộn câu hỏi & đáp án
+
+Ghi log hành vi:
+
+Tab switch
+
+Focus change
+
+Mouse activity
+
+Khi nộp bài:
+
+Chấm điểm tự động câu objective
+
+Tính anomaly score
+
+Flag nếu có dấu hiệu bất thường
+
+Sync dữ liệu nếu thi offline
+
+2.7 Chấm điểm & phân tích
+
+Hệ thống cung cấp:
+
+Điểm tổng
+
+Breakdown từng câu
+
+Phổ điểm lớp
+
+Tỷ lệ đúng/sai từng câu
+
+Phân tích câu hỏi:
+
+p-value (độ khó)
+
+Discrimination Index
+
+Gợi ý thay thế câu quá dễ/quá khó
+
+AI chỉ đóng vai trò đề xuất.
+
+2.8 Phát hiện gian lận
+
+Hệ thống ghi nhận:
+
+Thời gian trả lời từng câu
+
+Tab switch
+
+IP address
+
+Similarity bài làm
+
+Mô hình sử dụng:
+
+Rule-based scoring
+
+Có thể mở rộng ML
+
+Không tự động kết luận gian lận.
+Chỉ gắn cờ để giảng viên xem xét.
+
+3. Yêu cầu phi chức năng
+3.1 Hiệu năng
+
+Hỗ trợ nhiều sinh viên thi đồng thời
+
+Thời gian phản hồi < 300ms cho API chính
+
+Hệ thống không regenerate đề khi refresh
+
+3.2 Khả năng mở rộng
+
+Thiết kế theo service-based architecture
+
+Có thể scale ngang
+
+Tách AI service nếu cần
+
+3.3 Tính toàn vẹn dữ liệu
+
+Mỗi sinh viên có một ExamInstance riêng
+
+Lưu snapshot đề đã random
+
+Không thay đổi đề sau khi bắt đầu thi
+
+3.4 Bảo mật
+
+JWT authentication
+
+Rate limit login
+
+Log audit hệ thống
+
+Không cho chỉnh sửa dữ liệu thi sau submit
+
+4. Kiến trúc tổng thể
+
+Logical Architecture:
+
+Client (Web/Mobile)
+↓
+API Layer
+↓
+Services:
+
+Auth
+
+Course
+
+Question
+
+Exam
+
+Result
+
+Analytics
+↓
+Database (PostgreSQL)
+Cache (Redis)
+Optional AI Service
+
+5. Thiết kế dữ liệu (Bám sát ERD hiện tại)
+
+Hệ thống sử dụng mô hình dữ liệu gồm các nhóm chính:
+
+5.1 User Domain
+
+User
+
+Course
+
+Enrollment
+
+5.2 Question Domain
+
+Question
+
+QuestionVersion
+
+QuestionStatistics
+
+QuestionAILog
+
+Đặc điểm:
+
+Versioned
+
+Không ghi đè dữ liệu cũ
+
+5.3 Exam Domain
+
+Exam
+
+ExamQuestion
+
+ExamInstance
+
+ExamAnswer
+
+ExamInstance là trung tâm:
+
+Gắn student
+
+Gắn IP
+
+Gắn anomaly_score
+
+Lưu encrypted_payload
+
+Lưu thời gian bắt đầu / kết thúc
+
+5.4 Integrity Domain
+
+InteractionLog
+
+AnomalyFlag
+
+Phục vụ audit & giải trình.
+
+5.5 Offline Domain
+
+OfflinePackage
+
+OfflineSyncLog
+
+Cho phép mở rộng chế độ thi offline có kiểm soát.
+
+6. Giới hạn & định hướng
+
+Hệ thống không đảm bảo chống gian lận tuyệt đối.
+
+AI chỉ hỗ trợ, không thay thế giảng viên.
+
+Offline mode chỉ giảm rủi ro mất mạng, không phải giải pháp chống cheat hoàn toàn.
+
+Production ưu tiên đơn giản & ổn định trước khi tối ưu nghiên cứu.
+
+7. Kết luận
+
+Hệ thống này:
+
+Không phải CRUD đơn giản
+
+Không phải LMS thông thường
+
+Là một nền tảng khảo thí có integrity tracking và AI hỗ trợ có kiểm soát
+
+Giá trị cốt lõi nằm ở:
+
+Thiết kế ExamInstance riêng cho từng sinh viên
+
+Ghi nhận hành vi thi
+
+Phân tích dữ liệu câu hỏi
+
+Hỗ trợ quyết định dựa trên dữ liệu
