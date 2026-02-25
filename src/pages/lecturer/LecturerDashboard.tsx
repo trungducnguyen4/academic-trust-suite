@@ -305,7 +305,7 @@ export default function LecturerDashboard() {
                 </Link>
               </Button>
               <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-                <Link to="/lecturer/questions">
+                <Link to="/lecturer/question-bank">
                   <BookOpen className="h-5 w-5" />
                   <span>Question Bank</span>
                 </Link>

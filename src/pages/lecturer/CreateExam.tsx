@@ -1,0 +1,592 @@
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '@/components/ui/badge';
+import { Progress } from '@/components/ui/progress';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
+import {
+  Tabs,
+  TabsContent,
+  TabsList,
+  TabsTrigger,
+} from '@/components/ui/tabs';
+import {
+  BookOpen,
+  Clock,
+  Users,
+  Shield,
+  ChevronRight,
+  ChevronLeft,
+  CheckCircle2,
+  Plus,
+  FileText,
+  Settings,
+  Eye,
+  Sparkles,
+  Wand2,
+  AlertCircle,
+  Upload,
+  FileCheck,
+  FileSearch,
+  Database,
+  Loader2,
+} from 'lucide-react';
+
+// ─── Steps ───────────────────────────────────────────────────────
+type Step = 'info' | 'settings' | 'questions' | 'preview';
+const STEPS: { key: Step; label: string; icon: React.ReactNode }[] = [
+  { key: 'info',      label: 'Basic Info',   icon: <FileText className="h-4 w-4" /> },
+  { key: 'settings',  label: 'Settings',     icon: <Settings className="h-4 w-4" /> },
+  { key: 'questions', label: 'Questions',    icon: <BookOpen className="h-4 w-4" /> },
+  { key: 'preview',   label: 'Preview',      icon: <Eye className="h-4 w-4" /> },
+];
+
+interface ExamForm {
+  title: string;
+  course: string;
+  description: string;
+  duration: string;
+  maxAttempts: string;
+  passingScore: string;
+  startDate: string;
+  startTime: string;
+  endDate: string;
+  endTime: string;
+  requiresProctoring: boolean;
+  requiresDownload: boolean;
+  shuffleQuestions: boolean;
+  showResultImmediately: boolean;
+  questionType: string;
+  questionCount: string;
+  sourceMethod: 'bank' | 'import' | 'ai';
+  aiGenerationMode: boolean;
+  aiPrompt: string;
+  aiDifficulty: string;
+  aiReviewRequired: boolean;
+}
+
+const defaultForm: ExamForm = {
+  title: '',
+  course: '',
+  description: '',
+  duration: '60',
+  maxAttempts: '1',
+  passingScore: '50',
+  startDate: '',
+  startTime: '08:00',
+  endDate: '',
+  endTime: '17:00',
+  requiresProctoring: true,
+  requiresDownload: false,
+  shuffleQuestions: true,
+  showResultImmediately: false,
+  questionType: 'mixed',
+  questionCount: '20',
+  sourceMethod: 'bank',
+  aiGenerationMode: false,
+  aiPrompt: '',
+  aiDifficulty: '0.5',
+  aiReviewRequired: true,
+};
+
+const courses = [
+  'CS301 – Database Systems',
+  'CS201 – Data Structures & Algorithms',
+  'CS401 – Operating Systems',
+  'CS350 – Computer Networks',
+  'CS450 – Software Engineering',
+];
+
+export default function CreateExam() {
+  const navigate = useNavigate();
+  const [step, setStep] = useState<Step>('info');
+  const [form, setForm] = useState<ExamForm>(defaultForm);
+  const [isCreating, setIsCreating] = useState(false);
+  const [created, setCreated] = useState(false);
+  const [isStandardizing, setIsStandardizing] = useState(false);
+  const [docFile, setDocFile] = useState<string | null>(null);
+
+  const set = (key: keyof ExamForm, val: string | boolean) =>
+    setForm((f) => ({ ...f, [key]: val }));
+
+  const stepIdx = STEPS.findIndex((s) => s.key === step);
+  const canNext = (): boolean => {
+    if (step === 'info') return form.title.trim() !== '' && form.course !== '';
+    if (step === 'settings') return form.duration !== '' && form.startDate !== '' && form.endDate !== '';
+    return true;
+  };
+
+  const handleCreate = async () => {
+    setIsCreating(true);
+    await new Promise((r) => setTimeout(r, 1800));
+    setIsCreating(false);
+    setCreated(true);
+  };
+
+  // ── Success screen ──────────────────────────────────────────────
+  if (created) {
+    return (
+      <DashboardLayout>
+        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6 text-center">
+          <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center">
+            <CheckCircle2 className="h-10 w-10 text-green-600" />
+          </div>
+          <div>
+            <h2 className="text-2xl font-bold mb-1">Exam Created!</h2>
+            <p className="text-muted-foreground">
+              <strong>"{form.title}"</strong> has been saved and is ready to be configured.
+            </p>
+          </div>
+          <div className="flex gap-3">
+            <Button variant="outline" onClick={() => navigate('/lecturer/exams')}>
+              Back to Dashboard
+            </Button>
+            <Button onClick={() => navigate('/lecturer/question-bank')}>
+              <Plus className="h-4 w-4 mr-2" /> Add Questions
+            </Button>
+          </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  return (
+    <DashboardLayout>
+      <div className="max-w-3xl mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <h1 className="text-2xl font-bold">Create New Exam</h1>
+          <p className="text-muted-foreground text-sm mt-1">
+            Set up a new exam in 4 steps
+          </p>
+        </div>
+
+        {/* Step indicator */}
+        <div className="flex items-center gap-2">
+          {STEPS.map((s, i) => {
+            const done = i < stepIdx;
+            const active = s.key === step;
+            return (
+              <div key={s.key} className="flex items-center gap-2">
+                <div className={`flex items-center gap-2 px-3 py-1.5 rounded-full text-sm font-medium transition-all border ${
+                  active ? 'bg-primary text-primary-foreground border-primary'
+                  : done  ? 'bg-green-100 text-green-700 border-green-200'
+                  :         'bg-secondary text-muted-foreground border-border'
+                }`}>
+                  {done ? <CheckCircle2 className="h-4 w-4" /> : s.icon}
+                  <span className="hidden sm:inline">{s.label}</span>
+                </div>
+                {i < STEPS.length - 1 && (
+                  <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Step content */}
+        <Card>
+          {step === 'info' && (
+            <>
+              <CardHeader>
+                <CardTitle>Basic Information</CardTitle>
+                <CardDescription>Enter the exam title, course, and a brief description.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <Label htmlFor="title">Exam Title <span className="text-red-500">*</span></Label>
+                  <Input
+                    id="title"
+                    value={form.title}
+                    onChange={(e) => set('title', e.target.value)}
+                    placeholder="e.g. Midterm Exam – Database Systems"
+                    className="mt-1"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="course">Course <span className="text-red-500">*</span></Label>
+                  <Select value={form.course} onValueChange={(v) => set('course', v)}>
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select a course…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {courses.map((c) => (
+                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="desc">Description</Label>
+                  <Textarea
+                    id="desc"
+                    value={form.description}
+                    onChange={(e) => set('description', e.target.value)}
+                    placeholder="Briefly describe the scope and objectives of this exam…"
+                    className="mt-1 resize-none"
+                    rows={3}
+                  />
+                </div>
+              </CardContent>
+            </>
+          )}
+
+          {step === 'settings' && (
+            <>
+              <CardHeader>
+                <CardTitle>Exam Settings</CardTitle>
+                <CardDescription>Configure timing, scoring, and access control.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Duration (minutes)</Label>
+                    <Input
+                      type="number"
+                      value={form.duration}
+                      onChange={(e) => set('duration', e.target.value)}
+                      min={5}
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Passing Score (%)</Label>
+                    <Input
+                      type="number"
+                      value={form.passingScore}
+                      onChange={(e) => set('passingScore', e.target.value)}
+                      min={0} max={100}
+                      className="mt-1"
+                    />
+                  </div>
+                </div>
+
+                <Separator />
+                <p className="text-sm font-medium">Exam Window</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Start Date <span className="text-red-500">*</span></Label>
+                    <Input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>Start Time</Label>
+                    <Input type="time" value={form.startTime} onChange={(e) => set('startTime', e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>End Date <span className="text-red-500">*</span></Label>
+                    <Input type="date" value={form.endDate} onChange={(e) => set('endDate', e.target.value)} className="mt-1" />
+                  </div>
+                  <div>
+                    <Label>End Time</Label>
+                    <Input type="time" value={form.endTime} onChange={(e) => set('endTime', e.target.value)} className="mt-1" />
+                  </div>
+                </div>
+
+                <Separator />
+                <p className="text-sm font-medium">Options</p>
+                <div className="space-y-4">
+                  {([
+                    { key: 'requiresProctoring',      label: 'Enable AI Proctoring',         desc: 'Monitor student activity during the exam', icon: <Shield className="h-4 w-4 text-primary" /> },
+                    { key: 'requiresDownload',         label: 'Require Offline Download',     desc: 'Students must download the exam package first', icon: <Clock className="h-4 w-4 text-primary" /> },
+                    { key: 'shuffleQuestions',         label: 'Shuffle Questions',            desc: 'Randomize question order for each student', icon: <Users className="h-4 w-4 text-primary" /> },
+                    { key: 'showResultImmediately',    label: 'Show Results Immediately',     desc: 'Students see scores right after submission', icon: <Eye className="h-4 w-4 text-primary" /> },
+                  ] as const).map(({ key, label, desc, icon }) => (
+                    <div key={key} className="flex items-center justify-between border rounded-lg p-3">
+                      <div className="flex items-center gap-3">
+                        {icon}
+                        <div>
+                          <p className="text-sm font-medium">{label}</p>
+                          <p className="text-xs text-muted-foreground">{desc}</p>
+                        </div>
+                      </div>
+                      <Switch
+                        checked={form[key] as boolean}
+                        onCheckedChange={(v) => set(key, v)}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </>
+          )}
+
+          {step === 'questions' && (
+            <>
+              <CardHeader>
+                <CardTitle>Question Sourcing</CardTitle>
+                <CardDescription>Select one primary method to source questions for this exam.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <Tabs value={form.sourceMethod} onValueChange={(v) => set('sourceMethod', v as any)}>
+                  <TabsList className="grid w-full grid-cols-3 mb-4">
+                    <TabsTrigger value="bank" className="gap-2">
+                      <Database className="h-4 w-4" /> Bank
+                    </TabsTrigger>
+                    <TabsTrigger value="import" className="gap-2">
+                      <Upload className="h-4 w-4" /> Import
+                    </TabsTrigger>
+                    <TabsTrigger value="ai" className="gap-2">
+                      <Sparkles className="h-4 w-4" /> AI Gen
+                    </TabsTrigger>
+                  </TabsList>
+
+                  {/* --- TAB: QUESTION BANK --- */}
+                  <TabsContent value="bank" className="space-y-5 animate-in fade-in duration-300">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label>Number of Questions</Label>
+                        <Input
+                          type="number"
+                          value={form.questionCount}
+                          onChange={(e) => set('questionCount', e.target.value)}
+                          min={1}
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label>Question Type Mix</Label>
+                        <Select value={form.questionType} onValueChange={(v) => set('questionType', v)}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mixed">Mixed (all types)</SelectItem>
+                            <SelectItem value="single-choice">Single Choice only</SelectItem>
+                            <SelectItem value="multiple-choice">Multiple Choice only</SelectItem>
+                            <SelectItem value="true-false">True / False only</SelectItem>
+                            <SelectItem value="fill-blank">Fill in the Blank only</SelectItem>
+                            <SelectItem value="matching">Matching only</SelectItem>
+                            <SelectItem value="ordering">Ordering only</SelectItem>
+                            <SelectItem value="short-answer">Short Answer / Essay only</SelectItem>
+                            <SelectItem value="custom">Custom Selection (Khác)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+
+                    {form.questionType === 'custom' && (
+                      <div className="p-4 border rounded-lg bg-secondary/10 space-y-3">
+                        <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Select Types to Include</Label>
+                        <div className="grid grid-cols-2 gap-2">
+                          {['Single Choice', 'Multiple Choice', 'True / False', 'Fill in the Blank', 'Matching', 'Ordering', 'Essay'].map((t) => (
+                            <label key={t} className="flex items-center gap-2 text-sm p-2 border rounded hover:bg-card cursor-pointer">
+                              <input type="checkbox" defaultChecked className="accent-primary" />
+                              {t}
+                            </label>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    <p className="text-sm font-medium text-muted-foreground pt-2">Topics to include</p>
+                    <div className="space-y-2">
+                      {[
+                        { topic: 'Relational Algebra',     count: 24, selected: true  },
+                        { topic: 'SQL Queries',            count: 38, selected: true  },
+                        { topic: 'Normalization',          count: 17, selected: false },
+                        { topic: 'Transaction Management', count: 12, selected: true  },
+                      ].map((bank) => (
+                        <label key={bank.topic} className={`flex items-center gap-3 border rounded-lg px-4 py-3 cursor-pointer transition-all
+                          ${bank.selected ? 'border-primary bg-primary/5' : 'border-border'}`}>
+                          <input type="checkbox" defaultChecked={bank.selected} className="accent-primary" />
+                          <span className="flex-1 text-sm">{bank.topic}</span>
+                          <Badge variant="secondary">{bank.count} questions</Badge>
+                        </label>
+                      ))}
+                    </div>
+
+                    <Button variant="outline" size="sm" className="w-full gap-2" onClick={() => navigate('/lecturer/question-bank')}>
+                      <Plus className="h-4 w-4" /> Go to Question Bank
+                    </Button>
+                  </TabsContent>
+
+                  {/* --- TAB: IMPORT DOC --- */}
+                  <TabsContent value="import" className="space-y-5 animate-in fade-in duration-300">
+                    <div className="p-8 border-2 border-dashed rounded-xl bg-secondary/5 flex flex-col items-center justify-center text-center space-y-4">
+                      {!docFile ? (
+                        <>
+                          <div className="p-4 rounded-full bg-blue-100 text-blue-600">
+                            <Upload className="h-10 w-10" />
+                          </div>
+                          <div>
+                            <p className="font-bold text-lg">Upload your document</p>
+                            <p className="text-sm text-muted-foreground max-w-xs">AI will extract questions from your Word, PDF, or Plain Text files.</p>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            className="bg-background cursor-pointer" 
+                            onClick={() => setDocFile('Exam_Draft_V1.pdf')}
+                          >
+                            <FileSearch className="h-4 w-4 mr-2" /> Browse Files
+                          </Button>
+                        </>
+                      ) : (
+                        <div className="w-full space-y-4">
+                          <div className="flex items-center justify-between p-4 border rounded-xl bg-blue-50/50 border-blue-200 w-full">
+                            <div className="flex items-center gap-4 text-left">
+                              <div className="h-12 w-12 rounded bg-blue-600 flex items-center justify-center text-white">
+                                <FileText className="h-6 w-6" />
+                              </div>
+                              <div>
+                                <p className="font-bold text-base text-blue-700">{docFile}</p>
+                                <p className="text-xs text-blue-600 opacity-80">Final Draft • 2.4 MB</p>
+                              </div>
+                            </div>
+                            <Button variant="ghost" size="icon" onClick={() => setDocFile(null)}>
+                              <Plus className="h-5 w-5 rotate-45" />
+                            </Button>
+                          </div>
+                          <Button 
+                            className="w-full gap-2 bg-blue-600 hover:bg-blue-700 py-6 text-base"
+                            onClick={() => {
+                              setIsStandardizing(true);
+                              setTimeout(() => setIsStandardizing(false), 2500);
+                            }}
+                            disabled={isStandardizing}
+                          >
+                            {isStandardizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wand2 className="h-5 w-5" />}
+                            Start AI Extraction
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+
+                    {isStandardizing && (
+                      <div className="space-y-2 p-4 border rounded-lg bg-blue-50/30 animate-in slide-in-from-top-4">
+                         <div className="flex justify-between text-[11px] text-blue-700 font-bold uppercase tracking-wider">
+                          <span>AI Agent: Analyzing Layout...</span>
+                          <span>82%</span>
+                        </div>
+                        <Progress value={82} className="h-2 bg-blue-100" />
+                      </div>
+                    )}
+                  </TabsContent>
+
+                  {/* --- TAB: AI GENERATION --- */}
+                  <TabsContent value="ai" className="space-y-5 animate-in fade-in duration-300">
+                    <div className="p-6 border-2 border-primary/20 rounded-xl bg-primary/5 space-y-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="ai-prompt" className="text-base font-bold">What is the focus of this exam?</Label>
+                        <Textarea
+                          id="ai-prompt"
+                          placeholder="Example: Midterm for Computer Networks. Focus on OSI layers, TCP/UDP differences, and subnetting."
+                          value={form.aiPrompt}
+                          onChange={(e) => set('aiPrompt', e.target.value)}
+                          rows={4}
+                          className="bg-background text-base"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label>Question Count</Label>
+                          <Input type="number" value={form.questionCount} onChange={(e) => set('questionCount', e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Difficulty</Label>
+                          <Select value={form.aiDifficulty} onValueChange={(v) => set('aiDifficulty', v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="0.3">Easy (0.3)</SelectItem>
+                              <SelectItem value="0.5">Medium (0.5)</SelectItem>
+                              <SelectItem value="0.7">Hard (0.7)</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="p-4 bg-amber-50 border border-amber-100 rounded-lg flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-amber-600 mt-0.5" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-bold text-amber-900">Mandatory Teacher Review</p>
+                          <p className="text-xs text-amber-800 leading-relaxed">
+                            Questions generated by AI will be placed in a pending state until you approve each one for accuracy and integrity.
+                          </p>
+                        </div>
+                      </div>
+
+                      <Button className="w-full py-6 text-base gap-2 shadow-lg shadow-primary/20">
+                        <Sparkles className="h-5 w-5" /> Generate Complete Exam
+                      </Button>
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CardContent>
+            </>
+          )}
+
+          {step === 'preview' && (
+            <>
+              <CardHeader>
+                <CardTitle>Exam Preview</CardTitle>
+                <CardDescription>Review all settings before creating the exam.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4 text-sm">
+                {[
+                  { label: 'Title',           value: form.title || '—' },
+                  { label: 'Course',          value: form.course || '—' },
+                  { label: 'Description',     value: form.description || '—' },
+                  { label: 'Duration',        value: `${form.duration} minutes` },
+                  { label: 'Passing Score',   value: `${form.passingScore}%` },
+                  { label: 'Exam Window',     value: `${form.startDate} ${form.startTime} → ${form.endDate} ${form.endTime}` },
+                  { label: 'Questions',       value: `${form.questionCount} (${form.questionType})` },
+                  { label: 'AI Proctoring',   value: form.requiresProctoring ? 'Enabled' : 'Disabled' },
+                  { label: 'Offline Download',value: form.requiresDownload ? 'Required' : 'Not required' },
+                  { label: 'Shuffle',         value: form.shuffleQuestions ? 'Yes' : 'No' },
+                  { label: 'Show Results',    value: form.showResultImmediately ? 'Immediately' : 'After review' },
+                ].map(({ label, value }) => (
+                  <div key={label} className="flex gap-3">
+                    <span className="text-muted-foreground w-36 shrink-0">{label}</span>
+                    <span className="font-medium">{value}</span>
+                  </div>
+                ))}
+              </CardContent>
+            </>
+          )}
+        </Card>
+
+        {/* Navigation buttons */}
+        <div className="flex justify-between pb-8">
+          <Button
+            variant="outline"
+            onClick={() => {
+              if (stepIdx === 0) navigate('/lecturer/exams');
+              else setStep(STEPS[stepIdx - 1].key);
+            }}
+            className="gap-2"
+          >
+            <ChevronLeft className="h-4 w-4" />
+            {stepIdx === 0 ? 'Cancel' : 'Back'}
+          </Button>
+
+          {step !== 'preview' ? (
+            <Button
+              onClick={() => setStep(STEPS[stepIdx + 1].key)}
+              disabled={!canNext()}
+              className="gap-2"
+            >
+              Continue <ChevronRight className="h-4 w-4" />
+            </Button>
+          ) : (
+            <Button onClick={handleCreate} disabled={isCreating} className="gap-2">
+              {isCreating ? 'Creating…' : <><CheckCircle2 className="h-4 w-4" /> Create Exam</>}
+            </Button>
+          )}
+        </div>
+      </div>
+    </DashboardLayout>
+  );
+}

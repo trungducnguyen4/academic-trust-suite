@@ -1,0 +1,144 @@
+@startuml
+
+!theme plain
+hide circle
+skinparam linetype ortho
+
+' --- ENTITIES ---
+
+entity "User" as user {
+  *id : UUID
+  --
+  *email : VARCHAR
+  *name : VARCHAR
+  *role : ENUM(student, lecturer, admin)
+  avatar : VARCHAR
+  status : ENUM(active, inactive)
+}
+
+entity "Course" as course {
+  *id : UUID
+  --
+  *code : VARCHAR
+  *name : VARCHAR
+  semester : VARCHAR
+  description : TEXT
+  status : ENUM(active, archived, draft)
+  created_at : TIMESTAMP
+  *lecturer_id : UUID <<FK>>
+}
+
+entity "Enrollment" as enrollment {
+  *course_id : UUID <<FK>>
+  *student_id : UUID <<FK>>
+  --
+  joined_at : TIMESTAMP
+  status : ENUM(active, dropped)
+}
+
+entity "Exam" as exam {
+  *id : UUID
+  --
+  *course_id : UUID <<FK>>
+  *title : VARCHAR
+  description : TEXT
+  duration_minutes : INT
+  passing_score : INT
+  start_time : TIMESTAMP
+  end_time : TIMESTAMP
+  status : ENUM(draft, published, ongoing, completed)
+  --
+  requires_proctoring : BOOLEAN
+  shuffle_questions : BOOLEAN
+  show_results_immediately : BOOLEAN
+  access_code : VARCHAR
+  --
+  source_method : ENUM(bank, import, ai)
+  ai_config : JSON
+}
+
+entity "Question" as question {
+  *id : UUID
+  --
+  *content : TEXT
+  type : ENUM(single, multi, true_false, essay, matching, ordering)
+  difficulty : FLOAT
+  topic : VARCHAR
+  tags : JSON
+  media_url : VARCHAR
+  options : JSON
+  correct_answer : JSON
+  --
+  created_by : UUID <<FK>>
+}
+
+entity "ExamQuestion" as exam_question {
+  *exam_id : UUID <<FK>>
+  *question_id : UUID <<FK>>
+  --
+  points : FLOAT
+  order_index : INT
+}
+
+entity "ExamSubmission" as submission {
+  *id : UUID
+  --
+  *exam_id : UUID <<FK>>
+  *student_id : UUID <<FK>>
+  score : FLOAT
+  passed : BOOLEAN
+  started_at : TIMESTAMP
+  submitted_at : TIMESTAMP
+  time_spent_seconds : INT
+  status : ENUM(in_progress, submitted, graded)
+}
+
+entity "SubmissionAnswer" as answer {
+  *submission_id : UUID <<FK>>
+  *question_id : UUID <<FK>>
+  --
+  student_response : JSON
+  is_correct : BOOLEAN
+  points_awarded : FLOAT
+}
+
+entity "ProctoringSession" as proctoring {
+  *id : UUID
+  --
+  *submission_id : UUID <<FK>>
+  ip_address : VARCHAR
+  tab_switch_count : INT
+  mouse_anomalies : INT
+  flagged_status : ENUM(clean, warning, critical)
+  integrity_score : FLOAT
+}
+
+entity "IntegrityLog" as integrity_log {
+  *id : UUID
+  --
+  *session_id : UUID <<FK>>
+  event_type : ENUM(tab_switch, face_missing, multiple_faces, copy_paste)
+  timestamp : TIMESTAMP
+  details : TEXT
+}
+
+' --- RELATIONSHIPS ---
+
+user ||..o{ course : "teaches"
+user ||..o{ enrollment : "enrolls"
+course ||..o{ enrollment : "has students"
+
+course ||..o{ exam : "contains"
+exam ||..o{ exam_question : "includes"
+question ||..o{ exam_question : "used in"
+
+user ||..o{ submission : "attempts"
+exam ||..o{ submission : "generates"
+
+submission ||..o{ answer : "contains"
+question ||..o{ answer : "referenced by"
+
+submission ||..|| proctoring : "monitored by"
+proctoring ||..o{ integrity_log : "records"
+
+@enduml

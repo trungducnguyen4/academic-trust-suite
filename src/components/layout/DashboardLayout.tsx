@@ -33,8 +33,9 @@ const studentNavItems: NavItem[] = [
 
 const lecturerNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/lecturer', icon: <LayoutDashboard className="h-4 w-4" /> },
+  { title: 'Courses', href: '/lecturer/create-course', icon: <GraduationCap className="h-4 w-4" /> },
   { title: 'Exams', href: '/lecturer/exams', icon: <FileText className="h-4 w-4" /> },
-  { title: 'Question Bank', href: '/lecturer/questions', icon: <BookOpen className="h-4 w-4" /> },
+  { title: 'Question Bank', href: '/lecturer/question-bank', icon: <BookOpen className="h-4 w-4" /> },
   { title: 'Analytics', href: '/lecturer/analytics', icon: <BarChart3 className="h-4 w-4" /> },
 ];
 

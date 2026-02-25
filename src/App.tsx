@@ -21,6 +21,9 @@ import GradingBreakdown from "./pages/student/GradingBreakdown";
 import ExamTaking from "./pages/student/ExamTaking";
 import ExamReadyCheck from "./pages/student/ExamReadyCheck";
 import LearningFeedbackDetail from "./pages/student/LearningFeedbackDetail";
+import JoinExam from "./pages/student/JoinExam";
+import ScanQRJoinExam from "./pages/student/ScanQRJoinExam";
+import OfflineExamDownload from "./pages/student/OfflineExamDownload";
 
 // Lecturer
 import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
@@ -29,12 +32,21 @@ import QuestionEditor from "./pages/lecturer/QuestionEditor";
 import QuestionHistoryAnalysis from "./pages/lecturer/QuestionHistoryAnalysis";
 import AdvancedExamRuleConfig from "./pages/lecturer/AdvancedExamRuleConfig";
 import ExamMonitor from "./pages/lecturer/ExamMonitor";
+import CreateCourse from "./pages/lecturer/CreateCourse";
+import CourseDetail from "./pages/lecturer/CourseDetail";
+import UploadDocAIGen from "./pages/lecturer/UploadDocAIGen";
+import GenerateExamLink from "./pages/lecturer/GenerateExamLink";
+import CreateExam from "./pages/lecturer/CreateExam";
+import ExamAnalytics from "./pages/lecturer/ExamAnalytics";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
 import IntegrityOverview from "./pages/admin/IntegrityOverview";
 import MetricMethodologyReference from "./pages/admin/MetricMethodologyReference";
 import TransparencyDashboard from "./pages/admin/TransparencyDashboard";
+import UserRoleManagement from "./pages/admin/UserRoleManagement";
+import SystemPolicyConfig from "./pages/admin/SystemPolicyConfig";
+import AuditLogViewer from "./pages/admin/AuditLogViewer";
 
 import NotFound from "./pages/NotFound";
 
@@ -69,6 +81,9 @@ const App = () => {
                 path="/student/learning-feedback"
                 element={<LearningFeedbackDetail />}
               />
+              <Route path="/student/join-exam" element={<JoinExam />} />
+              <Route path="/student/scan-qr" element={<ScanQRJoinExam />} />
+              <Route path="/student/offline-download" element={<OfflineExamDownload />} />
 
               {/* ================= LECTURER ================= */}
               <Route path="/lecturer" element={<LecturerDashboard />} />
@@ -96,6 +111,12 @@ const App = () => {
                 path="/lecturer/exam-rule-config"
                 element={<AdvancedExamRuleConfig />}
               />
+              <Route path="/lecturer/create-course" element={<CreateCourse />} />
+              <Route path="/lecturer/course/:id" element={<CourseDetail />} />
+              <Route path="/lecturer/upload-doc-ai" element={<UploadDocAIGen />} />
+              <Route path="/lecturer/generate-link" element={<GenerateExamLink />} />
+              <Route path="/lecturer/exams/create" element={<CreateExam />} />
+              <Route path="/lecturer/analytics" element={<ExamAnalytics />} />
 
               {/* ================= ADMIN ================= */}
               <Route path="/admin" element={<AdminDashboard />} />
@@ -111,6 +132,9 @@ const App = () => {
                 path="/admin/transparency"
                 element={<TransparencyDashboard />}
               />
+              <Route path="/admin/user-management" element={<UserRoleManagement />} />
+              <Route path="/admin/system-policy" element={<SystemPolicyConfig />} />
+              <Route path="/admin/audit-logs" element={<AuditLogViewer />} />
 
               {/* Catch all */}
               <Route path="*" element={<NotFound />} />
