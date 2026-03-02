@@ -238,7 +238,7 @@ export default function ExamReadyCheck() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-4 gap-4 text-center">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
               <div>
                 <Clock className="h-5 w-5 mx-auto text-primary mb-1" />
                 <p className="text-lg font-semibold">{examInfo.duration}</p>

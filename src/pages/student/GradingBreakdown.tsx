@@ -97,7 +97,7 @@ export default function GradingBreakdown() {
             <CardDescription>Total Score = Auto-Graded + Manual Grading</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="text-center p-4 rounded-lg bg-blue-50/50 dark:bg-blue-950/20 border border-blue-100 dark:border-blue-900">
                 <Cpu className="h-6 w-6 text-blue-600 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{autoScore}/{autoMax}</p>
@@ -130,6 +130,7 @@ export default function GradingBreakdown() {
             <CardDescription>Objective questions graded automatically by the system</CardDescription>
           </CardHeader>
           <CardContent>
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -162,6 +163,7 @@ export default function GradingBreakdown() {
                 ))}
               </TableBody>
             </Table>
+            </div>
           </CardContent>
         </Card>
 

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -48,6 +48,7 @@ import {
   Loader2,
   Download,
 } from 'lucide-react';
+import api from '@/lib/api';
 
 interface User {
   id: string;
@@ -60,15 +61,13 @@ interface User {
   createdAt: string;
 }
 
-const mockUsers: User[] = [
-  { id: 'U001', name: 'Nguyen Van A', email: 'student@university.edu', role: 'student', department: 'Computer Science', status: 'active', lastLogin: '2026-01-14 09:22', createdAt: '2024-09-01' },
-  { id: 'U002', name: 'Dr. Tran Minh', email: 'lecturer@university.edu', role: 'lecturer', department: 'Computer Science', status: 'active', lastLogin: '2026-01-14 08:10', createdAt: '2023-01-15' },
-  { id: 'U003', name: 'Admin User', email: 'admin@university.edu', role: 'admin', department: 'IT Administration', status: 'active', lastLogin: '2026-01-14 07:55', createdAt: '2022-06-01' },
-  { id: 'U004', name: 'Le Thi B', email: 'le.b@university.edu', role: 'student', department: 'Mathematics', status: 'active', lastLogin: '2026-01-13 15:40', createdAt: '2024-09-01' },
-  { id: 'U005', name: 'Pham Van C', email: 'pham.c@university.edu', role: 'student', department: 'Computer Science', status: 'suspended', lastLogin: '2025-12-20 10:00', createdAt: '2024-09-01' },
-  { id: 'U006', name: 'Dr. Hoang D', email: 'hoang.d@university.edu', role: 'lecturer', department: 'Information Systems', status: 'active', lastLogin: '2026-01-12 16:30', createdAt: '2021-08-15' },
-  { id: 'U007', name: 'Vo Thi E', email: 'vo.e@university.edu', role: 'student', department: 'Computer Science', status: 'pending', lastLogin: '-', createdAt: '2026-01-10' },
-];
+interface APIUser {
+  id: string;
+  fullName: string;
+  email: string;
+  role: 'STUDENT' | 'LECTURER' | 'ADMIN';
+  createdAt: string;
+}
 
 const permissions = [
   { key: 'create_exam', label: 'Create Exam', student: false, lecturer: true, admin: true },
@@ -85,18 +84,51 @@ const permissions = [
 
 export default function UserRoleManagement() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<User[]>(mockUsers);
+  const [users, setUsers] = useState<User[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
   const [showAddDialog, setShowAddDialog] = useState(false);
   const [showPermDialog, setShowPermDialog] = useState(false);
   const [adding, setAdding] = useState(false);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalUsers, setTotalUsers] = useState(0);
+  const ITEMS_PER_PAGE = 20;
 
   // New user form
   const [newUser, setNewUser] = useState({
     name: '', email: '', role: 'student' as User['role'], department: '',
   });
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await api.getUsers(undefined, page, ITEMS_PER_PAGE);
+        const rawData = res?.data ?? res;
+        const data = Array.isArray(rawData) ? rawData : [];
+        setTotalPages(res?.totalPages ?? 1);
+        setTotalUsers(res?.total ?? data.length);
+        const mapped: User[] = data.map((u: APIUser) => ({
+          id: u.id.slice(0, 8),
+          name: u.fullName,
+          email: u.email,
+          role: u.role.toLowerCase() as User['role'],
+          department: 'General',
+          status: 'active' as const,
+          lastLogin: '-',
+          createdAt: new Date(u.createdAt).toISOString().split('T')[0],
+        }));
+        setUsers(mapped);
+      } catch (err) {
+        console.error('Failed to fetch users:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchUsers();
+  }, [page]);
 
   const filtered = users.filter((u) => {
     const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
@@ -109,18 +141,31 @@ export default function UserRoleManagement() {
 
   const handleAddUser = async () => {
     setAdding(true);
-    await new Promise((r) => setTimeout(r, 800));
-    const created: User = {
-      id: `U${String(users.length + 1).padStart(3, '0')}`,
-      ...newUser,
-      status: 'pending',
-      lastLogin: '-',
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    setUsers([created, ...users]);
-    setNewUser({ name: '', email: '', role: 'student', department: '' });
-    setShowAddDialog(false);
-    setAdding(false);
+    try {
+      const created = await api.register({
+        email: newUser.email,
+        password: '123456', // default password
+        fullName: newUser.name,
+        role: newUser.role.toUpperCase() as 'STUDENT' | 'LECTURER' | 'ADMIN',
+      });
+      const mapped: User = {
+        id: created.user.id.slice(0, 8),
+        name: created.user.fullName,
+        email: created.user.email,
+        role: newUser.role,
+        department: newUser.department || 'General',
+        status: 'active',
+        lastLogin: '-',
+        createdAt: new Date().toISOString().split('T')[0],
+      };
+      setUsers([mapped, ...users]);
+      setNewUser({ name: '', email: '', role: 'student', department: '' });
+      setShowAddDialog(false);
+    } catch (err) {
+      console.error('Failed to add user:', err);
+    } finally {
+      setAdding(false);
+    }
   };
 
   const toggleStatus = (id: string) => {
@@ -144,6 +189,16 @@ export default function UserRoleManagement() {
     lecturers: users.filter((u) => u.role === 'lecturer').length,
     admins: users.filter((u) => u.role === 'admin').length,
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -213,7 +268,7 @@ export default function UserRoleManagement() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card><CardContent className="pt-4 pb-4">
             <div className="flex items-center gap-3">
               <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Users className="h-5 w-5 text-primary" /></div>
@@ -274,6 +329,7 @@ export default function UserRoleManagement() {
         {/* User Table */}
         <Card>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -331,6 +387,35 @@ export default function UserRoleManagement() {
                 )}
               </TableBody>
             </Table>
+            </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between mt-4 px-2">
+              <p className="text-sm text-muted-foreground">
+                Page {page} of {totalPages} ({totalUsers} total)
+              </p>
+              <div className="flex items-center gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
+                  Previous
+                </Button>
+                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                  const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                  const p = start + i;
+                  if (p > totalPages) return null;
+                  return (
+                    <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className="w-8 h-8 p-0" onClick={() => setPage(p)}>
+                      {p}
+                    </Button>
+                  );
+                })}
+                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
+                  Next
+                </Button>
+              </div>
+            </div>
+          )}
+
           </CardContent>
         </Card>
 

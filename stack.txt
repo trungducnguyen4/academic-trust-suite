@@ -1,0 +1,56 @@
+MySQL — phù hợp không? (Yes)
+Ưu điểm:
+Ổn định, rộng rãi, dễ tìm host managed (RDS/Cloud SQL/Azure Database).
+Truy vấn quan hệ mạnh, transaction ACID (InnoDB).
+Prisma, TypeORM, Sequelize đều hỗ trợ MySQL tốt.
+Hạn chế / lưu ý:
+JSON support kém hơn PostgreSQL (MySQL có JSON type nhưng ít chức năng phân tích nâng cao).
+Nếu cần analytics/OLAP lớn, cân nhắc dùng ClickHouse/Redshift cho báo cáo.
+Best practices:
+Dùng InnoDB, utf8mb4_unicode_ci, primary keys GUID hoặc numeric (UUID ok).
+Thiết kế normalized schema (enrollments, submissions); dùng JSON/JSONB cho fields linh hoạt (question.options, ai_metadata) nếu cần.
+Dự phòng: bật binary log cho replication/point-in-time recovery, cấu hình backups tự động.
+Migrations: dùng Prisma Migrate hoặc Flyway/liquibase.
+Kiến trúc backend đề xuất (MySQL-friendly)
+Ngôn ngữ: TypeScript + Node.js.
+Framework: NestJS (module, DI, scaling) hoặc Fastify (hiệu năng).
+ORM: Prisma (Type safe, hoạt động tốt với MySQL).
+Cache/queue: Redis (cache, sessions, BullMQ).
+Background workers: BullMQ (document parsing, AI calls, scoring).
+Auth: JWT + Refresh tokens (store refresh token in DB or Redis), RBAC (student/lecturer/admin).
+API: REST hoặc GraphQL (GraphQL tốt nếu front-end mobile cần fetch linh hoạt).
+Storage: S3 (or equivalent) cho files + CDN.
+Mobile support — lựa chọn triển khai
+A. Progressive Web App (PWA) — nhanh, dùng code React hiện tại
+Ưu điểm: reuse toàn bộ src (React + Vite + Tailwind).
+Hỗ trợ offline với service worker, push notifications, installable.
+Hạn chế: camera/microphone và background constraints khác trên iOS/Android; proctoring tính năng giới hạn trong browser.
+B. Hybrid / Native wrapper (Ionic/Capacitor)
+
+Dùng same web code + native plugins (camera, filesystem, background).
+Cân bằng nhanh & native capability.
+C. Native cross-platform (React Native / Flutter) — nếu cần trải nghiệm mobile full
+
+Ưu điểm: access đầy đủ camera, sensor, background tasks, tốt cho proctoring (camera streaming).
+Hạn chế: phải phát triển/maintain riêng, learning curve.
+Gợi ý: bắt đầu với PWA + Capacitor wrapper nếu bạn cần native features dần dần. Nếu proctoring cần livestream camera + face detection realtime, cân nhắc React Native để có SDK kiểm soát tốt.
+
+Proctoring & AI trên mobile
+Nếu dùng browser (PWA): camera access via getUserMedia, nhưng iOS Safari có giới hạn; background/locking khó thực hiện.
+Nếu cần capture ổn định (video + face detection), dùng native (React Native) hoặc Capacitor với plugin camera + custom permissions.
+Đường dẫn xử lý: client → chunk upload → background worker → AI model; lưu metadata provenance.
+Scalability / Ops (với MySQL)
+Read replicas cho đọc báo cáo.
+Use connection pooling (pg has pool; for MySQL use pool & proxy like ProxySQL).
+Horizontal scale backend stateless + Redis for session/locks.
+Backups + PITR + monitoring (Percona, PMM, RDS automated backups).
+UX / Student-first features (mobile-focused)
+Full student features: join exam, take exam (offline-safe), resume, submit, view results, download materials.
+Offline strategies: cache exam data, save answers locally (IndexedDB), sync when online.
+Push notifications for exam start/approve results.
+Accessibility and performance (Lighthouse fixes earlier).
+Quick concrete next steps I can do for bạn (pick one)
+A: Generate a MySQL-compatible prisma.schema matching ERD (tables: users, courses, enrollments, exams, questions, exam_questions, submissions, answers, proctoring, integrity_logs).
+B: Scaffold a minimal NestJS + Prisma project with auth endpoints and courses + enrollments APIs.
+C: Create PWA checklist + minimal service-worker setup for offline exam saving.
+D: Recommend mobile plan: PWA → Capacitor wrapper steps and sample camera plugin usage for proctoring.

@@ -120,7 +120,7 @@ export default function OfflineExamDownload() {
         </p>
 
         {/* Storage summary */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
           <Card>
             <CardContent className="pt-4 pb-4">
               <div className="flex items-center gap-3">

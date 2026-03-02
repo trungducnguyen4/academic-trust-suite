@@ -163,7 +163,7 @@ export default function AuditLogViewer() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <Card>
             <CardContent className="pt-4 pb-3">
               <div className="text-sm text-muted-foreground">Total Entries</div>
@@ -193,7 +193,7 @@ export default function AuditLogViewer() {
         {/* Filters */}
         <Card>
           <CardContent className="pt-4 pb-4">
-            <div className="flex gap-3 items-end">
+            <div className="flex flex-wrap gap-3 items-end">
               <div className="flex-1">
                 <div className="relative">
                   <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
@@ -244,6 +244,7 @@ export default function AuditLogViewer() {
             </CardTitle>
           </CardHeader>
           <CardContent className="p-0">
+            <div className="overflow-x-auto">
             <Table>
               <TableHeader>
                 <TableRow>
@@ -300,6 +301,7 @@ export default function AuditLogViewer() {
                 )}
               </TableBody>
             </Table>
+            </div>
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t">
                 <span className="text-sm text-muted-foreground">

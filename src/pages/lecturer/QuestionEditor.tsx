@@ -1,5 +1,6 @@
-import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useState, useEffect } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+import { api, unwrapPaginatedData } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,6 +18,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import {
   Tabs,
   TabsContent,
@@ -45,10 +52,31 @@ interface Option {
   isCorrect: boolean;
 }
 
+interface Question {
+  id: string;
+  type: string;
+  content: string;
+  options?: any;
+  correctAnswer?: any;
+  explanation?: string;
+  difficulty: number;
+  points: number;
+  tags: string;
+  course?: { id: string; code: string; name: string };
+  learningObjectives?: string;
+}
+
 export default function QuestionEditor() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const questionId = searchParams.get('id');
+  const courseCodeParam = searchParams.get('courseCode');
+  
+  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [question, setQuestion] = useState<Question | null>(null);
   const [tab, setTab] = useState('edit');
+  const [courses, setCourses] = useState<{ id: string; code: string; name: string }[]>([]);
 
   // Question form state
   const [questionType, setQuestionType] = useState('multiple_choice');
@@ -83,6 +111,151 @@ export default function QuestionEditor() {
   const [essayRubric, setEssayRubric] = useState('');
   const [essayMaxScore, setEssayMaxScore] = useState(10);
 
+  // Load courses from API
+  useEffect(() => {
+    const fetchCourses = async () => {
+      try {
+        const data = unwrapPaginatedData(await api.getCourses());
+        const mapped = data.map((c: any) => ({ id: c.id, code: c.code, name: c.name }));
+        setCourses(mapped);
+        // Pre-select course from URL param
+        if (courseCodeParam && !course) {
+          const found = mapped.find((c: any) => c.code === courseCodeParam);
+          if (found) setCourse(found.id);
+        }
+      } catch (err) {
+        console.error('Failed to fetch courses:', err);
+      }
+    };
+    fetchCourses();
+  }, []);
+
+  // Load question data if editing existing question
+  useEffect(() => {
+    if (questionId) {
+      loadQuestion();
+    }
+  }, [questionId]);
+
+  const loadQuestion = async () => {
+    if (!questionId) return;
+    
+    try {
+      setLoading(true);
+      const questionData = await api.getQuestion(questionId);
+      setQuestion(questionData);
+      populateForm(questionData);
+    } catch (error) {
+      console.error('Failed to load question:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const populateForm = (questionData: Question) => {
+    // Map backend question type to frontend format
+    const typeMapping: { [key: string]: string } = {
+      'MULTIPLE_CHOICE': 'multiple_choice',
+      'MULTI_SELECT': 'multiple_choice', 
+      'SINGLE_CHOICE': 'single_choice',
+      'TRUE_FALSE': 'true_false',
+      'SHORT_ANSWER': 'essay',
+      'ESSAY': 'essay',
+      'FILL_IN_BLANK': 'fill_blank',
+      'MATCHING': 'matching',
+      'ORDERING': 'ordering'
+    };
+    
+    const frontendType = typeMapping[questionData.type] || questionData.type.toLowerCase();
+    setQuestionType(frontendType);
+    
+    setContent(questionData.content);
+    setExplanation(questionData.explanation || '');
+    setCourse(questionData.course?.id || '');
+    setDifficulty([questionData.difficulty]);
+    
+    // Parse tags
+    if (questionData.tags) {
+      try {
+        const tagsArray = Array.isArray(questionData.tags) ? questionData.tags : 
+                         typeof questionData.tags === 'string' ? 
+                         questionData.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+        setTags(tagsArray);
+      } catch {
+        setTags([]);
+      }
+    }
+    
+    // Handle different question types
+    if (questionData.type === 'MULTIPLE_CHOICE' || questionData.type === 'MULTI_SELECT' || questionData.type === 'SINGLE_CHOICE') {
+      console.log('Question options from backend:', questionData.options);
+      console.log('Question correctAnswer from backend:', questionData.correctAnswer);
+      
+      if (questionData.options) {
+        let formattedOptions: { id: string; text: string; isCorrect: boolean }[] = [];
+        
+        if (Array.isArray(questionData.options)) {
+          // Handle array format: ["Stack", "Queue", "Array", "List"]
+          formattedOptions = questionData.options.map((opt: any, index: number) => ({
+            id: String.fromCharCode(65 + index),
+            text: opt.text || opt,
+            isCorrect: false // Will set correct answers below
+          }));
+        } else if (typeof questionData.options === 'object') {
+          // Handle object format: {A: "Stack", B: "Queue", C: "Array", D: "List"}
+          formattedOptions = Object.entries(questionData.options).map(([key, value]) => ({
+            id: key,
+            text: value as string,
+            isCorrect: false // Will set correct answers below
+          }));
+        }
+        
+        // Set correct answers
+        if (questionData.correctAnswer) {
+          console.log('Processing correctAnswer:', questionData.correctAnswer);
+          
+          if (typeof questionData.correctAnswer === 'object') {
+            if ('answer' in questionData.correctAnswer) {
+              // Format: {answer: "B"} - mark that option as correct
+              const correctId = questionData.correctAnswer.answer;
+              const optionIndex = formattedOptions.findIndex(opt => opt.id === correctId);
+              if (optionIndex !== -1) {
+                formattedOptions[optionIndex].isCorrect = true;
+              }
+            } else {
+              // Handle other object formats if needed
+              Object.keys(questionData.correctAnswer).forEach(correctKey => {
+                const optionIndex = formattedOptions.findIndex(opt => opt.id === correctKey);
+                if (optionIndex !== -1) {
+                  formattedOptions[optionIndex].isCorrect = true;
+                }
+              });
+            }
+          } else if (typeof questionData.correctAnswer === 'number') {
+            // Handle index format
+            if (formattedOptions[questionData.correctAnswer]) {
+              formattedOptions[questionData.correctAnswer].isCorrect = true;
+            }
+          }
+        }
+        
+        setOptions(formattedOptions);
+      }
+      setMultipleAnswers(questionData.type === 'MULTI_SELECT');
+    } else if (questionData.type === 'TRUE_FALSE') {
+      console.log('True/False correctAnswer from backend:', questionData.correctAnswer);
+      
+      if (questionData.correctAnswer && typeof questionData.correctAnswer === 'object' && 'answer' in questionData.correctAnswer) {
+        setTfAnswer(questionData.correctAnswer.answer === true ? 'true' : 'false');
+      } else {
+        // Fallback for other formats
+        setTfAnswer(questionData.correctAnswer ? 'true' : 'false');
+      }
+    }
+    
+    setLearningObjective(questionData.learningObjectives || '');
+  };
+
   const addOption = () => {
     const nextId = String.fromCharCode(65 + options.length);
     setOptions([...options, { id: nextId, text: '', isCorrect: false }]);
@@ -115,34 +288,112 @@ export default function QuestionEditor() {
   const removeTag = (t: string) => setTags(tags.filter((tag) => tag !== t));
 
   const handleSave = async () => {
-    setSaving(true);
-    await new Promise((r) => setTimeout(r, 1200));
-    setSaving(false);
-    navigate('/lecturer/question-bank');
+    let questionData;
+    try {
+      setSaving(true);
+      
+      // Map frontend question type back to backend format
+      const backendTypeMapping: { [key: string]: string } = {
+        'multiple_choice': 'MULTIPLE_CHOICE',
+        'single_choice': 'SINGLE_CHOICE', 
+        'true_false': 'TRUE_FALSE',
+        'essay': 'ESSAY',
+        'fill_blank': 'FILL_IN_BLANK',
+        'matching': 'MATCHING',
+        'ordering': 'ORDERING'
+      };
+      
+      const backendType = backendTypeMapping[questionType] || questionType.toUpperCase();
+      
+      questionData = {
+        type: backendType,
+        content,
+        explanation,
+        difficulty: difficulty[0],
+        points: 10, // Default points
+        tags: tags, // Backend expects array
+        courseId: course || undefined,
+        options: questionType === 'multiple_choice' || questionType === 'single_choice' 
+          ? options.filter(opt => opt.text.trim()).reduce((acc, opt, idx) => {
+              acc[opt.id] = opt.text;
+              return acc;
+            }, {} as any) // Send as object {A: "text", B: "text"}
+          : {},
+        correctAnswer: questionType === 'single_choice' 
+          ? { answer: options.find(opt => opt.isCorrect)?.id || 'A' } // Format: {answer: "B"}
+          : questionType === 'multiple_choice'
+          ? { answer: options.filter(opt => opt.isCorrect).map(opt => opt.id).join(',') } // Format: {answer: "A,C"}
+          : questionType === 'true_false'
+          ? { answer: tfAnswer === 'true' }
+          : {}
+      };
+      
+      if (questionId) {
+        // Update existing question
+        console.log('Updating question with data:', questionData);
+        await api.updateQuestion(questionId, questionData);
+      } else {
+        // Create new question
+        console.log('Creating question with data:', questionData);
+        await api.createQuestion(questionData);
+      }
+      
+      navigate('/lecturer/question-bank');
+    } catch (error) {
+      console.error('Failed to save question:', error);
+      console.error('Question data that failed:', questionData);
+      // Show user-friendly error message
+      alert('Failed to save question. Please check the console for details.');
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
     
-    // Simulate AI thinking
-    await new Promise((r) => setTimeout(r, 2000));
-    
-    // Fill with mock generated content
-    setContent(`Generated question about ${aiPrompt}: What is the primary advantage of this approach in high-concurrency systems?`);
-    setExplanation("The primary advantage is the reduction in locking overhead, allowing multiple threads to progress without contention.");
-    
-    if (questionType === 'multiple_choice' || questionType === 'single_choice') {
-      setOptions([
-        { id: 'A', text: 'Improved data consistency', isCorrect: false },
-        { id: 'B', text: 'Reduced memory footprint', isCorrect: false },
-        { id: 'C', text: 'Higher throughput and parallelism', isCorrect: true },
-        { id: 'D', text: 'Easier debugging and maintenance', isCorrect: false },
-      ]);
+    try {
+      // Map frontend type to backend type for the AI prompt
+      const backendTypeMap: Record<string, string> = {
+        'multiple_choice': 'MULTIPLE_CHOICE',
+        'single_choice': 'MULTIPLE_CHOICE',
+        'true_false': 'TRUE_FALSE',
+        'essay': 'ESSAY',
+        'fill_blank': 'FILL_IN_BLANK',
+        'matching': 'MATCHING',
+        'ordering': 'ORDERING',
+      };
+
+      const result = await api.aiGenerateQuestion({
+        prompt: aiPrompt,
+        questionType: backendTypeMap[questionType] || 'MULTIPLE_CHOICE',
+        difficulty: Math.max(0, Math.min(1, difficulty[0])),
+      });
+
+      // Fill in the form with AI-generated content
+      setContent(result.content);
+      if (result.explanation) setExplanation(result.explanation);
+      if (result.tags && result.tags.length > 0) setTags(result.tags);
+      if (result.difficulty !== undefined && result.difficulty !== null) setDifficulty([Math.max(0, Math.min(1, result.difficulty))]);
+
+      // Fill in options if it's a choice-based question
+      if (result.options && (questionType === 'multiple_choice' || questionType === 'single_choice' || questionType === 'true_false')) {
+        const newOptions = Object.entries(result.options).map(([key, text]) => ({
+          id: key,
+          text: text as string,
+          isCorrect: result.correctAnswer?.answer === key,
+        }));
+        if (newOptions.length > 0) setOptions(newOptions);
+      }
+
+      setAiPrompt('');
+    } catch (error: any) {
+      console.error('AI generation failed:', error);
+      alert('AI generation failed: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsGenerating(false);
     }
-    
-    setIsGenerating(false);
-    setAiPrompt('');
   };
 
   const difficultyLabel = difficulty[0] < 0.4 ? 'Easy' : difficulty[0] < 0.7 ? 'Medium' : 'Hard';
@@ -161,21 +412,40 @@ export default function QuestionEditor() {
 
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground mb-1">Question Editor</h1>
-            <p className="text-muted-foreground">Create or edit a question with metadata and options</p>
+            <h1 className="text-2xl font-semibold text-foreground mb-1">
+              {loading ? 'Loading Question...' : questionId ? 'Edit Question' : 'New Question'}
+            </h1>
+            <p className="text-muted-foreground">
+              {(() => {
+                const currentCourse = courses.find(c => c.id === course);
+                if (currentCourse) return <span>Course: <span className="font-semibold text-foreground">{currentCourse.code} — {currentCourse.name}</span></span>;
+                if (courseCodeParam) return <span>Course: <span className="font-semibold text-foreground">{courseCodeParam}</span></span>;
+                return questionId ? 'Edit an existing question with metadata and options' : 'Create a question with metadata and options';
+              })()}
+            </p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setTab('preview')} className="gap-2">
-              <Eye className="h-4 w-4" /> Preview
-            </Button>
-            <Button onClick={handleSave} disabled={saving || !content} className="gap-2">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-              Save Question
-            </Button>
+            {!loading && (
+              <>
+                <Button variant="outline" onClick={() => setTab('preview')} className="gap-2">
+                  <Eye className="h-4 w-4" /> Preview
+                </Button>
+                <Button onClick={handleSave} disabled={saving || !content} className="gap-2">
+                  {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                  Save Question
+                </Button>
+              </>
+            )}
           </div>
         </div>
 
-        <Tabs value={tab} onValueChange={setTab}>
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+            <span className="ml-2 text-muted-foreground">Loading question data...</span>
+          </div>
+        ) : (
+          <Tabs value={tab} onValueChange={setTab}>
           <TabsList className="mb-4">
             <TabsTrigger value="edit">Edit</TabsTrigger>
             <TabsTrigger value="metadata">Metadata</TabsTrigger>
@@ -261,8 +531,32 @@ export default function QuestionEditor() {
             <Card>
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Question Content</CardTitle>
+                <CardDescription>Enter your question text and answer options</CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                {(questionType === 'multiple_choice' || questionType === 'single_choice') && (
+                  <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                    <p className="text-sm text-blue-800 font-medium mb-1">
+                      💡 How to select correct answers:
+                    </p>
+                    <p className="text-xs text-blue-700">
+                      {questionType === 'multiple_choice' ? 
+                        'Click the circles (A, B, C, D) to mark multiple correct answers' :
+                        'Click the circles (A, B, C, D) to select the single correct answer'
+                      }
+                    </p>
+                  </div>
+                )}
+                {questionType === 'true_false' && (
+                  <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
+                    <p className="text-sm text-green-800 font-medium mb-1">
+                      💡 How to select correct answer:
+                    </p>
+                    <p className="text-xs text-green-700">
+                      Click either "True" or "False" button below to set the correct answer
+                    </p>
+                  </div>
+                )}
                 <div className="space-y-2">
                   <Label htmlFor="content">Question Text</Label>
                   <Textarea
@@ -339,16 +633,26 @@ export default function QuestionEditor() {
                   <div key={opt.id} className="flex items-center gap-3">
                     <GripVertical className="h-4 w-4 text-muted-foreground cursor-move" />
                     {(questionType === 'multiple_choice' || questionType === 'single_choice') && (
-                      <button
-                        onClick={() => setCorrectOption(opt.id)}
-                        className={`flex items-center justify-center h-8 w-8 rounded-full border-2 text-sm font-medium transition-colors ${
-                          opt.isCorrect
-                            ? 'border-green-500 bg-green-50 text-green-700'
-                            : 'border-muted hover:border-primary/50 text-muted-foreground'
-                        }`}
-                      >
-                        {opt.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : opt.id}
-                      </button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <button
+                              onClick={() => setCorrectOption(opt.id)}
+                              className={`flex items-center justify-center h-8 w-8 rounded-full border-2 text-sm font-medium transition-all duration-200 ${
+                                opt.isCorrect
+                                  ? 'border-green-500 bg-green-100 text-green-700 shadow-lg scale-110'
+                                  : 'border-gray-300 hover:border-green-400 text-muted-foreground hover:bg-green-50 hover:scale-105'
+                              }`}
+                              title={opt.isCorrect ? 'Correct answer' : 'Click to mark as correct'}
+                            >
+                              {opt.isCorrect ? <CheckCircle2 className="h-4 w-4" /> : opt.id}
+                            </button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            <p>{opt.isCorrect ? '✅ Correct answer' : '⭕ Click to mark as correct'}</p>
+                          </TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
                     )}
                     {questionType === 'ordering' && (
                       <div className="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary">
@@ -387,16 +691,16 @@ export default function QuestionEditor() {
                     <Button
                       variant={tfAnswer === 'true' ? 'default' : 'outline'}
                       onClick={() => setTfAnswer('true')}
-                      className="flex-1"
+                      className={`flex-1 ${tfAnswer === 'true' ? 'bg-green-600 hover:bg-green-700' : 'border-green-300 hover:border-green-500 hover:bg-green-50'}`}
                     >
                       <CheckCircle2 className="mr-2 h-4 w-4" /> True
                     </Button>
                     <Button
                       variant={tfAnswer === 'false' ? 'default' : 'outline'}
                       onClick={() => setTfAnswer('false')}
-                      className="flex-1"
+                      className={`flex-1 ${tfAnswer === 'false' ? 'bg-green-600 hover:bg-green-700' : 'border-green-300 hover:border-green-500 hover:bg-green-50'}`}
                     >
-                      False
+                      <CheckCircle2 className="mr-2 h-4 w-4" /> False
                     </Button>
                   </div>
                 )}
@@ -478,16 +782,15 @@ export default function QuestionEditor() {
                 <CardTitle className="text-base">Classification</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label>Course</Label>
                     <Select value={course} onValueChange={setCourse}>
                       <SelectTrigger><SelectValue placeholder="Select course" /></SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="CS301">CS301 - Advanced Algorithms</SelectItem>
-                        <SelectItem value="CS202">CS202 - Database Systems</SelectItem>
-                        <SelectItem value="CS401">CS401 - Operating Systems</SelectItem>
-                        <SelectItem value="CS101">CS101 - Programming Basics</SelectItem>
+                        {courses.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -672,6 +975,7 @@ export default function QuestionEditor() {
             </Card>
           </TabsContent>
         </Tabs>
+        )}
       </div>
     </DashboardLayout>
   );

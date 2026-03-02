@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -44,152 +44,139 @@ import {
   Eye,
   ArrowUpDown,
   Database,
+  Loader2,
 } from 'lucide-react';
+import api from '@/lib/api';
+import { unwrapPaginatedData } from '@/lib/api';
 
 interface Question {
   id: string;
   content: string;
-  type: 'single_choice' | 'multiple_choice' | 'true_false' | 'fill_blank' | 'matching' | 'find_error' | 'ordering' | 'essay';
-  course: string;
-  topic: string;
-  difficulty: number; // 0-1
-  discrimination: number; // 0-1
-  reliability: number; // 0-1
-  tags: string[];
-  status: 'active' | 'draft' | 'retired';
-  usageCount: number;
-  lastUsed: string;
+  type: string;
+  course?: { code: string; name: string };
+  difficulty: number;
+  points: number;
+  tags: string;
   createdAt: string;
+  updatedAt: string;
 }
 
-const mockQuestions: Question[] = [
-  {
-    id: 'Q001', content: 'Define the time complexity of Dijkstra\'s algorithm using a min-heap.',
-    type: 'multiple_choice', course: 'CS301', topic: 'Graph Algorithms',
-    difficulty: 0.72, discrimination: 0.45, reliability: 0.88,
-    tags: ['graph', 'shortest-path', 'complexity'], status: 'active',
-    usageCount: 5, lastUsed: '2026-01-10', createdAt: '2025-06-15',
-  },
-  {
-    id: 'Q002', content: 'Explain the difference between B-Tree and B+ Tree indexing.',
-    type: 'essay', course: 'CS202', topic: 'Database Indexing',
-    difficulty: 0.58, discrimination: 0.62, reliability: 0.91,
-    tags: ['index', 'B-tree', 'database'], status: 'active',
-    usageCount: 3, lastUsed: '2026-01-05', createdAt: '2025-08-20',
-  },
-  {
-    id: 'Q003', content: 'A binary search tree always guarantees O(log n) lookup time. True or False?',
-    type: 'true_false', course: 'CS301', topic: 'Data Structures',
-    difficulty: 0.35, discrimination: 0.28, reliability: 0.75,
-    tags: ['BST', 'data-structures'], status: 'active',
-    usageCount: 8, lastUsed: '2025-12-20', createdAt: '2025-03-10',
-  },
-  {
-    id: 'Q004', content: 'Implement a thread-safe Singleton pattern in Java.',
-    type: 'essay', course: 'CS401', topic: 'Design Patterns',
-    difficulty: 0.81, discrimination: 0.55, reliability: 0.82,
-    tags: ['patterns', 'concurrency', 'java'], status: 'active',
-    usageCount: 2, lastUsed: '2025-11-15', createdAt: '2025-09-01',
-  },
-  {
-    id: 'Q005', content: 'Which sorting algorithm has the best average-case time complexity?',
-    type: 'multiple_choice', course: 'CS301', topic: 'Sorting',
-    difficulty: 0.42, discrimination: 0.18, reliability: 0.65,
-    tags: ['sorting', 'algorithm'], status: 'draft',
-    usageCount: 1, lastUsed: '2025-10-01', createdAt: '2025-10-01',
-  },
-  {
-    id: 'Q006', content: 'Describe the CAP theorem and its implications for distributed databases.',
-    type: 'essay', course: 'CS202', topic: 'Distributed Systems',
-    difficulty: 0.69, discrimination: 0.51, reliability: 0.87,
-    tags: ['CAP', 'distributed', 'database'], status: 'active',
-    usageCount: 4, lastUsed: '2026-01-08', createdAt: '2025-05-22',
-  },
-  {
-    id: 'Q007', content: 'A deadlock requires all four Coffman conditions to be present simultaneously. True or False?',
-    type: 'true_false', course: 'CS401', topic: 'Operating Systems',
-    difficulty: 0.48, discrimination: 0.40, reliability: 0.79,
-    tags: ['deadlock', 'OS', 'concurrency'], status: 'retired',
-    usageCount: 10, lastUsed: '2025-06-15', createdAt: '2024-09-01',
-  },  {
-    id: 'Q008', content: 'Match the OSI layer to its primary function.',
-    type: 'matching', course: 'CS401', topic: 'Networking',
-    difficulty: 0.55, discrimination: 0.48, reliability: 0.85,
-    tags: ['networking', 'OSI'], status: 'active',
-    usageCount: 2, lastUsed: '2026-02-01', createdAt: '2025-11-20',
-  },
-  {
-    id: 'Q009', content: 'Arrange the following sorting algorithms from slowest to fastest average case.',
-    type: 'ordering', course: 'CS301', topic: 'Sorting',
-    difficulty: 0.65, discrimination: 0.52, reliability: 0.89,
-    tags: ['sorting', 'algorithms'], status: 'active',
-    usageCount: 4, lastUsed: '2026-02-15', createdAt: '2025-12-05',
-  },
-  {
-    id: 'Q010', content: 'The primary key of a table must be [[unique]] and [[not null]].',
-    type: 'fill_blank', course: 'CS202', topic: 'Database Design',
-    difficulty: 0.32, discrimination: 0.35, reliability: 0.78,
-    tags: ['database', 'SQL'], status: 'active',
-    usageCount: 6, lastUsed: '2026-01-20', createdAt: '2025-08-10',
-  },];
+const typeLabels: Record<string, string> = {
+  MULTIPLE_CHOICE: 'Multiple Choice',
+  MULTI_SELECT: 'Multiple Select',
+  TRUE_FALSE: 'True/False',
+  SHORT_ANSWER: 'Short Answer',
+  ESSAY: 'Essay',
+  FILL_IN_BLANK: 'Fill in Blank',
+  MATCHING: 'Matching',
+  ORDERING: 'Ordering',
+};
 
 const difficultyLabel = (d: number) => {
-  if (d < 0.4) return { text: 'Easy', color: 'text-green-600' };
-  if (d < 0.7) return { text: 'Medium', color: 'text-yellow-600' };
+  if (d <= 2) return { text: 'Easy', color: 'text-green-600' };
+  if (d <= 3) return { text: 'Medium', color: 'text-yellow-600' };
   return { text: 'Hard', color: 'text-red-600' };
 };
 
-const qualityIndicator = (disc: number, rel: number) => {
-  const avg = (disc + rel) / 2;
-  if (avg >= 0.7) return { text: 'High', variant: 'success' as const };
-  if (avg >= 0.4) return { text: 'Medium', variant: 'warning' as const };
-  return { text: 'Low', variant: 'destructive' as const };
+// Safe parser for tags - handles arrays, JSON strings, comma-separated strings, or null
+const safeParseTags = (tags: unknown): string[] => {
+  if (!tags) return [];
+  // Already an array
+  if (Array.isArray(tags)) return tags.filter(t => typeof t === 'string');
+  // Not a string - can't parse
+  if (typeof tags !== 'string') return [];
+  try {
+    const parsed = JSON.parse(tags);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    // Not JSON - treat as comma-separated string
+    return tags.split(',').map(t => t.trim()).filter(Boolean);
+  }
 };
 
 export default function QuestionBankManagement() {
   const navigate = useNavigate();
-  const [questions, setQuestions] = useState<Question[]>(mockQuestions);
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [courses, setCourses] = useState<{ id: string; code: string; name: string; faculty?: string }[]>([]);
+  const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [filterCourse, setFilterCourse] = useState('all');
   const [filterType, setFilterType] = useState('all');
-  const [filterStatus, setFilterStatus] = useState('all');
-  const [sortBy, setSortBy] = useState<'difficulty' | 'discrimination' | 'reliability' | 'usageCount'>('difficulty');
+  const [sortBy, setSortBy] = useState<'difficulty' | 'points'>('difficulty');
   const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
+  const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [total, setTotal] = useState(0);
+  const ITEMS_PER_PAGE = 20;
 
-  const courses = [...new Set(mockQuestions.map((q) => q.course))];
-  const allTags = [...new Set(mockQuestions.flatMap((q) => q.tags))];
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        const [questionsRes, coursesData] = await Promise.all([
+          api.getQuestions({ page, limit: ITEMS_PER_PAGE }),
+          api.getCourses(),
+        ]);
+        // Handle paginated response
+        const qData = unwrapPaginatedData(questionsRes);
+        setQuestions(qData);
+        setTotalPages(questionsRes?.totalPages ?? 1);
+        setTotal(questionsRes?.total ?? qData.length);
+        setCourses(unwrapPaginatedData(coursesData));
+      } catch (error) {
+        console.error('Failed to fetch questions:', error);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [page]);
 
   const filtered = questions
     .filter((q) => {
+      const tags = safeParseTags(q.tags);
       const matchSearch =
         q.content.toLowerCase().includes(search.toLowerCase()) ||
         q.id.toLowerCase().includes(search.toLowerCase()) ||
-        q.tags.some((t) => t.toLowerCase().includes(search.toLowerCase()));
-      const matchCourse = filterCourse === 'all' || q.course === filterCourse;
+        tags.some((t: string) => t.toLowerCase().includes(search.toLowerCase()));
+      // When a course is selected, filter by it; otherwise show all
+      const matchCourse = selectedCourse
+        ? q.course?.code === selectedCourse
+        : (filterCourse === 'all' || q.course?.code === filterCourse);
       const matchType = filterType === 'all' || q.type === filterType;
-      const matchStatus = filterStatus === 'all' || q.status === filterStatus;
-      return matchSearch && matchCourse && matchType && matchStatus;
+      return matchSearch && matchCourse && matchType;
     })
     .sort((a, b) => {
       const mul = sortDir === 'asc' ? 1 : -1;
-      return (a[sortBy] - b[sortBy]) * mul;
+      if (sortBy === 'difficulty') return ((a.difficulty || 1) - (b.difficulty || 1)) * mul;
+      return ((a.points || 1) - (b.points || 1)) * mul;
     });
 
-  const handleDelete = (id: string) => {
-    setQuestions((prev) => prev.filter((q) => q.id !== id));
+  const handleDelete = async (id: string) => {
+    try {
+      await api.deleteQuestion(id);
+      setQuestions((prev) => prev.filter((q) => q.id !== id));
+    } catch (error) {
+      console.error('Failed to delete question:', error);
+    }
   };
 
-  const handleDuplicate = (q: Question) => {
-    const dup: Question = {
-      ...q,
-      id: `Q${String(questions.length + 1).padStart(3, '0')}`,
-      content: `[Copy] ${q.content}`,
-      status: 'draft',
-      usageCount: 0,
-      createdAt: new Date().toISOString().split('T')[0],
-    };
-    setQuestions((prev) => [dup, ...prev]);
+  const handleDuplicate = async (q: Question) => {
+    try {
+      const newQuestion = await api.createQuestion({
+        type: q.type,
+        content: `[Copy] ${q.content}`,
+        difficulty: q.difficulty,
+        points: q.points,
+        tags: safeParseTags(q.tags),
+        courseId: q.course?.code ? courses.find(c => c.code === q.course?.code)?.id : undefined,
+      });
+      setQuestions((prev) => [newQuestion, ...prev]);
+    } catch (error) {
+      console.error('Failed to duplicate question:', error);
+    }
   };
 
   const toggleSort = (col: typeof sortBy) => {
@@ -197,10 +184,46 @@ export default function QuestionBankManagement() {
     else { setSortBy(col); setSortDir('desc'); }
   };
 
+  // Group questions by course
+  const groupQuestionsByCourse = (questions: Question[]) => {
+    return questions.reduce((acc, question) => {
+      const courseCode = question.course?.code || 'Uncategorized';
+      if (!acc[courseCode]) {
+        acc[courseCode] = [];
+      }
+      acc[courseCode].push(question);
+      return acc;
+    }, {} as Record<string, Question[]>);
+  };
+
+  const gradientClasses = [
+    'bg-gradient-to-br from-pink-400 to-pink-600',
+    'bg-gradient-to-br from-purple-400 to-indigo-600', 
+    'bg-gradient-to-br from-blue-400 to-cyan-600',
+    'bg-gradient-to-br from-green-400 to-emerald-600',
+    'bg-gradient-to-br from-yellow-400 to-orange-600',
+    'bg-gradient-to-br from-red-400 to-pink-600',
+    'bg-gradient-to-br from-gray-400 to-gray-600',
+  ];
+
+  const getGradientClass = (index: number): string => {
+    return gradientClasses[index % gradientClasses.length];
+  };
+
   // Stats
-  const activeCount = questions.filter((q) => q.status === 'active').length;
-  const avgDifficulty = (questions.reduce((s, q) => s + q.difficulty, 0) / questions.length).toFixed(2);
-  const lowQualityCount = questions.filter((q) => (q.discrimination + q.reliability) / 2 < 0.4).length;
+  const avgDifficulty = questions.length > 0 
+    ? (questions.reduce((s, q) => s + (q.difficulty || 1), 0) / questions.length).toFixed(1)
+    : '0';
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -213,248 +236,318 @@ export default function QuestionBankManagement() {
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
         </Button>
 
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground mb-1">Question Bank</h1>
-            <p className="text-muted-foreground">
-              Manage questions, quality metrics, and psychometric analysis
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2" onClick={() => navigate('/lecturer/question-history')}>
-              <BarChart3 className="h-4 w-4" /> Analytics
-            </Button>
-            <Button className="gap-2" onClick={() => navigate('/lecturer/question-editor')}>
-              <Plus className="h-4 w-4" /> New Question
-            </Button>
-          </div>
-        </div>
-
-        {/* Stats Row */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Database className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{questions.length}</p>
-                  <p className="text-xs text-muted-foreground">Total Questions</p>
-                </div>
+        {/* COURSE SELECTION VIEW */}
+        {!selectedCourse ? (
+          <>
+            <div className="flex items-start justify-between mb-6 flex-col sm:flex-row gap-3">
+              <div>
+                <h1 className="text-2xl font-semibold text-foreground mb-1">Question Bank</h1>
+                <p className="text-muted-foreground">
+                  Select a course to manage its questions
+                </p>
               </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{activeCount}</p>
-                  <p className="text-xs text-muted-foreground">Active</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                  <BarChart3 className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{avgDifficulty}</p>
-                  <p className="text-xs text-muted-foreground">Avg Difficulty</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-red-100 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-red-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{lowQualityCount}</p>
-                  <p className="text-xs text-muted-foreground">Low Quality</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Filters */}
-        <Card className="mb-6">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex flex-wrap gap-3 items-center">
-              <div className="relative flex-1 min-w-[200px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search questions, IDs, tags..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={filterCourse} onValueChange={setFilterCourse}>
-                <SelectTrigger className="w-[140px]"><SelectValue placeholder="Course" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Courses</SelectItem>
-                  {courses.map((c) => <SelectItem key={c} value={c}>{c}</SelectItem>)}
-                </SelectContent>
-              </Select>
-              <Select value={filterType} onValueChange={setFilterType}>
-                <SelectTrigger className="w-[160px]"><SelectValue placeholder="Type" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Types</SelectItem>
-                  <SelectItem value="single_choice">Single Choice</SelectItem>
-                  <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
-                  <SelectItem value="true_false">True / False</SelectItem>
-                  <SelectItem value="fill_blank">Fill in the Blank</SelectItem>
-                  <SelectItem value="matching">Matching</SelectItem>
-                  <SelectItem value="find_error">Find the Error</SelectItem>
-                  <SelectItem value="ordering">Ordering / Sequencing</SelectItem>
-                  <SelectItem value="essay">Short Answer / Essay</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-[130px]"><SelectValue placeholder="Status" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="draft">Draft</SelectItem>
-                  <SelectItem value="retired">Retired</SelectItem>
-                </SelectContent>
-              </Select>
+              <Button className="gap-2" onClick={() => navigate('/lecturer/question-editor')}>
+                <Plus className="h-4 w-4" /> New Question
+              </Button>
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Question Table */}
-        <Card>
-          <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">ID</TableHead>
-                  <TableHead>Question</TableHead>
-                  <TableHead className="w-24">Type</TableHead>
-                  <TableHead className="w-20">Course</TableHead>
-                  <TableHead className="w-28 cursor-pointer" onClick={() => toggleSort('difficulty')}>
-                    <div className="flex items-center gap-1">
-                      Difficulty <ArrowUpDown className="h-3 w-3" />
+            {/* Stats Row */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+              <Card>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                      <Database className="h-5 w-5 text-primary" />
                     </div>
-                  </TableHead>
-                  <TableHead className="w-32 cursor-pointer" onClick={() => toggleSort('discrimination')}>
-                    <div className="flex items-center gap-1">
-                      Discrim. <ArrowUpDown className="h-3 w-3" />
+                    <div>
+                      <p className="text-2xl font-semibold">{questions.length}</p>
+                      <p className="text-xs text-muted-foreground">Total Questions</p>
                     </div>
-                  </TableHead>
-                  <TableHead className="w-28 cursor-pointer" onClick={() => toggleSort('reliability')}>
-                    <div className="flex items-center gap-1">
-                      Reliability <ArrowUpDown className="h-3 w-3" />
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
+                      <CheckCircle2 className="h-5 w-5 text-green-600" />
                     </div>
-                  </TableHead>
-                  <TableHead className="w-20">Quality</TableHead>
-                  <TableHead className="w-20">Status</TableHead>
-                  <TableHead className="w-28 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((q) => {
-                  const diff = difficultyLabel(q.difficulty);
-                  const qual = qualityIndicator(q.discrimination, q.reliability);
-                  return (
-                    <TableRow key={q.id}>
-                      <TableCell className="font-mono text-xs">{q.id}</TableCell>
-                      <TableCell>
-                        <p className="text-sm line-clamp-2">{q.content}</p>
-                        <div className="flex gap-1 mt-1 flex-wrap">
-                          {q.tags.map((t) => (
-                            <span key={t} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground">
-                              <Tag className="h-2.5 w-2.5" />{t}
+                    <div>
+                      <p className="text-2xl font-semibold">{courses.length}</p>
+                      <p className="text-xs text-muted-foreground">Courses</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
+                      <BarChart3 className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold">{avgDifficulty}</p>
+                      <p className="text-xs text-muted-foreground">Avg Difficulty</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+              <Card>
+                <CardContent className="pt-4 pb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
+                      <Tag className="h-5 w-5 text-purple-600" />
+                    </div>
+                    <div>
+                      <p className="text-2xl font-semibold">{Object.keys(typeLabels).filter(t => questions.some(q => q.type === t)).length}</p>
+                      <p className="text-xs text-muted-foreground">Question Types</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Course Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {courses.map((course, index) => {
+                const courseQuestions = questions.filter(q => q.course?.code === course.code);
+                const questionTypes = [...new Set(courseQuestions.map(q => q.type))];
+                const avgDiff = courseQuestions.length > 0
+                  ? (courseQuestions.reduce((s, q) => s + (q.difficulty || 1), 0) / courseQuestions.length)
+                  : 0;
+                const diffInfo = difficultyLabel(avgDiff);
+                return (
+                  <Card
+                    key={course.id}
+                    className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
+                    onClick={() => setSelectedCourse(course.code)}
+                  >
+                    <div className={`h-32 ${getGradientClass(index)} relative`}>
+                      <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
+                      <div className="absolute bottom-4 left-4 text-white">
+                        <p className="text-2xl font-bold">{course.code}</p>
+                        <p className="text-sm text-white/80 line-clamp-1">{course.name}</p>
+                      </div>
+                      <div className="absolute top-4 right-4">
+                        <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
+                          {courseQuestions.length} questions
+                        </span>
+                      </div>
+                    </div>
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Avg Difficulty</span>
+                          <span className={`font-medium ${diffInfo.color}`}>{diffInfo.text}</span>
+                        </div>
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Question Types</span>
+                          <span className="font-medium">{questionTypes.length}</span>
+                        </div>
+                        <div className="flex flex-wrap gap-1 pt-1">
+                          {questionTypes.slice(0, 3).map(t => (
+                            <span key={t} className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">
+                              {typeLabels[t] || t}
                             </span>
                           ))}
+                          {questionTypes.length > 3 && (
+                            <span className="text-[10px] text-muted-foreground">+{questionTypes.length - 3} more</span>
+                          )}
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <span className="text-xs capitalize">{q.type.replace('_', ' ')}</span>
-                      </TableCell>
-                      <TableCell className="font-mono text-xs">{q.course}</TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-between">
-                            <span className={`text-xs font-medium ${diff.color}`}>{diff.text}</span>
-                            <span className="text-xs text-muted-foreground">{q.difficulty.toFixed(2)}</span>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {courses.length === 0 && (
+              <div className="text-center py-16 text-muted-foreground">
+                <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">No courses yet</p>
+                <p className="text-sm">Create a course first to start adding questions.</p>
+              </div>
+            )}
+          </>
+        ) : (
+          /* QUESTION LIST VIEW (after selecting a course) */
+          <>
+            <div className="flex items-start justify-between mb-6 flex-col sm:flex-row gap-3">
+              <div className="flex items-center gap-3">
+                <Button
+                  variant="outline" size="icon"
+                  className="h-9 w-9"
+                  onClick={() => setSelectedCourse(null)}
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+                <div>
+                  <h1 className="text-2xl font-semibold text-foreground mb-0.5">
+                    {selectedCourse} — Question Bank
+                  </h1>
+                  <p className="text-muted-foreground text-sm">
+                    {courses.find(c => c.code === selectedCourse)?.name || ''} • {filtered.length} questions
+                  </p>
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" className="gap-2" onClick={() => navigate('/lecturer/question-history')}>
+                  <BarChart3 className="h-4 w-4" /> Analytics
+                </Button>
+                <Button className="gap-2" onClick={() => navigate(`/lecturer/question-editor?courseCode=${selectedCourse}`)}>
+                  <Plus className="h-4 w-4" /> New Question
+                </Button>
+              </div>
+            </div>
+
+            {/* Filters */}
+            <Card className="mb-6">
+              <CardContent className="pt-4 pb-4">
+                <div className="flex flex-wrap gap-3 items-center">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search questions, IDs, tags..."
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      className="pl-9"
+                    />
+                  </div>
+                  <Select value={filterType} onValueChange={setFilterType}>
+                    <SelectTrigger className="w-[160px]"><SelectValue placeholder="Type" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Types</SelectItem>
+                      {Object.entries(typeLabels).map(([value, label]) => (
+                        <SelectItem key={value} value={value}>{label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Question Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {filtered.map((question, qIndex) => {
+                const diff = difficultyLabel(question.difficulty || 1);
+                const tags = safeParseTags(question.tags);
+                return (
+                  <Card key={question.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                    <div className={`h-24 ${getGradientClass(qIndex)} relative`}>
+                      <div className="absolute inset-0 bg-black/20" />
+                      <div className="absolute top-3 right-3 flex gap-1">
+                        <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-6 w-6 p-0" onClick={() => setPreviewQuestion(question)}>
+                          <Eye className="h-3 w-3" />
+                        </Button>
+                        <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-6 w-6 p-0" onClick={() => navigate(`/lecturer/question-editor?id=${question.id}&courseCode=${selectedCourse}`)}>
+                          <Edit2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-xs font-mono text-muted-foreground">{question.id.slice(0, 8)}</span>
+                            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${diff.color}`}>{diff.text}</span>
                           </div>
-                          <Progress value={q.difficulty * 100} className="h-1.5" />
+                          <p className="text-sm line-clamp-3 mb-2">{question.content}</p>
+                          
+                          <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
+                            <span>{typeLabels[question.type] || question.type}</span>
+                            <span>•</span>
+                            <span>{question.points || 1} pts</span>
+                          </div>
+                          
+                          <div className="flex flex-wrap gap-1">
+                            {tags.slice(0, 3).map((tag: string) => (
+                              <span key={tag} className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground">
+                                <Tag className="h-2.5 w-2.5" />{tag}
+                              </span>
+                            ))}
+                            {tags.length > 3 && (
+                              <span className="text-[10px] text-muted-foreground">+{tags.length - 3}</span>
+                            )}
+                          </div>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">{q.discrimination.toFixed(2)}</span>
-                          <Progress value={q.discrimination * 100} className="h-1.5" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <span className="text-xs text-muted-foreground">{q.reliability.toFixed(2)}</span>
-                          <Progress value={q.reliability * 100} className="h-1.5" />
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge variant={qual.variant}>{qual.text}</StatusBadge>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge
-                          variant={q.status === 'active' ? 'success' : q.status === 'draft' ? 'warning' : 'default'}
-                        >
-                          {q.status}
-                        </StatusBadge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-0.5">
-                          <Button variant="ghost" size="sm" title="Preview" onClick={() => setPreviewQuestion(q)}>
-                            <Eye className="h-4 w-4" />
+                        
+                        <div className="flex gap-1 pt-2">
+                          <Button variant="outline" size="sm" className="flex-1 h-7 text-xs" onClick={() => handleDuplicate(question)}>
+                            <Copy className="h-3 w-3 mr-1" />
+                            Copy
                           </Button>
-                          <Button variant="ghost" size="sm" title="Edit" onClick={() => navigate(`/lecturer/question-editor?id=${q.id}`)}>
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" title="Duplicate" onClick={() => handleDuplicate(q)}>
-                            <Copy className="h-4 w-4" />
-                          </Button>
-                          <Button variant="ghost" size="sm" className="text-destructive" title="Delete" onClick={() => handleDelete(q.id)}>
-                            <Trash2 className="h-4 w-4" />
+                          <Button variant="outline" size="sm" className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground" onClick={() => handleDelete(question.id)}>
+                            <Trash2 className="h-3 w-3" />
                           </Button>
                         </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-                {filtered.length === 0 && (
-                  <TableRow>
-                    <TableCell colSpan={10} className="text-center py-8 text-muted-foreground">
-                      No questions match the current filters
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
-          </CardContent>
-        </Card>
+                      </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+
+            {filtered.length === 0 && (
+              <div className="text-center py-16 text-muted-foreground">
+                <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">No questions found</p>
+                <p className="text-sm">Create your first question for this course.</p>
+              </div>
+            )}
+
+            {/* Pagination Controls */}
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between mt-6 px-2">
+                <p className="text-sm text-muted-foreground">
+                  Showing page {page} of {totalPages} ({total} total)
+                </p>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+                    const start = Math.max(1, Math.min(page - 2, totalPages - 4));
+                    const p = start + i;
+                    if (p > totalPages) return null;
+                    return (
+                      <Button
+                        key={p}
+                        variant={p === page ? 'default' : 'outline'}
+                        size="sm"
+                        className="w-8 h-8 p-0"
+                        onClick={() => setPage(p)}
+                      >
+                        {p}
+                      </Button>
+                    );
+                  })}
+                  <Button
+                    variant="outline" size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            )}
+          </>
+        )}
 
         {/* Preview Dialog */}
         <Dialog open={!!previewQuestion} onOpenChange={() => setPreviewQuestion(null)}>
           <DialogContent className="max-w-lg">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
-                <span className="font-mono text-sm text-muted-foreground">{previewQuestion?.id}</span>
+                <span className="font-mono text-sm text-muted-foreground">{previewQuestion?.id.slice(0, 8)}</span>
                 Question Preview
               </DialogTitle>
-              <DialogDescription>Full question details and psychometric data</DialogDescription>
+              <DialogDescription>Full question details</DialogDescription>
             </DialogHeader>
             {previewQuestion && (
               <div className="space-y-4">
@@ -463,34 +556,25 @@ export default function QuestionBankManagement() {
                   <p className="text-sm text-muted-foreground">{previewQuestion.content}</p>
                 </div>
                 <Separator />
-                <div className="grid grid-cols-3 gap-4 text-center">
+                <div className="grid grid-cols-2 gap-4 text-center">
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Difficulty</p>
-                    <p className="text-lg font-semibold">{previewQuestion.difficulty.toFixed(2)}</p>
-                    <Progress value={previewQuestion.difficulty * 100} className="h-1.5 mt-1" />
+                    <p className="text-lg font-semibold">{previewQuestion.difficulty || 1}</p>
                   </div>
                   <div>
-                    <p className="text-xs text-muted-foreground mb-1">Discrimination</p>
-                    <p className="text-lg font-semibold">{previewQuestion.discrimination.toFixed(2)}</p>
-                    <Progress value={previewQuestion.discrimination * 100} className="h-1.5 mt-1" />
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Reliability</p>
-                    <p className="text-lg font-semibold">{previewQuestion.reliability.toFixed(2)}</p>
-                    <Progress value={previewQuestion.reliability * 100} className="h-1.5 mt-1" />
+                    <p className="text-xs text-muted-foreground mb-1">Points</p>
+                    <p className="text-lg font-semibold">{previewQuestion.points || 1}</p>
                   </div>
                 </div>
                 <Separator />
                 <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div><span className="text-muted-foreground">Course:</span> {previewQuestion.course}</div>
-                  <div><span className="text-muted-foreground">Topic:</span> {previewQuestion.topic}</div>
-                  <div><span className="text-muted-foreground">Type:</span> {previewQuestion.type.replace('_', ' ')}</div>
-                  <div><span className="text-muted-foreground">Used:</span> {previewQuestion.usageCount} times</div>
-                  <div><span className="text-muted-foreground">Last used:</span> {previewQuestion.lastUsed}</div>
-                  <div><span className="text-muted-foreground">Created:</span> {previewQuestion.createdAt}</div>
+                  <div><span className="text-muted-foreground">Course:</span> {previewQuestion.course?.code || '-'}</div>
+                  <div><span className="text-muted-foreground">Type:</span> {typeLabels[previewQuestion.type] || previewQuestion.type}</div>
+                  <div><span className="text-muted-foreground">Created:</span> {new Date(previewQuestion.createdAt).toLocaleDateString()}</div>
+                  <div><span className="text-muted-foreground">Updated:</span> {new Date(previewQuestion.updatedAt).toLocaleDateString()}</div>
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  {previewQuestion.tags.map((t) => (
+                  {safeParseTags(previewQuestion.tags).map((t: string) => (
                     <span key={t} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-muted text-muted-foreground">
                       <Tag className="h-3 w-3" />{t}
                     </span>

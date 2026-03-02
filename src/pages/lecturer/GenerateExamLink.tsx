@@ -157,7 +157,7 @@ export default function GenerateExamLink() {
           </p>
         </div>
 
-        <div className="grid grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-6">
           {/* Generate Link Card */}
           <Card>
             <CardHeader className="pb-3">
@@ -177,7 +177,7 @@ export default function GenerateExamLink() {
                   </SelectContent>
                 </Select>
               </div>
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Max Usage</Label>
                   <Input type="number" min={1} value={maxUsage} onChange={(e) => setMaxUsage(Number(e.target.value))} />
@@ -329,7 +329,7 @@ export default function GenerateExamLink() {
             <CardDescription>Monitor email delivery and student enrollment status</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-3 gap-4 mb-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-4">
               <div className="text-center p-3 rounded-lg bg-muted">
                 <p className="text-xl font-semibold">{invitations.length}</p>
                 <p className="text-xs text-muted-foreground">Total Sent</p>
