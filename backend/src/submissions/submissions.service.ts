@@ -375,6 +375,47 @@ export class SubmissionsService {
     return submission;
   }
 
+  /**
+   * Export exam results as CSV string. Returns CSV content (headers + rows).
+   */
+  async exportExamResults(examId: string) {
+    const submissions = await this.prisma.examSubmission.findMany({
+      where: { examId, status: { in: ['SUBMITTED', 'GRADED', 'FLAGGED'] } },
+      include: {
+        student: {
+          select: { fullName: true, studentId: true, email: true },
+        },
+        answers: true,
+        exam: { select: { id: true, title: true, totalPoints: true } },
+      },
+      orderBy: { submittedAt: 'desc' },
+    });
+
+    // Build CSV
+    const rows: string[] = [];
+    // header
+    rows.push(['Student Name', 'Student ID', 'Email', 'Score', 'Total Points', 'Time Spent (mins)', 'Status', 'Submitted At'].join(','));
+
+    for (const s of submissions) {
+      const studentName = (s.student?.fullName || '').replace(/,/g, '');
+      const studentId = s.student?.studentId || '';
+      const email = s.student?.email || '';
+      const score = s.score != null ? String(s.score) : '';
+      const totalPoints = s.exam?.totalPoints != null ? String(s.exam.totalPoints) : '';
+      let timeSpentMins = '';
+      if (s.startedAt && s.submittedAt) {
+        const diffMs = new Date(s.submittedAt).getTime() - new Date(s.startedAt).getTime();
+        timeSpentMins = String(Math.round(diffMs / 60000));
+      }
+      const status = s.status || '';
+      const submittedAt = s.submittedAt ? new Date(s.submittedAt).toISOString() : '';
+
+      rows.push([studentName, studentId, email, score, totalPoints, timeSpentMins, status, submittedAt].join(','));
+    }
+
+    return rows.join('\n');
+  }
+
   async getStudentSubmission(examId: string, studentId: string) {
     return this.prisma.examSubmission.findFirst({
       where: { examId, studentId },

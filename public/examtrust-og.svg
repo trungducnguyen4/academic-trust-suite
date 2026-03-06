@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630" role="img" aria-label="ExamTrust social image">
+  <defs>
+    <linearGradient id="g1" x1="0" x2="1">
+      <stop offset="0" stop-color="#2E6CF6"/>
+      <stop offset="1" stop-color="#4AA1FF"/>
+    </linearGradient>
+  </defs>
+  <rect width="1200" height="630" fill="#F7F9FC"/>
+  <rect x="60" y="90" width="180" height="180" rx="32" fill="url(#g1)"/>
+
+  <!-- mortarboard inside rounded square -->
+  <g transform="translate(90 125) scale(3)">
+    <path d="M6 12 L22 6 L38 12 L22 18 Z" fill="#fff"/>
+    <path d="M22 18 L22 28" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/>
+    <circle cx="22" cy="30" r="2.2" fill="#fff"/>
+  </g>
+
+  <text x="280" y="180" font-family="Inter, Arial, sans-serif" font-size="64" fill="#0F172A" font-weight="700">ExamTrust</text>
+  <text x="280" y="230" font-family="Inter, Arial, sans-serif" font-size="20" fill="#475569">Secure, trusted exam management for universities and schools</text>
+</svg>

@@ -1,6 +1,7 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
@@ -22,8 +23,25 @@ async function bootstrap() {
   // API prefix
   app.setGlobalPrefix('api');
 
+  // Swagger docs at /docs
+  const swaggerConfig = new DocumentBuilder()
+    .setTitle('ExamTrust API')
+    .setDescription('Academic Trust Suite – REST API documentation')
+    .setVersion('1.0')
+    .addBearerAuth(
+      { type: 'http', scheme: 'bearer', bearerFormat: 'JWT', in: 'header' },
+      'access-token',
+    )
+    .build();
+
+  const document = SwaggerModule.createDocument(app, swaggerConfig);
+  SwaggerModule.setup('docs', app, document, {
+    swaggerOptions: { persistAuthorization: true },
+  });
+
   const port = process.env.PORT || 3001;
   await app.listen(port);
   console.log(`🚀 ExamTrust API running on http://localhost:${port}/api`);
+  console.log(`📖 Swagger docs    → http://localhost:${port}/docs`);
 }
 bootstrap();

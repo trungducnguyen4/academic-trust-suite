@@ -8,13 +8,19 @@ import {
   Query,
   UseGuards,
   Request,
+  Res,
 } from '@nestjs/common';
+import { Response } from 'express';
 import { SubmissionsService } from './submissions.service';
 import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto } from './dto/submission.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+
+@ApiTags('Submissions')
+@ApiBearerAuth('access-token')
 @Controller('submissions')
 @UseGuards(JwtAuthGuard)
 export class SubmissionsController {
@@ -61,6 +67,16 @@ export class SubmissionsController {
       limit: limit ? parseInt(limit, 10) : 20,
     };
     return this.submissionsService.findByExam(examId, pagination);
+  }
+
+  @Get('exam/:examId/export')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  async exportExamResults(@Param('examId') examId: string, @Res() res: Response) {
+    const csv = await this.submissionsService.exportExamResults(examId);
+    res.setHeader('Content-Type', 'text/csv');
+    res.setHeader('Content-Disposition', `attachment; filename="exam-${examId}-results.csv"`);
+    return res.send(csv);
   }
 
   @Get('my-submissions')

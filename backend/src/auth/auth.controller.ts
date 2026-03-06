@@ -4,6 +4,10 @@ import { LoginDto } from './dto/login.dto';
 import { RegisterDto } from './dto/register.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import { ApiTags } from '@nestjs/swagger';
+
+@ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
   constructor(private authService: AuthService) {}

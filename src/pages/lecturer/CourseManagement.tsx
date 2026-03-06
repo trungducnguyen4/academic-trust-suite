@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { api, unwrapPaginatedData } from '@/lib/api';
+import { formatDistanceToNow } from 'date-fns';
 import {
   Select,
   SelectContent,
@@ -63,58 +64,30 @@ export default function CourseManagement() {
   const fetchCourses = async () => {
     try {
       setLoading(true);
-      const coursesData = unwrapPaginatedData(await api.getCourses());
-      
-      // Mock data with faculty grouping - replace with real API data
-      const mockCourses: Course[] = [
-        { 
-          id: '1', 
-          code: 'HK3_2023_304105', 
-          name: 'Lịch sử Đảng Cộng sản Việt Nam', 
-          faculty: 'Faculty of Social Sciences and Humanities',
-          department: 'Political History',
-          enrolledStudents: 45,
-          totalStudents: 50,
-          progress: 75,
-          lastAccessed: '2 hours ago'
-        },
-        { 
-          id: '2', 
-          code: 'HK1_2025_504074', 
-          name: 'Kiến tập Công nghiệp', 
-          faculty: 'Faculty of Information Technology',
-          department: 'Software Engineering', 
-          enrolledStudents: 38,
-          totalStudents: 40,
-          progress: 33,
-          lastAccessed: '1 day ago'
-        },
-        {
-          id: '3',
-          code: 'HK2_2024_502071', 
-          name: 'Phát triển ứng dụng di động đa nền tảng',
-          faculty: 'Faculty of Information Technology',
-          department: 'Mobile Development',
-          enrolledStudents: 42,
-          totalStudents: 45,
-          progress: 65,
-          lastAccessed: '3 hours ago'
-        },
-        {
-          id: '4',
-          code: 'HK2_2024_503111',
-          name: 'Công nghệ Java',
-          faculty: 'Faculty of Information Technology', 
-          department: 'Software Engineering',
-          enrolledStudents: 35,
-          totalStudents: 40,
-          progress: 90,
-          lastAccessed: '5 hours ago'
-        }
-      ];
-      
-      setCourses(mockCourses);
-      setRecentCourses(mockCourses.slice(0, 2));
+      // Use my-courses which returns aggregated fields from the backend
+      const raw = await api.getMyCourses();
+      // Normalise: backend returns array directly (not paginated)
+      const safeRelativeTime = (raw: any): string => {
+        if (!raw) return '—';
+        const d = new Date(raw);
+        if (isNaN(d.getTime())) return '—';
+        return formatDistanceToNow(d, { addSuffix: true });
+      };
+
+      const list: Course[] = (Array.isArray(raw) ? raw : unwrapPaginatedData(raw)).map((c: any) => ({
+        id: c.id,
+        code: c.code,
+        name: c.name,
+        faculty: c.faculty ?? c.department ?? 'General',
+        department: c.department,
+        semester: c.semester,
+        enrolledStudents: c.enrolledStudents ?? c._count?.enrollments ?? 0,
+        totalStudents: c.totalStudents ?? c._count?.enrollments ?? 0,
+        progress: c.progress ?? 0,
+        lastAccessed: safeRelativeTime(c.lastAccessed),
+      }));
+      setCourses(list);
+      setRecentCourses(list.slice(0, 2));
     } catch (error) {
       console.error('Failed to fetch courses:', error);
     } finally {

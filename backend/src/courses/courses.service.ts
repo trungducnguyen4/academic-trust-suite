@@ -154,49 +154,104 @@ export class CoursesService {
   }
 
   async getMyCoursesAsStudent(studentId: string) {
-    return this.prisma.course.findMany({
+    const courses = await this.prisma.course.findMany({
       where: {
         enrollments: {
-          some: {
-            studentId,
-          },
+          some: { studentId },
         },
       },
       include: {
         lecturer: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
-        },
-        exams: {
-          where: {
-            status: 'PUBLISHED',
-          },
-          select: {
-            id: true,
-            title: true,
-            startTime: true,
-            endTime: true,
-          },
-        },
-      },
-    });
-  }
-
-  async getMyCoursesAsLecturer(lecturerId: string) {
-    return this.prisma.course.findMany({
-      where: { lecturerId },
-      include: {
-        _count: {
-          select: {
-            enrollments: true,
-            exams: true,
-          },
+          select: { id: true, fullName: true, email: true },
         },
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // For each course compute counts and student progress
+    const results = await Promise.all(
+      courses.map(async (c) => {
+        const [enrolledCount, publishedExamsCount, studentSubmittedCount, lastSubmission] = await Promise.all([
+          this.prisma.enrollment.count({ where: { courseId: c.id } }),
+          this.prisma.exam.count({ where: { courseId: c.id, status: 'PUBLISHED' } }),
+          this.prisma.examSubmission.count({
+            where: {
+              studentId,
+              exam: { courseId: c.id, status: 'PUBLISHED' },
+              status: { in: ['SUBMITTED', 'GRADED'] },
+            },
+          }),
+          this.prisma.examSubmission.findFirst({
+            where: { studentId, exam: { courseId: c.id } },
+            orderBy: { submittedAt: 'desc' },
+            select: { submittedAt: true, startedAt: true, createdAt: true },
+          }),
+        ]);
+
+        const progress = publishedExamsCount > 0 ? Math.round((studentSubmittedCount / publishedExamsCount) * 100) : 0;
+
+        const lastAccessed = lastSubmission ? lastSubmission.submittedAt ?? lastSubmission.startedAt ?? lastSubmission.createdAt : null;
+
+        return {
+          id: c.id,
+          code: c.code,
+          name: c.name,
+          semester: c.semester,
+          description: c.description,
+          credits: c.credits,
+          lecturer: c.lecturer,
+          enrolledStudents: enrolledCount,
+          totalStudents: enrolledCount,
+          progress,
+          lastAccessed,
+        };
+      }),
+    );
+
+    return results;
+  }
+
+  async getMyCoursesAsLecturer(lecturerId: string) {
+    const courses = await this.prisma.course.findMany({
+      where: { lecturerId },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const results = await Promise.all(
+      courses.map(async (c) => {
+        const [enrolledCount, publishedExamsCount, totalSubmissions, lastSubmission] = await Promise.all([
+          this.prisma.enrollment.count({ where: { courseId: c.id } }),
+          this.prisma.exam.count({ where: { courseId: c.id, status: 'PUBLISHED' } }),
+          this.prisma.examSubmission.count({ where: { exam: { courseId: c.id, status: 'PUBLISHED' } } }),
+          this.prisma.examSubmission.findFirst({
+            where: { exam: { courseId: c.id } },
+            orderBy: { submittedAt: 'desc' },
+            select: { submittedAt: true, startedAt: true, createdAt: true },
+          }),
+        ]);
+
+        const progress = publishedExamsCount > 0 && enrolledCount > 0
+          ? Math.round((totalSubmissions / (publishedExamsCount * Math.max(1, enrolledCount))) * 100)
+          : 0;
+
+        const lastAccessed = lastSubmission ? lastSubmission.submittedAt ?? lastSubmission.startedAt ?? lastSubmission.createdAt : null;
+
+        return {
+          id: c.id,
+          code: c.code,
+          name: c.name,
+          semester: c.semester,
+          description: c.description,
+          credits: c.credits,
+          lecturerId: c.lecturerId,
+          enrolledStudents: enrolledCount,
+          totalStudents: enrolledCount,
+          progress,
+          lastAccessed,
+        };
+      }),
+    );
+
+    return results;
   }
 }

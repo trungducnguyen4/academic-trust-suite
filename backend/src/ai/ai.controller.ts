@@ -3,6 +3,10 @@ import { AiService } from './ai.service';
 import { GenerateQuestionDto, GenerateExamQuestionsDto } from './dto/generate-question.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+
+@ApiTags('AI')
+@ApiBearerAuth('access-token')
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {

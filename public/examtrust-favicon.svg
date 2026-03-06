@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64" role="img" aria-label="ExamTrust logo">
+  <rect width="64" height="64" rx="12" fill="#2E6CF6"/>
+  <g transform="translate(10 14)" fill="none" stroke="#fff" stroke-linecap="round" stroke-linejoin="round" stroke-width="2">
+    <!-- mortarboard brim -->
+    <path d="M6 12 L22 6 L38 12 L22 18 Z" fill="#fff" stroke="none" opacity="0.95"/>
+    <!-- cap top (slightly darker) -->
+    <path d="M6 12 L22 6 L38 12 L22 18 Z" fill="#fff" opacity="0.0" />
+    <!-- tassel line -->
+    <path d="M22 18 L22 26" stroke="#fff" stroke-width="1.6"/>
+    <!-- tassel dot -->
+    <circle cx="22" cy="28" r="2" fill="#fff" stroke="none"/>
+  </g>
+</svg>

@@ -127,6 +127,12 @@ export default function CreateCourse() {
     const fetchCourses = async () => {
       try {
         const data = unwrapPaginatedData(await api.getCourses());
+        const safeIso = (raw?: any) => {
+          if (!raw) return '—';
+          const d = new Date(raw);
+          if (isNaN(d.getTime())) return typeof raw === 'string' ? raw : '—';
+          return d.toISOString().split('T')[0];
+        };
         const mapped: Course[] = data.map((c: APICourse) => ({
           id: c.id,
           code: c.code,
@@ -135,7 +141,7 @@ export default function CreateCourse() {
           students: c._count?.enrollments || 0,
           exams: c._count?.exams || 0,
           status: 'active' as const,
-          createdAt: new Date(c.createdAt).toISOString().split('T')[0],
+          createdAt: safeIso(c.createdAt),
         }));
         setCourses(mapped);
       } catch (err) {
@@ -246,7 +252,10 @@ export default function CreateCourse() {
         students: 0,
         exams: 0,
         status: 'active',
-        createdAt: new Date(created.createdAt).toISOString().split('T')[0],
+        createdAt: (() => {
+          const d = new Date(created.createdAt);
+          return isNaN(d.getTime()) ? (typeof created.createdAt === 'string' ? created.createdAt : '—') : d.toISOString().split('T')[0];
+        })(),
       };
       setCourses(prev => [mapped, ...prev]);
       setCreatedCourseId(created.id);

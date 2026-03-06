@@ -39,6 +39,7 @@ import UploadDocAIGen from "./pages/lecturer/UploadDocAIGen";
 import GenerateExamLink from "./pages/lecturer/GenerateExamLink";
 import CreateExam from "./pages/lecturer/CreateExam";
 import ExamAnalytics from "./pages/lecturer/ExamAnalytics";
+import ExamResultsList from "./pages/lecturer/ExamResultsList";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -95,6 +96,7 @@ const App = () => {
                 path="/lecturer/exam/:id/monitor"
                 element={<ExamMonitor />}
               />
+              <Route path="/lecturer/exam/:id/results" element={<ExamResultsList />} />
 
               <Route
                 path="/lecturer/question-bank"

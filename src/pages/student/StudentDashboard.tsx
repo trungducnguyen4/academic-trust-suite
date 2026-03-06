@@ -19,10 +19,14 @@ import {
   TrendingUp,
   Target,
   Award,
+  Filter,
+  MoreHorizontal,
+  Users,
 } from 'lucide-react';
 import { format, formatDistanceToNow, addHours } from 'date-fns';
 import { Link } from 'react-router-dom';
 import api from '@/lib/api';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface UpcomingExam {
   id: string;
@@ -49,6 +53,8 @@ export default function StudentDashboard() {
   const [upcomingExams, setUpcomingExams] = useState<UpcomingExam[]>([]);
   const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [recentCourses, setRecentCourses] = useState<any[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -59,7 +65,20 @@ export default function StudentDashboard() {
           api.getAvailableExams(),
           api.getMySubmissions(),
         ]);
-        
+        // try to load real course data for this student from backend
+        let myCourses: any[] = [];
+        try {
+          myCourses = await api.getMyCourses();
+        } catch (err) {
+          console.warn('getMyCourses failed, falling back to mock courses', err);
+        }
+        // simple mock fallback if backend returns nothing
+        const mockCourses = [
+          { id: 'c1', code: 'HK1_2025_504074', name: 'Kiến tập Công nghiệp', faculty: 'Faculty of Information Technology', enrolledStudents: 38, totalStudents: 40, progress: 33, lastAccessed: '2 days ago' },
+          { id: 'c2', code: 'HK2_2024_502071', name: 'Phát triển ứng dụng di động', faculty: 'Faculty of Information Technology', enrolledStudents: 42, totalStudents: 45, progress: 65, lastAccessed: '3 hours ago' },
+          { id: 'c3', code: 'HK2_2024_503111', name: 'Công nghệ Java', faculty: 'Faculty of Information Technology', enrolledStudents: 35, totalStudents: 40, progress: 90, lastAccessed: '5 hours ago' },
+          { id: 'c4', code: 'HK3_2023_304105', name: 'Lịch sử Đảng Cộng sản Việt Nam', faculty: 'Faculty of Social Sciences and Humanities', enrolledStudents: 45, totalStudents: 50, progress: 75, lastAccessed: '1 day ago' }
+        ];
         const now = new Date();
         const upcoming = exams.filter((exam: any) => {
           const endTime = new Date(exam.endTime);
@@ -71,6 +90,25 @@ export default function StudentDashboard() {
         
         setUpcomingExams(upcoming);
         setExamHistory(submissions.filter((s: any) => s.status === 'GRADED'));
+
+        const safeRelativeTime = (raw: any): string => {
+          if (!raw) return '—';
+          const d = new Date(raw);
+          if (isNaN(d.getTime())) return typeof raw === 'string' ? raw : '—';
+          return formatDistanceToNow(d, { addSuffix: true });
+        };
+
+        const normaliseCourses = (list: any[]) =>
+          list.map((c: any) => ({
+            ...c,
+            lastAccessed: safeRelativeTime(c.lastAccessed),
+          }));
+
+        const finalCourses = myCourses && myCourses.length
+          ? normaliseCourses(myCourses)
+          : mockCourses;
+        setCourses(finalCourses);
+        setRecentCourses(finalCourses.slice(0, 2));
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
@@ -168,6 +206,96 @@ export default function StudentDashboard() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
+          {/* Course overview (matches lecturer style) */}
+          <div className="lg:col-span-3">
+            <section className="mb-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-semibold">Course overview</h2>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" size="sm" className="gap-2">
+                    <Filter className="h-4 w-4" />
+                    All (except removed from view)
+                  </Button>
+                  <Select defaultValue="name">
+                    <SelectTrigger className="w-40">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="name">Course name</SelectItem>
+                      <SelectItem value="code">Course code</SelectItem>
+                      <SelectItem value="faculty">Faculty</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Select defaultValue="card">
+                    <SelectTrigger className="w-24">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="list">List</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div>
+                <div className="space-y-6">
+                  {/* group by faculty */}
+                  {Object.entries(courses.reduce((acc:any, c:any) => { const f = c.faculty||'Other'; (acc[f]||(acc[f]=[])).push(c); return acc; }, {})).map(([faculty, facultyCourses]: any) => (
+                    <div key={faculty}>
+                      <h3 className="text-lg font-medium mb-3">{faculty}</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                        {facultyCourses.map((course:any, index:number) => (
+                          <Card key={course.id} className="overflow-hidden hover:shadow-md transition-shadow">
+                            <div className={`h-24 ${['bg-gradient-to-br from-pink-400 to-pink-600','bg-gradient-to-br from-purple-400 to-indigo-600','bg-gradient-to-br from-blue-400 to-cyan-600','bg-gradient-to-br from-green-400 to-emerald-600'][index%4]} relative`}>
+                              <div className="absolute inset-0 bg-black/20" />
+                              <div className="absolute top-3 right-3">
+                                <Button variant="ghost" size="sm" className="text-white hover:bg-white/20">
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                            <CardContent className="p-4">
+                              <div className="space-y-3">
+                                <div>
+                                  <h4 className="font-medium text-sm">{course.code}</h4>
+                                  <p className="text-sm text-muted-foreground line-clamp-2">{course.name}</p>
+                                </div>
+                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                  <div className="flex items-center gap-1">
+                                    <Users className="h-3 w-3" />
+                                    <span>{course.enrolledStudents}/{course.totalStudents}</span>
+                                  </div>
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span>{course.lastAccessed}</span>
+                                  </div>
+                                </div>
+                                {course.progress != null && (
+                                  <div className="space-y-1">
+                                    <div className="flex justify-between text-xs">
+                                      <span>{course.progress}% complete</span>
+                                    </div>
+                                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                      <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: `${course.progress}%` }} />
+                                    </div>
+                                  </div>
+                                )}
+                                <Button asChild variant="outline" size="sm" className="w-full">
+                                  <Link to={`/student/courses/${course.id}`}>View Details</Link>
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </section>
+          </div>
+
           {/* Upcoming Exams */}
           <div className="lg:col-span-2">
             <Card className="card-elevated">
@@ -276,34 +404,7 @@ export default function StudentDashboard() {
             </Card>
           </div>
 
-          {/* Notifications */}
-          <div>
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold">Notifications</CardTitle>
-                <CardDescription>Recent updates</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {notifications.map((notification) => (
-                    <div key={notification.id} className="flex gap-3 p-3 rounded-xl bg-secondary/50">
-                      <div className={`mt-1 h-2 w-2 rounded-full flex-shrink-0 ${
-                        notification.type === 'warning' ? 'bg-warning' : 'bg-info'
-                      }`} />
-                      <div className="space-y-1">
-                        <p className="text-sm text-foreground leading-relaxed">
-                          {notification.message}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          {formatDistanceToNow(notification.time, { addSuffix: true })}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          </div>
+          {/* Notifications moved to header bell dropdown for compact responsive UI */}
         </div>
 
         {/* Recent Results */}
