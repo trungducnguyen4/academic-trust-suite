@@ -33,11 +33,13 @@ import QuestionHistoryAnalysis from "./pages/lecturer/QuestionHistoryAnalysis";
 import AdvancedExamRuleConfig from "./pages/lecturer/AdvancedExamRuleConfig";
 import ExamMonitor from "./pages/lecturer/ExamMonitor";
 import CreateCourse from "./pages/lecturer/CreateCourse";
+import CourseManagement from "./pages/lecturer/CourseManagement";
 import CourseDetail from "./pages/lecturer/CourseDetail";
 import UploadDocAIGen from "./pages/lecturer/UploadDocAIGen";
 import GenerateExamLink from "./pages/lecturer/GenerateExamLink";
 import CreateExam from "./pages/lecturer/CreateExam";
 import ExamAnalytics from "./pages/lecturer/ExamAnalytics";
+import ExamResultsList from "./pages/lecturer/ExamResultsList";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -94,6 +96,7 @@ const App = () => {
                 path="/lecturer/exam/:id/monitor"
                 element={<ExamMonitor />}
               />
+              <Route path="/lecturer/exam/:id/results" element={<ExamResultsList />} />
 
               <Route
                 path="/lecturer/question-bank"
@@ -111,6 +114,7 @@ const App = () => {
                 path="/lecturer/exam-rule-config"
                 element={<AdvancedExamRuleConfig />}
               />
+              <Route path="/lecturer/courses" element={<CourseManagement />} />
               <Route path="/lecturer/create-course" element={<CreateCourse />} />
               <Route path="/lecturer/course/:id" element={<CourseDetail />} />
               <Route path="/lecturer/upload-doc-ai" element={<UploadDocAIGen />} />

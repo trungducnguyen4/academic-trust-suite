@@ -1,68 +1,107 @@
-import React, { createContext, useContext, useState, ReactNode } from 'react';
-import { User, UserRole, AuthState } from '@/types/auth';
+import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { User, AuthState } from '@/types/auth';
+import api from '@/lib/api';
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   resetPassword: (email: string) => Promise<void>;
+  register: (data: {
+    email: string;
+    password: string;
+    fullName: string;
+    role?: string;
+    studentId?: string;
+    department?: string;
+  }) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-// Mock users for demonstration
-const mockUsers: Record<string, User & { password: string }> = {
-  'student@university.edu': {
-    id: '1',
-    email: 'student@university.edu',
-    name: 'Alex Johnson',
-    role: 'student',
-    password: 'password123',
-  },
-  'lecturer@university.edu': {
-    id: '2',
-    email: 'lecturer@university.edu',
-    name: 'Dr. Sarah Chen',
-    role: 'lecturer',
-    password: 'password123',
-  },
-  'admin@university.edu': {
-    id: '3',
-    email: 'admin@university.edu',
-    name: 'System Admin',
-    role: 'admin',
-    password: 'password123',
-  },
-};
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [authState, setAuthState] = useState<AuthState>({
     user: null,
     isAuthenticated: false,
-    isLoading: false,
+    isLoading: true, // Start with loading to check token
   });
+
+  // Check for existing token on mount
+  useEffect(() => {
+    const checkAuth = async () => {
+      const token = localStorage.getItem('accessToken');
+      if (token) {
+        try {
+          const user = await api.getMe();
+          setAuthState({
+            user,
+            isAuthenticated: true,
+            isLoading: false,
+          });
+        } catch (error) {
+          // Token invalid, clear it
+          api.clearToken();
+          setAuthState({
+            user: null,
+            isAuthenticated: false,
+            isLoading: false,
+          });
+        }
+      } else {
+        setAuthState({
+          user: null,
+          isAuthenticated: false,
+          isLoading: false,
+        });
+      }
+    };
+    checkAuth();
+  }, []);
 
   const login = async (email: string, password: string) => {
     setAuthState((prev) => ({ ...prev, isLoading: true }));
     
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    
-    const mockUser = mockUsers[email.toLowerCase()];
-    
-    if (mockUser && mockUser.password === password) {
-      const { password: _, ...user } = mockUser;
+    try {
+      const response = await api.login(email, password);
+      api.setToken(response.accessToken);
+      
       setAuthState({
-        user,
+        user: response.user,
         isAuthenticated: true,
         isLoading: false,
       });
-    } else {
+    } catch (error: any) {
       setAuthState((prev) => ({ ...prev, isLoading: false }));
-      throw new Error('Invalid credentials');
+      throw new Error(error.message || 'Invalid credentials');
+    }
+  };
+
+  const register = async (data: {
+    email: string;
+    password: string;
+    fullName: string;
+    role?: string;
+    studentId?: string;
+    department?: string;
+  }) => {
+    setAuthState((prev) => ({ ...prev, isLoading: true }));
+    
+    try {
+      const response = await api.register(data);
+      api.setToken(response.accessToken);
+      
+      setAuthState({
+        user: response.user,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+    } catch (error: any) {
+      setAuthState((prev) => ({ ...prev, isLoading: false }));
+      throw new Error(error.message || 'Registration failed');
     }
   };
 
   const logout = () => {
+    api.clearToken();
     setAuthState({
       user: null,
       isAuthenticated: false,
@@ -71,18 +110,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const resetPassword = async (email: string) => {
-    // Simulate API call
+    // In real implementation, call API to send reset email
+    // For now, just simulate the call
     await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    if (!mockUsers[email.toLowerCase()]) {
-      throw new Error('Email not found');
-    }
-    
-    // In real implementation, send reset email
+    // TODO: Implement password reset API endpoint on backend
   };
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout, resetPassword }}>
+    <AuthContext.Provider value={{ ...authState, login, logout, resetPassword, register }}>
       {children}
     </AuthContext.Provider>
   );

@@ -124,7 +124,7 @@ export default function ExamEventTimeline() {
         </div>
 
         {/* Summary Stats */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="pt-4 pb-4 text-center">
               <p className="text-2xl font-semibold">{mockEvents.length}</p>

@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
+import api from '@/lib/api';
 import {
   Select,
   SelectContent,
@@ -118,6 +119,8 @@ export default function CreateExam() {
   const [created, setCreated] = useState(false);
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [docFile, setDocFile] = useState<string | null>(null);
+  const [isAiGenerating, setIsAiGenerating] = useState(false);
+  const [aiGeneratedQuestions, setAiGeneratedQuestions] = useState<any[]>([]);
 
   const set = (key: keyof ExamForm, val: string | boolean) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -134,6 +137,25 @@ export default function CreateExam() {
     await new Promise((r) => setTimeout(r, 1800));
     setIsCreating(false);
     setCreated(true);
+  };
+
+  const handleAiGenerate = async () => {
+    if (!form.aiPrompt.trim()) return;
+    setIsAiGenerating(true);
+    try {
+      const result = await api.aiGenerateExamQuestions({
+        prompt: form.aiPrompt,
+        questionCount: parseInt(form.questionCount) || 20,
+        difficulty: Math.max(0, Math.min(1, parseFloat(form.aiDifficulty || '0.5'))),
+      });
+      setAiGeneratedQuestions(result.questions);
+      alert(`Successfully generated ${result.questions.length} questions! Review them in the preview step.`);
+    } catch (error: any) {
+      console.error('AI generation failed:', error);
+      alert('AI generation failed: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsAiGenerating(false);
+    }
   };
 
   // ── Success screen ──────────────────────────────────────────────
@@ -251,7 +273,7 @@ export default function CreateExam() {
                 <CardDescription>Configure timing, scoring, and access control.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-5">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Duration (minutes)</Label>
                     <Input
@@ -276,7 +298,7 @@ export default function CreateExam() {
 
                 <Separator />
                 <p className="text-sm font-medium">Exam Window</p>
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Start Date <span className="text-red-500">*</span></Label>
                     <Input type="date" value={form.startDate} onChange={(e) => set('startDate', e.target.value)} className="mt-1" />
@@ -331,7 +353,7 @@ export default function CreateExam() {
               </CardHeader>
               <CardContent className="space-y-6">
                 <Tabs value={form.sourceMethod} onValueChange={(v) => set('sourceMethod', v as any)}>
-                  <TabsList className="grid w-full grid-cols-3 mb-4">
+                  <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-4">
                     <TabsTrigger value="bank" className="gap-2">
                       <Database className="h-4 w-4" /> Bank
                     </TabsTrigger>
@@ -345,7 +367,7 @@ export default function CreateExam() {
 
                   {/* --- TAB: QUESTION BANK --- */}
                   <TabsContent value="bank" className="space-y-5 animate-in fade-in duration-300">
-                    <div className="grid grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label>Number of Questions</Label>
                         <Input
@@ -380,7 +402,7 @@ export default function CreateExam() {
                     {form.questionType === 'custom' && (
                       <div className="p-4 border rounded-lg bg-secondary/10 space-y-3">
                         <Label className="text-xs uppercase tracking-wider text-muted-foreground font-semibold">Select Types to Include</Label>
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                           {['Single Choice', 'Multiple Choice', 'True / False', 'Fill in the Blank', 'Matching', 'Ordering', 'Essay'].map((t) => (
                             <label key={t} className="flex items-center gap-2 text-sm p-2 border rounded hover:bg-card cursor-pointer">
                               <input type="checkbox" defaultChecked className="accent-primary" />
@@ -490,7 +512,7 @@ export default function CreateExam() {
                         />
                       </div>
 
-                      <div className="grid grid-cols-2 gap-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div className="space-y-2">
                           <Label>Question Count</Label>
                           <Input type="number" value={form.questionCount} onChange={(e) => set('questionCount', e.target.value)} />
@@ -518,9 +540,37 @@ export default function CreateExam() {
                         </div>
                       </div>
 
-                      <Button className="w-full py-6 text-base gap-2 shadow-lg shadow-primary/20">
-                        <Sparkles className="h-5 w-5" /> Generate Complete Exam
+                      <Button 
+                        className="w-full py-6 text-base gap-2 shadow-lg shadow-primary/20"
+                        onClick={handleAiGenerate}
+                        disabled={isAiGenerating || !form.aiPrompt.trim()}
+                      >
+                        {isAiGenerating ? (
+                          <><Loader2 className="h-5 w-5 animate-spin" /> Generating Questions...</>
+                        ) : (
+                          <><Sparkles className="h-5 w-5" /> Generate Complete Exam</>
+                        )}
                       </Button>
+
+                      {aiGeneratedQuestions.length > 0 && (
+                        <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                          <p className="text-sm font-medium text-green-800 mb-2">
+                            ✓ {aiGeneratedQuestions.length} questions generated
+                          </p>
+                          <div className="space-y-2 max-h-60 overflow-y-auto">
+                            {aiGeneratedQuestions.map((q, i) => (
+                              <div key={i} className="text-xs bg-white p-2 rounded border">
+                                <span className="font-medium text-muted-foreground">Q{i+1}.</span>{' '}
+                                <span className="line-clamp-2">{q.content}</span>
+                                <div className="flex gap-2 mt-1">
+                                  <Badge variant="outline" className="text-[10px] h-4">{q.type}</Badge>
+                                  <Badge variant="outline" className="text-[10px] h-4">Diff: {q.difficulty}</Badge>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </TabsContent>
                 </Tabs>

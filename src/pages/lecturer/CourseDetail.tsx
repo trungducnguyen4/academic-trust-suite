@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
@@ -40,24 +40,108 @@ import {
   CheckCircle2
 } from 'lucide-react';
 import { toast } from 'sonner';
+import api, { unwrapPaginatedData } from '@/lib/api';
 
-// Mock data
-const mockStudents = [
-  { id: '20120001', name: 'Nguyen Van A', email: 'a.nguyen@university.edu', status: 'active', joinedAt: '2025-02-15' },
-  { id: '20120002', name: 'Le Thi B', email: 'b.le@university.edu', status: 'active', joinedAt: '2025-02-16' },
-  { id: '20120003', name: 'Tran Van C', email: 'c.tran@university.edu', status: 'inactive', joinedAt: '2025-02-20' },
-];
+interface Student {
+  id: string;
+  name: string;
+  email: string;
+  status: string;
+  joinedAt: string;
+}
+
+interface Enrollment {
+  id: string;
+  student: {
+    id: string;
+    fullName: string;
+    email: string;
+  };
+  joinedAt: string;
+}
+
+interface Course {
+  id: string;
+  code?: string;
+  name?: string;
+  semester?: string;
+}
 
 export default function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [students, setStudents] = useState(mockStudents);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [course, setCourse] = useState<Course | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [resolvedCourseId, setResolvedCourseId] = useState<string | null>(null);
+  const [enrollmentsRaw, setEnrollmentsRaw] = useState<any[] | null>(null);
   const [search, setSearch] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
 
   // Manual Add Form
   const [newStudent, setNewStudent] = useState({ name: '', id: '', email: '' });
+
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!id) return;
+      try {
+        // Try fetching by id first (DB id). If not found, fallback to searching by course code.
+        let courseRes: any | null = null;
+        let enrollments: Enrollment[] = [];
+
+        try {
+          courseRes = await api.getCourse(id);
+        } catch (err) {
+          courseRes = null;
+        }
+
+        if (!courseRes || !courseRes.id) {
+          // fallback: fetch all courses and match by code or id
+          try {
+            const courses = unwrapPaginatedData(await api.getCourses());
+            const found = courses.find((c: any) => (c.code && c.code.toLowerCase() === String(id).toLowerCase()) || c.id === id);
+            if (found) {
+              courseRes = found;
+            }
+          } catch (err) {
+            console.warn('Failed to fetch courses for fallback lookup', err);
+          }
+        }
+
+        if (courseRes && courseRes.id) {
+          // fetch enrollments by the resolved course id
+          enrollments = await api.getCourseEnrollments(courseRes.id);
+          setCourse({ id: courseRes.id, code: courseRes.code, name: courseRes.name, semester: courseRes.semester });
+          setResolvedCourseId(courseRes.id);
+        } else {
+          // no course found — keep course as null and try to fetch enrollments by id param anyway
+          try {
+            enrollments = await api.getCourseEnrollments(id);
+            setResolvedCourseId(id);
+          } catch (err) {
+            enrollments = [];
+            setResolvedCourseId(null);
+          }
+        }
+
+        const mapped: Student[] = enrollments.map((e: Enrollment) => ({
+          id: e.student.id.slice(0, 8),
+          name: e.student.fullName,
+          email: e.student.email,
+          status: 'active',
+          joinedAt: new Date(e.joinedAt).toISOString().split('T')[0],
+        }));
+        setStudents(mapped);
+        setEnrollmentsRaw(enrollments || []);
+      } catch (err) {
+        console.error('Failed to fetch course or enrollments:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, [id]);
 
   const filteredStudents = students.filter(
     (s) =>
@@ -68,7 +152,7 @@ export default function CourseDetail() {
 
   const handleAddManual = () => {
     if (!newStudent.name || !newStudent.id) return;
-    const student = {
+    const student: Student = {
       id: newStudent.id,
       name: newStudent.name,
       email: newStudent.email,
@@ -86,10 +170,10 @@ export default function CourseDetail() {
     // Simulate API call
     await new Promise(resolve => setTimeout(resolve, 1500));
     
-    // Mock imported data
-    const imported = [
-      { id: '20120045', name: 'Pham Van D', email: 'd.pham@university.edu', status: 'active', joinedAt: '2026-02-25' },
-      { id: '20120046', name: 'Hoang Thi E', email: 'e.hoang@university.edu', status: 'active', joinedAt: '2026-02-25' },
+    // Mock imported data (would be replaced with real CSV parsing)
+    const imported: Student[] = [
+      { id: '20120045', name: 'Pham Van D', email: 'd.pham@university.edu', status: 'active', joinedAt: new Date().toISOString().split('T')[0] },
+      { id: '20120046', name: 'Hoang Thi E', email: 'e.hoang@university.edu', status: 'active', joinedAt: new Date().toISOString().split('T')[0] },
     ];
     setStudents([...imported, ...students]);
     setIsImporting(false);
@@ -101,6 +185,16 @@ export default function CourseDetail() {
     setStudents(students.filter(s => s.id !== studentId));
     toast.success("Student removed from course");
   };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -115,8 +209,21 @@ export default function CourseDetail() {
             >
               <ArrowLeft className="h-4 w-4" /> Back to Courses
             </Button>
-            <h1 className="text-3xl font-bold tracking-tight">Advanced Algorithms (CS301)</h1>
-            <p className="text-muted-foreground">Semester 2 / 2025-2026 • {students.length} Students Enrolled</p>
+            <h1 className="text-3xl font-bold tracking-tight">
+              {course?.name || 'Course Details'}{course?.code ? ` (${course.code})` : ''}
+            </h1>
+            <p className="text-muted-foreground">{course?.semester || 'Semester unknown'} • {students.length} Students Enrolled</p>
+            {typeof window !== 'undefined' && window.location.hostname.includes('localhost') && (
+              <div className="mt-3 p-3 rounded-md bg-muted/30 text-sm text-muted-foreground">
+                <div className="font-medium text-foreground">Dev debug</div>
+                <div>Resolved course id: <span className="font-mono">{resolvedCourseId || 'none'}</span></div>
+                <div>Enrollments fetched: {Array.isArray(enrollmentsRaw) ? enrollmentsRaw.length : 'null'}</div>
+                <details className="mt-2 text-xs">
+                  <summary className="cursor-pointer">Show raw enrollments (first 5)</summary>
+                  <pre className="max-h-56 overflow-auto p-2 bg-white text-xs text-muted-foreground rounded mt-2">{enrollmentsRaw ? JSON.stringify(enrollmentsRaw.slice(0,5), null, 2) : 'no data'}</pre>
+                </details>
+              </div>
+            )}
           </div>
           <div className="flex gap-2">
             <Button variant="outline" className="gap-2">

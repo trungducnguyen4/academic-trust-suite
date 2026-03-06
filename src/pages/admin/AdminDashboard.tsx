@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { useAuth } from '@/contexts/AuthContext';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,55 +9,106 @@ import {
   Shield,
   Settings,
   BarChart3,
-  AlertTriangle,
-  CheckCircle2,
   Activity,
   Database,
   ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
+import api, { unwrapPaginatedData } from '@/lib/api';
 
-// Mock data
-const systemStats = {
-  totalUsers: 1248,
-  activeExams: 12,
-  flaggedSubmissions: 3,
-  systemHealth: 99.8,
-};
+interface User {
+  id: string;
+  email: string;
+  fullName: string;
+  role: 'ADMIN' | 'LECTURER' | 'STUDENT';
+  createdAt: string;
+}
 
-const userBreakdown = [
-  { role: 'Students', count: 1156, percentage: 92.6 },
-  { role: 'Lecturers', count: 84, percentage: 6.7 },
-  { role: 'Administrators', count: 8, percentage: 0.6 },
-];
+interface Exam {
+  id: string;
+  title: string;
+  startTime: string;
+  endTime: string;
+  course?: { code: string };
+}
 
-const recentActivity = [
-  { id: '1', action: 'New exam published', user: 'Dr. Chen', time: '10 min ago' },
-  { id: '2', action: 'User role updated', user: 'System', time: '25 min ago' },
-  { id: '3', action: 'Integrity flag reviewed', user: 'Admin', time: '1 hour ago' },
-  { id: '4', action: 'New lecturer added', user: 'System', time: '2 hours ago' },
-];
-
-const integrityAlerts = [
-  {
-    id: '1',
-    examTitle: 'Data Structures Final',
-    studentId: 'STU-2024-0892',
-    confidence: 'High',
-    reason: 'Unusual answer pattern similarity',
-  },
-  {
-    id: '2',
-    examTitle: 'Algorithms Midterm',
-    studentId: 'STU-2024-1034',
-    confidence: 'Medium',
-    reason: 'Rapid sequential correct answers',
-  },
-];
+interface Submission {
+  id: string;
+  score: number | null;
+  startedAt: string;
+  exam?: { title: string };
+  student?: { fullName: string; email: string };
+}
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const [users, setUsers] = useState<User[]>([]);
+  const [exams, setExams] = useState<Exam[]>([]);
+  const [submissions, setSubmissions] = useState<Submission[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        const [usersRes, examsRes, submissionsRes] = await Promise.all([
+          api.getUsers(),
+          api.getExams(),
+          api.getSubmissions()
+        ]);
+        setUsers(unwrapPaginatedData(usersRes));
+        setExams(unwrapPaginatedData(examsRes));
+        setSubmissions(unwrapPaginatedData(submissionsRes));
+      } catch (err) {
+        console.error('Failed to fetch admin data:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchData();
+  }, []);
+
+  // Calculate stats from real data
+  const now = new Date();
+  const activeExams = exams.filter(e => new Date(e.startTime) <= now && new Date(e.endTime) >= now).length;
+  const totalUsers = users.length;
+  
+  const studentCount = users.filter(u => u.role === 'STUDENT').length;
+  const lecturerCount = users.filter(u => u.role === 'LECTURER').length;
+  const adminCount = users.filter(u => u.role === 'ADMIN').length;
+  
+  const userBreakdown = [
+    { role: 'Students', count: studentCount, percentage: totalUsers ? (studentCount / totalUsers) * 100 : 0 },
+    { role: 'Lecturers', count: lecturerCount, percentage: totalUsers ? (lecturerCount / totalUsers) * 100 : 0 },
+    { role: 'Administrators', count: adminCount, percentage: totalUsers ? (adminCount / totalUsers) * 100 : 0 },
+  ];
+
+  // Recent activity from submissions and users
+  const recentActivity = [
+    ...submissions.slice(0, 2).map(s => ({
+      id: s.id,
+      action: `Exam submission: ${s.exam?.title || 'Unknown'}`,
+      user: s.student?.fullName || 'Student',
+      time: new Date(s.startedAt).toLocaleDateString()
+    })),
+    ...users.slice(0, 2).map(u => ({
+      id: u.id,
+      action: `User registered: ${u.role}`,
+      user: u.fullName,
+      time: new Date(u.createdAt).toLocaleDateString()
+    }))
+  ].slice(0, 4);
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
@@ -80,7 +132,7 @@ export default function AdminDashboard() {
                   <Users className="h-5 w-5 text-primary" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{systemStats.totalUsers.toLocaleString()}</p>
+                  <p className="text-2xl font-semibold">{totalUsers.toLocaleString()}</p>
                   <p className="text-sm text-muted-foreground">Total Users</p>
                 </div>
               </div>
@@ -93,7 +145,7 @@ export default function AdminDashboard() {
                   <Activity className="h-5 w-5 text-info" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{systemStats.activeExams}</p>
+                  <p className="text-2xl font-semibold">{activeExams}</p>
                   <p className="text-sm text-muted-foreground">Active Exams</p>
                 </div>
               </div>
@@ -106,8 +158,8 @@ export default function AdminDashboard() {
                   <Shield className="h-5 w-5 text-warning" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{systemStats.flaggedSubmissions}</p>
-                  <p className="text-sm text-muted-foreground">Flagged</p>
+                  <p className="text-2xl font-semibold">{submissions.length}</p>
+                  <p className="text-sm text-muted-foreground">Submissions</p>
                 </div>
               </div>
             </CardContent>
@@ -119,8 +171,8 @@ export default function AdminDashboard() {
                   <Database className="h-5 w-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{systemStats.systemHealth}%</p>
-                  <p className="text-sm text-muted-foreground">System Health</p>
+                  <p className="text-2xl font-semibold">{exams.length}</p>
+                  <p className="text-sm text-muted-foreground">Total Exams</p>
                 </div>
               </div>
             </CardContent>
@@ -170,12 +222,12 @@ export default function AdminDashboard() {
             </CardContent>
           </Card>
 
-          {/* Integrity Alerts */}
+          {/* Recent Submissions */}
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Integrity Alerts</CardTitle>
-                <CardDescription>Flagged submissions</CardDescription>
+                <CardTitle className="text-lg">Recent Submissions</CardTitle>
+                <CardDescription>Latest exam submissions</CardDescription>
               </div>
               <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
                 <Link to="/admin/integrity">
@@ -186,20 +238,26 @@ export default function AdminDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {integrityAlerts.map((alert) => (
-                  <div key={alert.id} className="rounded-lg border border-border p-3 space-y-2">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <p className="text-sm font-medium text-foreground">{alert.examTitle}</p>
-                        <p className="text-xs text-muted-foreground">{alert.studentId}</p>
+                {submissions.length === 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-4">No submissions yet</p>
+                ) : (
+                  submissions.slice(0, 3).map((sub) => (
+                    <div key={sub.id} className="rounded-lg border border-border p-3 space-y-2">
+                      <div className="flex items-start justify-between">
+                        <div>
+                          <p className="text-sm font-medium text-foreground">{sub.exam?.title || 'Unknown Exam'}</p>
+                          <p className="text-xs text-muted-foreground">{sub.student?.fullName || 'Unknown Student'}</p>
+                        </div>
+                        <StatusBadge variant={sub.score !== null ? 'success' : 'warning'}>
+                          {sub.score !== null ? `${sub.score}%` : 'Pending'}
+                        </StatusBadge>
                       </div>
-                      <StatusBadge variant={alert.confidence === 'High' ? 'destructive' : 'warning'}>
-                        {alert.confidence}
-                      </StatusBadge>
+                      <p className="text-xs text-muted-foreground">
+                        Started: {new Date(sub.startedAt).toLocaleString()}
+                      </p>
                     </div>
-                    <p className="text-xs text-muted-foreground">{alert.reason}</p>
-                  </div>
-                ))}
+                  ))
+                )}
               </div>
             </CardContent>
           </Card>

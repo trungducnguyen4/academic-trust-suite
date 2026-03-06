@@ -326,12 +326,12 @@ export default function ExamTaking() {
 
       <div className="flex pt-14 min-h-screen">
         {/* ── Navigator Sidebar ────────────────────────────────── */}
-        <aside className="fixed left-0 top-14 bottom-0 w-60 bg-card border-r flex flex-col p-4 overflow-y-auto">
+        <aside className="fixed left-0 top-14 bottom-0 w-60 bg-card border-r flex flex-col p-4 overflow-y-auto hidden md:flex">
           <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-2">Progress</h3>
           <Progress value={(answeredCount / total) * 100} className="h-1.5 mb-1" />
           <p className="text-xs text-muted-foreground mb-3">{answeredCount}/{total} answered</p>
 
-          <div className="grid grid-cols-5 gap-1 mb-4">
+          <div className="grid grid-cols-4 md:grid-cols-5 gap-1 mb-4">
             {questions.map((qItem, idx) => {
               const ans = isAnswered(qItem, answers);
               const fl  = flagged[qItem.id];
@@ -369,7 +369,7 @@ export default function ExamTaking() {
         </aside>
 
         {/* ── Main Question Area ────────────────────────────────── */}
-        <main className="ml-60 flex-1 p-6 flex justify-center">
+        <main className="md:ml-60 ml-0 flex-1 p-6 flex justify-center">
           <div className="w-full max-w-3xl">
             <Card>
               <CardHeader className="pb-3">
@@ -458,7 +458,7 @@ export default function ExamTaking() {
             <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
             <AlertDialogDescription asChild>
               <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-3 gap-2 text-center">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
                   <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950">
                     <p className="text-xl font-bold text-green-700">{answeredCount}</p>
                     <p className="text-xs text-green-600">Answered</p>

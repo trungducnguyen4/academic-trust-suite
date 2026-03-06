@@ -337,7 +337,7 @@ export default function UploadDocAIGen() {
         {step === 'review' && (
           <div className="space-y-4">
             {/* Review Stats */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card>
                 <CardContent className="pt-4 pb-4 text-center">
                   <p className="text-2xl font-semibold text-green-600">{approvedCount}</p>

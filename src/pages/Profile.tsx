@@ -38,8 +38,8 @@ export default function Profile() {
   };
 
   const roleLabel = 
-    user.role === 'student' ? 'Student' :
-    user.role === 'lecturer' ? 'Lecturer' :
+    user.role === 'STUDENT' ? 'Student' :
+    user.role === 'LECTURER' ? 'Lecturer' :
     'Administrator';
 
   return (
@@ -59,11 +59,11 @@ export default function Profile() {
               <div className="flex items-center gap-4">
                 <Avatar className="h-16 w-16">
                   <AvatarFallback className="bg-primary/10 text-primary text-xl">
-                    {user.name.charAt(0)}
+                    {user.fullName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
                 <div>
-                  <h3 className="font-medium text-foreground">{user.name}</h3>
+                  <h3 className="font-medium text-foreground">{user.fullName}</h3>
                   <p className="text-sm text-muted-foreground">{user.email}</p>
                   <StatusBadge variant="info" className="mt-2">
                     {roleLabel}
@@ -74,7 +74,7 @@ export default function Profile() {
               <div className="grid gap-4">
                 <div className="grid gap-2">
                   <Label>Full Name</Label>
-                  <Input value={user.name} disabled className="bg-secondary/50" />
+                  <Input value={user.fullName} disabled className="bg-secondary/50" />
                 </div>
                 <div className="grid gap-2">
                   <Label>Email Address</Label>

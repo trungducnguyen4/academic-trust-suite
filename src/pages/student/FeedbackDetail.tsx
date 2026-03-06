@@ -99,7 +99,7 @@ export default function FeedbackDetail() {
         </div>
 
         {/* Score Summary */}
-        <div className="grid grid-cols-4 gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardContent className="pt-4 pb-4 text-center">
               <p className="text-3xl font-bold text-primary">{examResult.totalScore}</p>
@@ -132,9 +132,9 @@ export default function FeedbackDetail() {
           </Card>
         </div>
 
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Left column — 2/3 */}
-          <div className="col-span-2 space-y-6">
+          <div className="lg:col-span-2 space-y-6">
             {/* Score Breakdown */}
             <Card>
               <CardHeader>
@@ -219,7 +219,7 @@ export default function FeedbackDetail() {
                 <CardDescription>Based on your performance and weak areas</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {recommendations.map((rec, idx) => (
                     <div key={idx} className="p-4 rounded-lg border border-border hover:border-primary/50 transition-colors">
                       <div className="flex items-center gap-2 mb-2">

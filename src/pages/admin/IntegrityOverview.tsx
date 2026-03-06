@@ -361,6 +361,7 @@ export default function IntegrityOverview() {
               </TabsList>
 
               <TabsContent value={activeTab} className="mt-0">
+                <div className="overflow-x-auto">
                 <div className="rounded-md border">
                   <Table>
                     <TableHeader>
@@ -432,6 +433,7 @@ export default function IntegrityOverview() {
                       )}
                     </TableBody>
                   </Table>
+                </div>
                 </div>
               </TabsContent>
             </Tabs>

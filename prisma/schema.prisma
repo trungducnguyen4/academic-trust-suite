@@ -1,0 +1,203 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+/// MySQL-compatible schema for Academic Trust Suite
+
+model User {
+  id         String    @id @default(uuid())
+  email      String    @unique
+  password   String
+  fullName   String
+  role       String    @default("STUDENT") // ADMIN, LECTURER, STUDENT
+  studentId  String?   // Only for students
+  department String?
+  avatar     String?
+  status     String    @default("active")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // relations
+  coursesTaught  Course[]         @relation("CourseLecturer")
+  examsCreated   Exam[]           @relation("ExamCreator")
+  enrollments    Enrollment[]
+  submissions    ExamSubmission[] @relation("StudentSubmissions")
+  questions      Question[]       @relation("AuthorQuestions")
+
+  @@map("users")
+}
+
+model Course {
+  id         String    @id @default(uuid())
+  code       String    @unique
+  name       String
+  semester   String?
+  description String?  @db.Text
+  credits    Int?
+  status     String    @default("draft")
+  createdAt  DateTime  @default(now())
+  updatedAt  DateTime  @updatedAt
+
+  // optional lecturer (User)
+  lecturerId String?
+  lecturer   User?     @relation("CourseLecturer", fields: [lecturerId], references: [id])
+
+  enrollments Enrollment[]
+  exams       Exam[]
+  questions   Question[]
+
+  @@index([code])
+  @@index([lecturerId])
+  @@map("courses")
+}
+
+model Enrollment {
+  id        String   @id @default(uuid())
+  course    Course   @relation(fields: [courseId], references: [id])
+  courseId  String
+  student   User     @relation(fields: [studentId], references: [id])
+  studentId String
+  joinedAt  DateTime @default(now())
+  status    String   @default("active")
+
+  @@unique([courseId, studentId])
+  @@index([studentId])
+  @@map("enrollments")
+}
+
+model Exam {
+  id                     String   @id @default(uuid())
+  course                 Course   @relation(fields: [courseId], references: [id])
+  courseId               String
+  title                  String
+  description            String?  @db.Text
+  duration               Int      // duration in minutes
+  totalPoints            Int?
+  passingScore           Int?
+  startTime              DateTime?
+  endTime                DateTime?
+  status                 String   @default("DRAFT") // DRAFT, PUBLISHED, ONGOING, COMPLETED, ARCHIVED
+  settings               Json?
+  creatorId              String
+  creator                User     @relation("ExamCreator", fields: [creatorId], references: [id])
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  examQuestions  ExamQuestion[]
+  submissions    ExamSubmission[]
+
+  @@index([courseId])
+  @@index([creatorId])
+  @@index([status])
+  @@map("exams")
+}
+
+model Question {
+  id           String   @id @default(uuid())
+  type         String   // MULTIPLE_CHOICE, MULTI_SELECT, TRUE_FALSE, SHORT_ANSWER, ESSAY, FILL_IN_BLANK, MATCHING, ORDERING
+  content      String   @db.Text
+  options      Json?    // array of options or structured JSON
+  correctAnswer Json?
+  explanation  String?  @db.Text
+  difficulty   Int?     @default(1)
+  points       Int?     @default(1)
+  tags         String?  @db.Text // JSON array stored as text
+  courseId     String?
+  course       Course?  @relation(fields: [courseId], references: [id])
+  creatorId    String?
+  creator      User?    @relation("AuthorQuestions", fields: [creatorId], references: [id])
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  exams             ExamQuestion[]
+  submissionAnswers SubmissionAnswer[]
+
+  @@index([courseId])
+  @@index([creatorId])
+  @@map("questions")
+}
+
+model ExamQuestion {
+  id         String   @id @default(uuid())
+  exam       Exam     @relation(fields: [examId], references: [id])
+  examId     String
+  question   Question @relation(fields: [questionId], references: [id])
+  questionId String
+  orderIndex Int
+  points     Int?     @default(1)
+
+  @@unique([examId, questionId])
+  @@index([examId])
+  @@map("exam_questions")
+}
+
+model ExamSubmission {
+  id           String    @id @default(uuid())
+  exam         Exam      @relation(fields: [examId], references: [id])
+  examId       String
+  student      User      @relation("StudentSubmissions", fields: [studentId], references: [id])
+  studentId    String
+  status       String    @default("IN_PROGRESS") // IN_PROGRESS, SUBMITTED, GRADED, FLAGGED
+  score        Int?
+  startedAt    DateTime?
+  submittedAt  DateTime?
+  gradedAt     DateTime?
+  createdAt    DateTime  @default(now())
+
+  answers      SubmissionAnswer[]
+  proctoring   ProctoringSession?
+
+  @@index([examId])
+  @@index([studentId])
+  @@map("exam_submissions")
+}
+
+model SubmissionAnswer {
+  id               String         @id @default(uuid())
+  submission       ExamSubmission @relation(fields: [submissionId], references: [id])
+  submissionId     String
+  question         Question       @relation(fields: [questionId], references: [id])
+  questionId       String
+  answer           Json
+  isCorrect        Boolean?
+  pointsAwarded    Int?
+  feedback         String?        @db.Text
+  timeTaken        Int?           // in seconds
+
+  @@index([submissionId])
+  @@index([questionId])
+  @@map("submission_answers")
+}
+
+model ProctoringSession {
+  id             String   @id @default(uuid())
+  submission     ExamSubmission @relation(fields: [submissionId], references: [id])
+  submissionId   String   @unique
+  ipAddress      String?
+  tabSwitchCount Int?     @default(0)
+  mouseAnomalies Int?     @default(0)
+  flaggedStatus  String?
+  integrityScore Float?
+  createdAt      DateTime @default(now())
+
+  logs IntegrityLog[]
+
+  @@map("proctoring_sessions")
+}
+
+model IntegrityLog {
+  id            String   @id @default(uuid())
+  proctoring    ProctoringSession @relation(fields: [proctoringId], references: [id])
+  proctoringId  String
+  eventType     String
+  details       String?
+  timestamp     DateTime @default(now())
+
+  @@index([proctoringId])
+  @@map("integrity_logs")
+}
