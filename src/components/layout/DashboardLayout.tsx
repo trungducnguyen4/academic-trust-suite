@@ -5,7 +5,6 @@ import { cn } from '@/lib/utils';
 import {
   LayoutDashboard,
   FileText,
-  Clock,
   BarChart3,
   Settings,
   Users,
@@ -29,20 +28,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-
-interface HeaderNotification {
-  id: string;
-  message: string;
-  time: string;
-}
 
 interface NavItem {
   title: string;
@@ -81,15 +66,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
 
-  // TODO: Replace with API-backed notifications once endpoint is available.
-  const notifications: HeaderNotification[] = [];
-
-  // Close mobile sidebar on route change
   useEffect(() => {
     setMobileOpen(false);
   }, [location.pathname]);
 
-  // Prevent body scroll when mobile menu is open
   useEffect(() => {
     if (mobileOpen) {
       document.body.style.overflow = 'hidden';
@@ -113,26 +93,20 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
     user.role === 'LECTURER' ? 'Lecturer' :
     'Administrator';
 
-  const roleColor =
-    user.role === 'STUDENT' ? 'bg-blue-500/20 text-blue-400' :
-    user.role === 'LECTURER' ? 'bg-violet-500/20 text-violet-400' :
-    'bg-emerald-500/20 text-emerald-400';
-
   const sidebarWidth = collapsed ? 'w-[72px]' : 'w-[260px]';
 
-  // Shared sidebar content — used for both desktop and mobile
   const sidebarContent = (isMobile: boolean) => (
     <div className="flex h-full flex-col">
       {/* Logo */}
       <div className={cn(
-        "flex h-16 items-center border-b border-sidebar-border px-4",
+        "flex h-14 items-center border-b border-sidebar-border px-4",
         !isMobile && collapsed ? 'justify-center' : 'gap-3'
       )}>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-primary text-primary-foreground shadow-inner-glow">
-          <GraduationCap className="h-5 w-5" />
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <GraduationCap className="h-3.5 w-3.5" />
         </div>
         {(isMobile || !collapsed) && (
-          <span className="font-bold text-sidebar-foreground text-lg tracking-tight">
+          <span className="font-bold text-sidebar-foreground text-base tracking-tight">
             ExamTrust
           </span>
         )}
@@ -161,10 +135,10 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
               to={item.href}
               onClick={() => isMobile && setMobileOpen(false)}
               className={cn(
-                "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-all duration-200",
+                "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-150",
                 !isMobile && collapsed && 'justify-center px-0',
                 isActive
-                  ? "bg-primary text-primary-foreground shadow-glow-blue/20"
+                  ? "bg-sidebar-primary text-sidebar-primary-foreground"
                   : "text-sidebar-foreground/60 hover:bg-sidebar-accent hover:text-sidebar-foreground"
               )}
             >
@@ -194,7 +168,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="px-3 mb-2">
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="flex w-full items-center justify-center rounded-xl p-2 text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            className="flex w-full items-center justify-center rounded-md p-2 text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
           >
             {collapsed ? <PanelLeft className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
           </button>
@@ -204,18 +178,18 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
       {/* User section */}
       <div className="border-t border-sidebar-border p-3">
         <div className={cn(
-          "flex items-center gap-3 rounded-xl p-2",
+          "flex items-center gap-3 rounded-md p-2",
           !isMobile && collapsed && 'justify-center'
         )}>
-          <Avatar className="h-9 w-9 shrink-0 ring-2 ring-sidebar-accent">
-            <AvatarFallback className="bg-gradient-to-br from-primary to-accent text-primary-foreground text-sm font-bold">
+          <Avatar className="h-8 w-8 shrink-0">
+            <AvatarFallback className="bg-primary text-primary-foreground text-sm font-bold">
               {user.fullName.charAt(0)}
             </AvatarFallback>
           </Avatar>
           {(isMobile || !collapsed) && (
             <div className="flex-1 min-w-0">
               <p className="text-sm font-semibold text-sidebar-foreground truncate">{user.fullName}</p>
-              <span className={cn("inline-flex items-center mt-0.5 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wider", roleColor)}>
+              <span className="text-[10px] font-medium uppercase tracking-wider text-sidebar-foreground/50">
                 {roleLabel}
               </span>
             </div>
@@ -227,7 +201,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <Button
               variant="ghost"
               size="sm"
-              className="w-full justify-start text-sidebar-foreground/50 hover:text-red-400 hover:bg-red-500/10 rounded-xl"
+              className="w-full justify-start text-sidebar-foreground/50 hover:text-destructive hover:bg-destructive/10 rounded-md"
               onClick={logout}
             >
               <LogOut className="mr-2 h-4 w-4" />
@@ -240,7 +214,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             <TooltipTrigger asChild>
               <button
                 onClick={logout}
-                className="flex w-full items-center justify-center rounded-xl p-2 mt-2 text-sidebar-foreground/40 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                className="flex w-full items-center justify-center rounded-md p-2 mt-2 text-sidebar-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
               >
                 <LogOut className="h-[18px] w-[18px]" />
               </button>
@@ -258,14 +232,14 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         {/* Mobile overlay backdrop */}
         {mobileOpen && (
           <div
-            className="fixed inset-0 z-40 bg-black/50 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-40 bg-foreground/20 lg:hidden"
             onClick={() => setMobileOpen(false)}
           />
         )}
 
         {/* Mobile sidebar (overlay) */}
         <aside className={cn(
-          "fixed left-0 top-0 z-50 h-screen w-[280px] sidebar-gradient border-r border-sidebar-border transition-transform duration-300 ease-in-out lg:hidden",
+          "fixed left-0 top-0 z-50 h-screen w-[280px] bg-sidebar border-r border-sidebar-border transition-transform duration-300 ease-in-out lg:hidden",
           mobileOpen ? 'translate-x-0' : '-translate-x-full'
         )}>
           {sidebarContent(true)}
@@ -273,7 +247,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
         {/* Desktop sidebar (fixed) */}
         <aside className={cn(
-          "fixed left-0 top-0 z-40 h-screen sidebar-gradient border-r border-sidebar-border transition-all duration-300 ease-in-out hidden lg:block",
+          "fixed left-0 top-0 z-40 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out hidden lg:block",
           sidebarWidth
         )}>
           {sidebarContent(false)}
@@ -287,56 +261,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
           !collapsed && "lg:ml-[260px]"
         )}>
           {/* Top bar */}
-          <div className="sticky top-0 z-30 flex h-14 lg:h-16 items-center justify-between border-b border-border bg-background/80 backdrop-blur-xl px-4 lg:px-6">
-            {/* Mobile hamburger */}
+          <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background px-4 lg:px-6">
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden rounded-xl text-muted-foreground hover:text-foreground"
+              className="lg:hidden text-muted-foreground hover:text-foreground"
               onClick={() => setMobileOpen(true)}
             >
               <Menu className="h-5 w-5" />
             </Button>
             <div className="hidden lg:block" />
-            <div className="flex items-center gap-2 lg:gap-3">
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="relative rounded-xl text-muted-foreground hover:text-foreground h-9 w-9"
-                  >
-                    <Bell className="h-[18px] w-[18px]" />
-                    {notifications.length > 0 && (
-                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary" />
-                    )}
-                    <span className="sr-only">Open notifications</span>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-80 rounded-xl">
-                  <DropdownMenuLabel className="flex items-center justify-between">
-                    <span>Notifications</span>
-                    <span className="text-xs text-muted-foreground">{notifications.length}</span>
-                  </DropdownMenuLabel>
-                  <DropdownMenuSeparator />
-                  {notifications.length === 0 ? (
-                    <div className="px-3 py-4 text-sm text-muted-foreground">
-                      There's no notification.
-                    </div>
-                  ) : (
-                    notifications.map((notification) => (
-                      <DropdownMenuItem
-                        key={notification.id}
-                        className="flex flex-col items-start gap-1 py-2"
-                      >
-                        <span className="text-sm leading-snug">{notification.message}</span>
-                        <span className="text-xs text-muted-foreground">{notification.time}</span>
-                      </DropdownMenuItem>
-                    ))
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-              <div className="h-8 w-px bg-border hidden sm:block" />
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="relative text-muted-foreground hover:text-foreground h-8 w-8"
+              >
+                <Bell className="h-[18px] w-[18px]" />
+                <span className="sr-only">Notifications</span>
+              </Button>
+              <div className="h-6 w-px bg-border hidden sm:block" />
               <div className="text-sm hidden sm:block">
                 <span className="text-muted-foreground">Hello, </span>
                 <span className="font-semibold text-foreground">{user.fullName.split(' ')[0]}</span>
