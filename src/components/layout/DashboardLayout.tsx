@@ -29,6 +29,20 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+
+interface HeaderNotification {
+  id: string;
+  message: string;
+  time: string;
+}
 
 interface NavItem {
   title: string;
@@ -66,6 +80,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // TODO: Replace with API-backed notifications once endpoint is available.
+  const notifications: HeaderNotification[] = [];
 
   // Close mobile sidebar on route change
   useEffect(() => {
@@ -282,9 +299,43 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </Button>
             <div className="hidden lg:block" />
             <div className="flex items-center gap-2 lg:gap-3">
-              <Button variant="ghost" size="icon" className="rounded-xl text-muted-foreground hover:text-foreground h-9 w-9">
-                <Bell className="h-[18px] w-[18px]" />
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative rounded-xl text-muted-foreground hover:text-foreground h-9 w-9"
+                  >
+                    <Bell className="h-[18px] w-[18px]" />
+                    {notifications.length > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-primary" />
+                    )}
+                    <span className="sr-only">Open notifications</span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-80 rounded-xl">
+                  <DropdownMenuLabel className="flex items-center justify-between">
+                    <span>Notifications</span>
+                    <span className="text-xs text-muted-foreground">{notifications.length}</span>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  {notifications.length === 0 ? (
+                    <div className="px-3 py-4 text-sm text-muted-foreground">
+                      There's no notification.
+                    </div>
+                  ) : (
+                    notifications.map((notification) => (
+                      <DropdownMenuItem
+                        key={notification.id}
+                        className="flex flex-col items-start gap-1 py-2"
+                      >
+                        <span className="text-sm leading-snug">{notification.message}</span>
+                        <span className="text-xs text-muted-foreground">{notification.time}</span>
+                      </DropdownMenuItem>
+                    ))
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
               <div className="h-8 w-px bg-border hidden sm:block" />
               <div className="text-sm hidden sm:block">
                 <span className="text-muted-foreground">Hello, </span>
