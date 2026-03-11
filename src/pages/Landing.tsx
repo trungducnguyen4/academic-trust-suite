@@ -58,7 +58,7 @@ export default function Landing() {
       {/* Hero Section */}
       <section className="py-24 md:py-36 lg:py-44">
         <div className="container">
-          <div className="mx-auto max-w-3xl text-center">
+            <div className="mx-auto max-w-3xl text-center">
             <h1 className="mb-6 text-4xl font-bold tracking-tight md:text-5xl lg:text-6xl text-foreground text-balance">
               Examinations Built on Trust & Transparency
             </h1>
@@ -116,7 +116,7 @@ export default function Landing() {
             {features.map((feature) => (
               <div
                 key={feature.title}
-                className="card-interactive p-6"
+                className="card-interactive p-6 rounded-lg shadow-soft"
               >
                 <div className="mb-4 inline-flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
                   <feature.icon className="h-5 w-5" />

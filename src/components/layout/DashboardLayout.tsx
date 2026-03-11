@@ -98,11 +98,11 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
   const sidebarContent = (isMobile: boolean) => (
     <div className="flex h-full flex-col">
       {/* Logo */}
-      <div className={cn(
+        <div className={cn(
         "flex h-14 items-center border-b border-sidebar-border px-4",
         !isMobile && collapsed ? 'justify-center' : 'gap-3'
       )}>
-        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-primary text-primary-foreground">
+        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary text-primary-foreground">
           <GraduationCap className="h-3.5 w-3.5" />
         </div>
         {(isMobile || !collapsed) && (
@@ -150,13 +150,13 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
 
           if (!isMobile && collapsed) {
             return (
-              <Tooltip key={item.href}>
-                <TooltipTrigger asChild>{link}</TooltipTrigger>
-                <TooltipContent side="right" className="font-medium">
-                  {item.title}
-                </TooltipContent>
-              </Tooltip>
-            );
+                <Tooltip key={item.href}>
+                  <TooltipTrigger asChild>{link}</TooltipTrigger>
+                  <TooltipContent side="right" className="font-medium">
+                    {item.title}
+                  </TooltipContent>
+                </Tooltip>
+              );
           }
 
           return link;
@@ -168,7 +168,7 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
         <div className="px-3 mb-2">
           <button
             onClick={() => setCollapsed(!collapsed)}
-            className="flex w-full items-center justify-center rounded-md p-2 text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
+            className="flex w-full items-center justify-center rounded-lg p-2 text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
           >
             {collapsed ? <PanelLeft className="h-[18px] w-[18px]" /> : <PanelLeftClose className="h-[18px] w-[18px]" />}
           </button>

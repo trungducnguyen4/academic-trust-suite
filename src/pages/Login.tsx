@@ -40,7 +40,7 @@ export default function Login() {
       {/* Header */}
       <header className="flex items-center justify-between px-6 py-4 border-b border-border">
         <Link to="/" className="flex items-center gap-2 font-bold text-foreground">
-          <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
+          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <GraduationCap className="h-3.5 w-3.5" />
           </div>
           <span className="text-base">ExamTrust</span>
@@ -52,11 +52,11 @@ export default function Login() {
 
       {/* Content */}
       <div className="flex-1 flex items-center justify-center p-6">
-        <div className="w-full max-w-[420px]">
-          <div className="bg-card border border-border rounded-lg p-8">
+          <div className="w-full max-w-[420px]">
+          <div className="bg-card border border-border rounded-lg p-8 shadow-soft">
             {/* Logo */}
-            <div className="flex items-center justify-center gap-2 mb-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <div className="flex items-center justify-center gap-2 mb-2">
+              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
                 <GraduationCap className="h-4 w-4" />
               </div>
               <span className="text-lg font-bold text-foreground">ExamTrust</span>
@@ -138,7 +138,7 @@ export default function Login() {
                   key={demo.role}
                   type="button"
                   onClick={() => { setEmail(demo.email); setPassword('123456'); }}
-                  className="flex items-center justify-between w-full px-3 py-2 rounded-md bg-secondary/50 hover:bg-secondary border border-transparent hover:border-border transition-all text-sm group"
+                  className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-secondary/50 hover:bg-secondary border border-transparent hover:border-border transition-all text-sm group shadow-sm"
                 >
                   <div className="flex items-center gap-3">
                     <span className="text-xs font-semibold text-muted-foreground">{demo.role}</span>
