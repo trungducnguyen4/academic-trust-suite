@@ -1,9 +1,11 @@
-import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateEnrollmentDto, BulkEnrollmentDto, BulkEnrollByEmailsDto, UpdateEnrollmentStatusDto } from './dto/enrollment.dto';
+import * as bcrypt from 'bcrypt';
 
 @Injectable()
 export class EnrollmentsService {
+  private readonly logger = new Logger(EnrollmentsService.name);
   constructor(private prisma: PrismaService) {}
 
   async create(createEnrollmentDto: CreateEnrollmentDto) {
@@ -131,13 +133,29 @@ export class EnrollmentsService {
     const results = {
       success: [] as { email: string; fullName: string; studentId: string | null }[],
       failed: [] as { email: string; reason: string }[],
+      provisioned: 0,
     };
 
     for (const email of emails) {
       try {
-        const student = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
-        if (!student) { results.failed.push({ email, reason: 'Student not found' }); continue; }
-        if (student.role !== 'STUDENT') { results.failed.push({ email, reason: 'User is not a student' }); continue; }
+        let student = await this.prisma.user.findUnique({ where: { email: email.toLowerCase().trim() } });
+
+        // Auto-provision: create student account if email not yet registered
+        if (!student) {
+          const tempPassword = await bcrypt.hash('Examtrust@123', 10);
+          const emailPrefix = email.split('@')[0];
+          student = await this.prisma.user.create({
+            data: {
+              email: email.toLowerCase().trim(),
+              password: tempPassword,
+              fullName: emailPrefix,
+              role: 'STUDENT',
+            },
+          });
+          results.provisioned = (results.provisioned ?? 0) + 1;
+        }
+
+        if (student.role !== 'STUDENT') { results.failed.push({ email, reason: 'User is not a student (role: ' + student.role + ')' }); continue; }
 
         const existing = await this.prisma.enrollment.findUnique({
           where: { studentId_courseId: { studentId: student.id, courseId } },
@@ -146,8 +164,9 @@ export class EnrollmentsService {
 
         await this.prisma.enrollment.create({ data: { studentId: student.id, courseId } });
         results.success.push({ email, fullName: student.fullName, studentId: student.studentId });
-      } catch {
-        results.failed.push({ email, reason: 'Unknown error' });
+      } catch (err: any) {
+        this.logger.error(`Failed to enroll ${email}: ${err?.message}`);
+        results.failed.push({ email, reason: err?.message ?? 'Unknown error' });
       }
     }
 

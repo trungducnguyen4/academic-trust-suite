@@ -168,6 +168,7 @@ class ApiClient {
     return this.request<{
       success: { email: string; fullName: string; studentId: string | null }[];
       failed: { email: string; reason: string }[];
+      provisioned: number;
     }>('/enrollments/bulk-by-emails', {
       method: 'POST',
       body: { courseId, emails },
@@ -362,6 +363,8 @@ class ApiClient {
       difficulty: number;
       points: number;
       tags: string[];
+      topic?: string;
+      learningObjective?: string;
       options: Record<string, string> | null;
       correctAnswer: Record<string, string> | null;
     }>('/ai/generate-question', {

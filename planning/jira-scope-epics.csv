@@ -1,0 +1,13 @@
+Summary,Issue Type,Description,Labels,Priority,Components
+"Authentication and access control","Epic","Xac thuc nguoi dung, dang nhap, dang ky, JWT va phan quyen theo vai tro ADMIN, LECTURER, STUDENT.","scope,auth,backend,frontend","High","Auth"
+"User and role administration","Epic","Quan ly nguoi dung, vai tro, danh sach sinh vien/giang vien va cap nhat thong tin tai khoan.","scope,users,admin,backend,frontend","High","Users"
+"Course lifecycle management","Epic","Tao, cap nhat, xem chi tiet va quan ly danh sach hoc phan theo vai tro.","scope,courses,lecturer,backend,frontend","High","Courses"
+"Enrollment operations","Epic","Ghi danh tung sinh vien, ghi danh hang loat, xem danh sach hoc vien va cap nhat trang thai ghi danh.","scope,enrollments,backend,frontend","Medium","Enrollments"
+"Question bank and authoring","Epic","Quan ly ngan hang cau hoi, phan loai theo tags, thong ke cau hoi va trinh sua noi dung cau hoi.","scope,questions,lecturer,backend,frontend","High","Questions"
+"Exam authoring and publishing","Epic","Tao de thi, them cau hoi vao de, cau hinh quy tac, phat hanh de thi va sinh link thi.","scope,exams,lecturer,backend,frontend","High","Exams"
+"Student exam participation","Epic","Sinh vien vao phong thi, kiem tra san sang, lam bai thi, tham gia bang QR va cac trai nghiem lien quan.","scope,student-exam,frontend,backend","High","Student Experience"
+"Submission and grading workflow","Epic","Bat dau bai thi, nop bai, xem ket qua, cham diem tung cau tra loi va chot diem cuoi cung.","scope,submissions,grading,backend,frontend","High","Submissions"
+"Integrity monitoring and audit","Epic","Giam sat ky thi, tong quan integrity, audit log, cau hinh chinh sach he thong va ho so minh bach.","scope,integrity,audit,admin,frontend","High","Integrity"
+"Analytics and transparency dashboards","Epic","Dashboard cho admin va giang vien, thong ke ky thi, methodology reference va cac man hinh transparency.","scope,analytics,dashboard,frontend","Medium","Analytics"
+"AI assisted exam utilities","Epic","Ho tro AI cho sinh cau hoi tu tai lieu va cac tinh nang tro giup lien quan den thi cu.","scope,ai,backend,frontend","Medium","AI"
+"Platform setup and seed data","Epic","Thiet lap Prisma, migration, seed du lieu mau, API documentation va local AI server cho phat trien.","scope,platform,data,devops,backend","Medium","Platform"

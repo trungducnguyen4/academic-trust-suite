@@ -276,8 +276,8 @@ export default function LecturerDashboard() {
             </Card>
 
             {/* AI Quick Action */}
-            <Card className="card-elevated overflow-hidden">
-              <div className="absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5" />
+            <Card className="card-elevated overflow-hidden relative">
+              <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5" />
               <CardContent className="pt-6 relative">
                 <div className="flex items-center gap-3 mb-3">
                   <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">

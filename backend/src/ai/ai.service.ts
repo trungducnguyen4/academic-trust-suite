@@ -2,19 +2,36 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 
+// Using global fetch (Node 18+) to call a local model server when configured
+
 @Injectable()
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private genAI: GoogleGenerativeAI;
   private model: any;
+  private provider: string;
+  private localUrl: string | undefined;
+  private ollamaUrl: string;
+  private ollamaModel: string;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('GOOGLE_AI_API_KEY');
-    if (!apiKey) {
-      this.logger.warn('GOOGLE_AI_API_KEY not set. AI features will not work.');
+    this.provider = this.configService.get<string>('AI_PROVIDER') || 'google'; // 'google' | 'ollama' | 'local' | 'mock'
+    this.localUrl = this.configService.get<string>('AI_LOCAL_URL') || undefined;
+    this.ollamaUrl = this.configService.get<string>('AI_OLLAMA_URL') || 'http://localhost:11434';
+    this.ollamaModel = this.configService.get<string>('AI_OLLAMA_MODEL') || 'mistral';
+
+    if (this.provider === 'google') {
+      if (!apiKey) {
+        this.logger.warn('GOOGLE_AI_API_KEY not set. AI features will not work.');
+      }
+      this.genAI = new GoogleGenerativeAI(apiKey || '');
+      this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    } else if (this.provider === 'ollama') {
+      this.logger.log(`AI provider: Ollama @ ${this.ollamaUrl} (model: ${this.ollamaModel})`);
+    } else {
+      this.logger.log(`AI provider set to '${this.provider}'. Using local/mock mode.`);
     }
-    this.genAI = new GoogleGenerativeAI(apiKey || '');
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
   }
 
   /**
@@ -51,6 +68,8 @@ You MUST respond with a valid JSON object (no markdown, no code fences, just pur
   "difficulty": ${difficulty},
   "points": <appropriate points 1-10>,
   "tags": ["tag1", "tag2", "tag3"],
+  "topic": "specific topic name",
+  "learningObjective": "Action verb + what students should be able to do",
   ${this.getOptionsInstruction(questionType)}
 }
 
@@ -61,12 +80,40 @@ Rules:
 - For essay/short answer: omit options, set correctAnswer to {"answer": "sample answer guideline"}
 - Tags should be relevant academic topics (2-4 tags)
 - Points should reflect difficulty (easy: 1-3, medium: 3-5, hard: 5-10)
+- "topic": 1-5 words naming the specific academic topic of this question
+- "learningObjective": one sentence starting with an action verb (e.g. "Understand...", "Apply...", "Analyze...")
 - Return ONLY the JSON object, no additional text`;
 
     try {
-      const result = await this.model.generateContent(systemPrompt);
-      const responseText = result.response.text();
-      
+      let responseText: string;
+
+      if (this.provider === 'ollama') {
+        responseText = await this._callOllama(systemPrompt);
+      } else if (this.provider === 'local' && this.localUrl) {
+        // Call custom local model server (POST { prompt })
+        const resp = await fetch(this.localUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: systemPrompt }),
+        });
+        if (!resp.ok) throw new Error(`Local model server returned ${resp.status}`);
+        responseText = await resp.text();
+      } else if (this.provider === 'mock') {
+        responseText = JSON.stringify({
+          content: `Sample question about ${prompt}`,
+          type: questionType,
+          explanation: 'This is a mocked explanation for development.',
+          difficulty: Math.round(difficulty * 4) / 4,
+          points: 1,
+          tags: ['mock', 'development'],
+          options: questionType === 'MULTIPLE_CHOICE' ? { A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D' } : null,
+          correctAnswer: questionType === 'MULTIPLE_CHOICE' ? { answer: 'A' } : null,
+        });
+      } else {
+        const result = await this.model.generateContent(systemPrompt);
+        responseText = result.response.text();
+      }
+
       // Clean the response - remove code fences if present
       const cleaned = responseText
         .replace(/```json\s*/gi, '')
@@ -96,6 +143,8 @@ Rules:
         difficulty: parsedDifficulty !== undefined ? parsedDifficulty : difficulty,
         points: parsed.points || 1,
         tags: Array.isArray(parsed.tags) ? parsed.tags : [],
+        topic: parsed.topic || '',
+        learningObjective: parsed.learningObjective || '',
         options: parsed.options || null,
         correctAnswer: parsed.correctAnswer || null,
       };
@@ -156,9 +205,37 @@ Rules:
 - Return ONLY the JSON object, no additional text`;
 
     try {
-      const result = await this.model.generateContent(systemPrompt);
-      const responseText = result.response.text();
-      
+      let responseText: string;
+
+      if (this.provider === 'ollama') {
+        responseText = await this._callOllama(systemPrompt);
+      } else if (this.provider === 'local' && this.localUrl) {
+        const resp = await fetch(this.localUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: systemPrompt }),
+        });
+        if (!resp.ok) throw new Error(`Local model server returned ${resp.status}`);
+        responseText = await resp.text();
+      } else if (this.provider === 'mock') {
+        const sample = {
+          questions: Array.from({ length: questionCount }).map((_, i) => ({
+            content: `Mock question ${i + 1} about ${prompt}`,
+            type: 'MULTIPLE_CHOICE',
+            explanation: 'Mocked explanation',
+            difficulty: Math.round(difficulty * 4) / 4,
+            points: 1,
+            tags: ['mock'],
+            options: { A: 'A', B: 'B', C: 'C', D: 'D' },
+            correctAnswer: { answer: 'A' },
+          })),
+        };
+        responseText = JSON.stringify(sample);
+      } else {
+        const result = await this.model.generateContent(systemPrompt);
+        responseText = result.response.text();
+      }
+
       const cleaned = responseText
         .replace(/```json\s*/gi, '')
         .replace(/```\s*/gi, '')
@@ -191,6 +268,31 @@ Rules:
       this.logger.error('Failed to generate exam questions:', error);
       throw new Error(`AI generation failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Call Ollama's HTTP API and return the generated text.
+   * Ollama exposes POST /api/generate — we use streaming=false for simplicity.
+   */
+  private async _callOllama(prompt: string): Promise<string> {
+    const url = `${this.ollamaUrl}/api/generate`;
+    const resp = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        model: this.ollamaModel,
+        prompt,
+        stream: false,
+        options: { temperature: 0.2 },
+      }),
+    });
+    if (!resp.ok) {
+      const body = await resp.text();
+      throw new Error(`Ollama returned ${resp.status}: ${body}`);
+    }
+    const data: any = await resp.json();
+    // Ollama non-streaming response: { response: "...", ... }
+    return data.response || data.choices?.[0]?.text || '';
   }
 
   private getTypeLabel(type: string): string {

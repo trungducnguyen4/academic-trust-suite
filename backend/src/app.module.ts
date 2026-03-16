@@ -14,7 +14,8 @@ import { AiModule } from './ai/ai.module';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '../.env',
+      // Prefer backend/.env when running backend locally; fallback to repo root .env.
+      envFilePath: ['.env', '../.env'],
     }),
     PrismaModule,
     AuthModule,

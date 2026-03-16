@@ -18,10 +18,24 @@ import {
   Bell,
   Menu,
   X,
+  User,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Separator } from '@/components/ui/separator';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
@@ -272,19 +286,63 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
             </Button>
             <div className="hidden lg:block" />
             <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                className="relative text-muted-foreground hover:text-foreground h-8 w-8"
-              >
-                <Bell className="h-[18px] w-[18px]" />
-                <span className="sr-only">Notifications</span>
-              </Button>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="relative text-muted-foreground hover:text-foreground h-8 w-8"
+                  >
+                    <Bell className="h-[18px] w-[18px]" />
+                    <span className="sr-only">Notifications</span>
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent align="end" className="w-80 p-0">
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-border">
+                    <span className="font-semibold text-sm">Thông báo</span>
+                  </div>
+                  <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
+                    <Bell className="h-8 w-8 mb-2 opacity-30" />
+                    <p className="text-sm">Không có thông báo mới</p>
+                  </div>
+                </PopoverContent>
+              </Popover>
               <div className="h-6 w-px bg-border hidden sm:block" />
-              <div className="text-sm hidden sm:block">
-                <span className="text-muted-foreground">Hello, </span>
-                <span className="font-semibold text-foreground">{user.fullName.split(' ')[0]}</span>
-              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" className="flex items-center gap-2 h-8 px-2 rounded-lg">
+                    <Avatar className="h-7 w-7">
+                      <AvatarFallback className="bg-primary text-primary-foreground text-xs font-bold">
+                        {user.fullName.charAt(0)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="text-sm hidden sm:block">
+                      <span className="text-muted-foreground">Hello, </span>
+                      <span className="font-semibold text-foreground">{user.fullName.split(' ')[0]}</span>
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56" align="end" forceMount>
+                  <DropdownMenuLabel className="font-normal">
+                    <div className="flex flex-col space-y-1">
+                      <p className="text-sm font-semibold">{user.fullName}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
+                    </div>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem asChild>
+                    <Link to="/profile" className="flex items-center">
+                      <User className="mr-2 h-4 w-4" />
+                      Profile
+                    </Link>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
+                    <LogOut className="mr-2 h-4 w-4" />
+                    Sign out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </div>
 

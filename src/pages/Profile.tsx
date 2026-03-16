@@ -44,11 +44,11 @@ export default function Profile() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-2xl">
+      <div className="w-full max-w-6xl">
         <h1 className="text-2xl font-semibold text-foreground mb-1">Profile</h1>
         <p className="text-muted-foreground mb-6">Manage your account settings</p>
 
-        <div className="space-y-6">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1.25fr)_minmax(340px,0.75fr)] xl:items-start">
           {/* Profile Info */}
           <Card>
             <CardHeader>
@@ -56,22 +56,22 @@ export default function Profile() {
               <CardDescription>Your account details and role</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="flex items-center gap-4">
+              <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
                 <Avatar className="h-16 w-16">
                   <AvatarFallback className="bg-primary/10 text-primary text-xl">
                     {user.fullName.charAt(0)}
                   </AvatarFallback>
                 </Avatar>
-                <div>
+                <div className="min-w-0">
                   <h3 className="font-medium text-foreground">{user.fullName}</h3>
-                  <p className="text-sm text-muted-foreground">{user.email}</p>
+                  <p className="text-sm text-muted-foreground break-all">{user.email}</p>
                   <StatusBadge variant="info" className="mt-2">
                     {roleLabel}
                   </StatusBadge>
                 </div>
               </div>
               <Separator />
-              <div className="grid gap-4">
+              <div className="grid gap-4 lg:grid-cols-2">
                 <div className="grid gap-2">
                   <Label>Full Name</Label>
                   <Input value={user.fullName} disabled className="bg-secondary/50" />

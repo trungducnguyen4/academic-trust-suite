@@ -399,6 +399,8 @@ export default function QuestionEditor() {
       if (result.explanation) setExplanation(result.explanation);
       if (result.tags && result.tags.length > 0) setTags(result.tags);
       if (result.difficulty !== undefined && result.difficulty !== null) setDifficulty([Math.max(0, Math.min(1, result.difficulty))]);
+      if (result.topic) setTopic(result.topic);
+      if (result.learningObjective) setLearningObjective(result.learningObjective);
 
       // Fill in options if it's a choice-based question
       if (result.options && (questionType === 'multiple_choice' || questionType === 'single_choice' || questionType === 'true_false')) {
@@ -424,7 +426,7 @@ export default function QuestionEditor() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto px-3 sm:px-0">
+      <div className="max-w-6xl mx-auto px-3 sm:px-0">
         <Button
           variant="ghost" size="sm"
           className="mb-3 sm:mb-4 gap-2 text-muted-foreground -ml-2"
@@ -469,14 +471,16 @@ export default function QuestionEditor() {
           </div>
         ) : (
           <Tabs value={tab} onValueChange={setTab}>
-          <TabsList className="mb-3 sm:mb-4 grid grid-cols-3 w-full sm:w-auto">
+          <TabsList className="mb-3 sm:mb-4 grid grid-cols-2 w-[160px]">
             <TabsTrigger value="edit" className="text-xs sm:text-sm">Edit</TabsTrigger>
-            <TabsTrigger value="metadata" className="text-xs sm:text-sm">Metadata</TabsTrigger>
             <TabsTrigger value="preview" className="text-xs sm:text-sm">Preview</TabsTrigger>
           </TabsList>
 
           {/* === EDIT TAB === */}
-          <TabsContent value="edit" className="space-y-4 sm:space-y-6">
+          <TabsContent value="edit">
+            <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
+            {/* ── LEFT: Question Editor ── */}
+            <div className="space-y-4 sm:space-y-6">
             {/* AI Generator Section */}
             <Card className="border-primary/20 bg-primary/5">
               <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
@@ -497,7 +501,7 @@ export default function QuestionEditor() {
                   />
                   <Button 
                     onClick={handleAiGenerate} 
-                    disabled={isGenerating || !aiPrompt.trim()}
+                    disabled={isGenerating || !aiPrompt.trim() || !course}
                     className="gap-2 w-full sm:w-auto"
                     size="sm"
                   >
@@ -505,6 +509,9 @@ export default function QuestionEditor() {
                     Generate
                   </Button>
                 </div>
+                {!course && (
+                  <p className="text-[10px] text-destructive font-medium px-1">⚠ Chọn môn học bên phải trước khi dùng AI.</p>
+                )}
                 <p className="text-[10px] text-muted-foreground italic px-1">
                   * Generated content will overwrite current question text and options.
                 </p>
@@ -802,29 +809,32 @@ export default function QuestionEditor() {
                 />
               </CardContent>
             </Card>
-          </TabsContent>
+            </div>{/* end left column */}
 
-          {/* === METADATA TAB === */}
-          <TabsContent value="metadata" className="space-y-4 sm:space-y-6">
-            <Card>
-              <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-                <CardTitle className="text-sm sm:text-base">Classification</CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <Label className="text-sm">Course</Label>
-                    <Select value={course} onValueChange={setCourse}>
-                      <SelectTrigger className="text-sm"><SelectValue placeholder="Select course" /></SelectTrigger>
-                      <SelectContent>
-                        {courses.map(c => (
-                          <SelectItem key={c.id} value={c.id} className="text-sm">{c.code} - {c.name}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-1.5 sm:space-y-2">
-                    <Label className="text-sm">Topic</Label>
+            {/* ── RIGHT: Metadata Sidebar ── */}
+            <div className="space-y-4 sm:space-y-6 lg:sticky lg:top-[4.5rem]">
+
+              {/* Course - required */}
+              <Card className={!course ? 'border-destructive/50' : ''}>
+                <CardHeader className="pb-2 px-4 pt-4">
+                  <CardTitle className="text-sm flex items-center gap-1">
+                    Môn học <span className="text-destructive">*</span>
+                  </CardTitle>
+                  {!course && (
+                    <CardDescription className="text-xs text-destructive">Bắt buộc để dùng AI</CardDescription>
+                  )}
+                </CardHeader>
+                <CardContent className="space-y-3 px-4 pb-4">
+                  <Select value={course} onValueChange={setCourse}>
+                    <SelectTrigger className="text-sm"><SelectValue placeholder="Chọn môn học..." /></SelectTrigger>
+                    <SelectContent>
+                      {courses.map(c => (
+                        <SelectItem key={c.id} value={c.id} className="text-sm">{c.code} - {c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Topic</Label>
                     <Input
                       placeholder="e.g., Graph Algorithms"
                       value={topic}
@@ -832,29 +842,27 @@ export default function QuestionEditor() {
                       className="text-sm"
                     />
                   </div>
-                </div>
-                <div className="space-y-1.5 sm:space-y-2">
-                  <Label className="text-sm">Learning Objective</Label>
-                  <Input
-                    placeholder="e.g., Apply Dijkstra's algorithm"
-                    value={learningObjective}
-                    onChange={(e) => setLearningObjective(e.target.value)}
-                    className="text-sm"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-                <CardTitle className="text-sm sm:text-base">Difficulty Level</CardTitle>
-              </CardHeader>
-              <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-                <div className="space-y-3 sm:space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className={`text-xs sm:text-sm font-medium ${difficultyColor}`}>{difficultyLabel}</span>
-                    <span className="text-xs sm:text-sm text-muted-foreground">{difficulty[0].toFixed(2)}</span>
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Learning Objective</Label>
+                    <Input
+                      placeholder="e.g., Apply Dijkstra's algorithm"
+                      value={learningObjective}
+                      onChange={(e) => setLearningObjective(e.target.value)}
+                      className="text-sm"
+                    />
                   </div>
+                </CardContent>
+              </Card>
+
+              {/* Difficulty */}
+              <Card>
+                <CardHeader className="pb-2 px-4 pt-4">
+                  <CardTitle className="text-sm flex items-center justify-between">
+                    Độ khó
+                    <span className={`text-xs font-semibold ${difficultyColor}`}>{difficultyLabel} ({difficulty[0].toFixed(2)})</span>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
                   <Slider
                     value={difficulty}
                     onValueChange={setDifficulty}
@@ -863,47 +871,47 @@ export default function QuestionEditor() {
                     step={0.01}
                     className="py-1"
                   />
-                  <div className="flex justify-between text-[10px] sm:text-xs text-muted-foreground">
-                    <span>Easy (0.0)</span>
-                    <span className="hidden xs:inline">Medium (0.5)</span>
-                    <span>Hard (1.0)</span>
+                  <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
+                    <span>Easy</span><span>Medium</span><span>Hard</span>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
 
-            <Card>
-              <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
-                <CardTitle className="text-sm sm:text-base">Tags</CardTitle>
-                <CardDescription className="text-xs sm:text-sm">Add tags for categorization</CardDescription>
-              </CardHeader>
-              <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-                <div className="flex gap-2 mb-2 sm:mb-3">
-                  <Input
-                    placeholder="Add a tag..."
-                    value={tagInput}
-                    onChange={(e) => setTagInput(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                    className="flex-1 text-sm"
-                  />
-                  <Button variant="outline" onClick={addTag} size="sm" className="text-sm">Add</Button>
-                </div>
-                <div className="flex flex-wrap gap-1.5 sm:gap-2">
-                  {tags.map((t) => (
-                    <span
-                      key={t}
-                      className="inline-flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-0.5 sm:py-1 rounded-md text-[11px] sm:text-xs bg-muted text-muted-foreground"
-                    >
-                      <Tag className="h-2.5 w-2.5 sm:h-3 sm:w-3" />{t}
-                      <button onClick={() => removeTag(t)} className="ml-0.5 sm:ml-1 hover:text-destructive text-sm">×</button>
-                    </span>
-                  ))}
-                  {tags.length === 0 && (
-                    <p className="text-xs sm:text-sm text-muted-foreground">No tags added yet</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+              {/* Tags */}
+              <Card>
+                <CardHeader className="pb-2 px-4 pt-4">
+                  <CardTitle className="text-sm">Tags</CardTitle>
+                </CardHeader>
+                <CardContent className="px-4 pb-4">
+                  <div className="flex gap-2 mb-2">
+                    <Input
+                      placeholder="Add a tag..."
+                      value={tagInput}
+                      onChange={(e) => setTagInput(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
+                      className="flex-1 text-sm"
+                    />
+                    <Button variant="outline" onClick={addTag} size="sm" className="text-sm">Add</Button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {tags.map((t) => (
+                      <span
+                        key={t}
+                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-muted text-muted-foreground"
+                      >
+                        <Tag className="h-2.5 w-2.5" />{t}
+                        <button onClick={() => removeTag(t)} className="ml-0.5 hover:text-destructive">×</button>
+                      </span>
+                    ))}
+                    {tags.length === 0 && (
+                      <p className="text-xs text-muted-foreground">No tags added yet</p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+            </div>{/* end metadata sidebar */}
+            </div>{/* end grid */}
           </TabsContent>
 
           {/* === PREVIEW TAB === */}

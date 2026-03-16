@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import api from '@/lib/api';
+import api, { unwrapPaginatedData } from '@/lib/api';
 import {
   Select,
   SelectContent,
@@ -79,51 +79,102 @@ interface ExamForm {
   aiReviewRequired: boolean;
 }
 
-const defaultForm: ExamForm = {
-  title: '',
-  course: '',
-  description: '',
-  duration: '60',
-  maxAttempts: '1',
-  passingScore: '50',
-  startDate: '',
-  startTime: '08:00',
-  endDate: '',
-  endTime: '17:00',
-  requiresProctoring: true,
-  requiresDownload: false,
-  shuffleQuestions: true,
-  showResultImmediately: false,
-  questionType: 'mixed',
-  questionCount: '20',
-  sourceMethod: 'bank',
-  aiGenerationMode: false,
-  aiPrompt: '',
-  aiDifficulty: '0.5',
-  aiReviewRequired: true,
+const pad2 = (value: number) => String(value).padStart(2, '0');
+
+const toDateInputValue = (date: Date) => {
+  const y = date.getFullYear();
+  const m = pad2(date.getMonth() + 1);
+  const d = pad2(date.getDate());
+  return `${y}-${m}-${d}`;
 };
 
-const courses = [
-  'CS301 – Database Systems',
-  'CS201 – Data Structures & Algorithms',
-  'CS401 – Operating Systems',
-  'CS350 – Computer Networks',
-  'CS450 – Software Engineering',
-];
+const toTimeInputValue = (date: Date) => `${pad2(date.getHours())}:${pad2(date.getMinutes())}`;
+
+const getDefaultExamWindow = () => {
+  const now = new Date();
+
+  // Round forward to the next hour (e.g. 09:15 -> 10:00, 09:00 -> 10:00).
+  const start = new Date(now);
+  start.setMinutes(0, 0, 0);
+  start.setHours(start.getHours() + 1);
+
+  // End time defaults to one hour after the rounded start time.
+  const end = new Date(start);
+  end.setHours(end.getHours() + 1);
+
+  return {
+    startDate: toDateInputValue(start),
+    startTime: toTimeInputValue(start),
+    endDate: toDateInputValue(end),
+    endTime: toTimeInputValue(end),
+  };
+};
+
+const createDefaultForm = (): ExamForm => {
+  const examWindow = getDefaultExamWindow();
+
+  return {
+    title: '',
+    course: '',
+    description: '',
+    duration: '60',
+    maxAttempts: '1',
+    passingScore: '50',
+    startDate: examWindow.startDate,
+    startTime: examWindow.startTime,
+    endDate: examWindow.endDate,
+    endTime: examWindow.endTime,
+    requiresProctoring: true,
+    requiresDownload: false,
+    shuffleQuestions: true,
+    showResultImmediately: false,
+    questionType: 'mixed',
+    questionCount: '20',
+    sourceMethod: 'bank',
+    aiGenerationMode: false,
+    aiPrompt: '',
+    aiDifficulty: '0.5',
+    aiReviewRequired: true,
+  };
+};
+
+interface CourseOption {
+  id: string;
+  code: string;
+  name: string;
+}
 
 export default function CreateExam() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>('info');
-  const [form, setForm] = useState<ExamForm>(defaultForm);
+  const [form, setForm] = useState<ExamForm>(() => createDefaultForm());
   const [isCreating, setIsCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [isStandardizing, setIsStandardizing] = useState(false);
   const [docFile, setDocFile] = useState<string | null>(null);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiGeneratedQuestions, setAiGeneratedQuestions] = useState<any[]>([]);
+  const [courses, setCourses] = useState<CourseOption[]>([]);
 
   const set = (key: keyof ExamForm, val: string | boolean) =>
     setForm((f) => ({ ...f, [key]: val }));
+
+  useEffect(() => {
+    const loadCourses = async () => {
+      try {
+        const data = unwrapPaginatedData(await api.getCourses());
+        setCourses(data.map((course: any) => ({
+          id: course.id,
+          code: course.code,
+          name: course.name,
+        })));
+      } catch (error) {
+        console.error('Failed to load courses for exam creation:', error);
+      }
+    };
+
+    loadCourses();
+  }, []);
 
   const stepIdx = STEPS.findIndex((s) => s.key === step);
   const canNext = (): boolean => {
@@ -133,10 +184,46 @@ export default function CreateExam() {
   };
 
   const handleCreate = async () => {
-    setIsCreating(true);
-    await new Promise((r) => setTimeout(r, 1800));
-    setIsCreating(false);
-    setCreated(true);
+    const startTime = form.startDate
+      ? new Date(`${form.startDate}T${form.startTime || '00:00'}`).toISOString()
+      : undefined;
+    const endTime = form.endDate
+      ? new Date(`${form.endDate}T${form.endTime || '23:59'}`).toISOString()
+      : undefined;
+
+    try {
+      setIsCreating(true);
+      await api.createExam({
+        title: form.title.trim(),
+        description: form.description.trim() || undefined,
+        courseId: form.course,
+        duration: Number(form.duration),
+        passingScore: Number(form.passingScore),
+        startTime,
+        endTime,
+        settings: {
+          maxAttempts: Number(form.maxAttempts || 1),
+          requiresProctoring: form.requiresProctoring,
+          requiresDownload: form.requiresDownload,
+          shuffleQuestions: form.shuffleQuestions,
+          showResultImmediately: form.showResultImmediately,
+          sourceMethod: form.sourceMethod,
+          questionType: form.questionType,
+          requestedQuestionCount: Number(form.questionCount || 0),
+          aiGenerationMode: form.aiGenerationMode,
+          aiPrompt: form.aiPrompt || undefined,
+          aiDifficulty: Number(form.aiDifficulty || 0.5),
+          aiReviewRequired: form.aiReviewRequired,
+        },
+      });
+
+      setCreated(true);
+    } catch (error: any) {
+      console.error('Failed to create exam:', error);
+      alert(error.message || 'Failed to create exam');
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   const handleAiGenerate = async () => {
@@ -176,7 +263,7 @@ export default function CreateExam() {
             <Button variant="outline" onClick={() => navigate('/lecturer/exams')}>
               Back to Dashboard
             </Button>
-            <Button onClick={() => navigate('/lecturer/question-bank')}>
+            <Button onClick={() => navigate('/lecturer/exams')}>
               <Plus className="h-4 w-4 mr-2" /> Add Questions
             </Button>
           </div>
@@ -246,7 +333,7 @@ export default function CreateExam() {
                     </SelectTrigger>
                     <SelectContent>
                       {courses.map((c) => (
-                        <SelectItem key={c} value={c}>{c}</SelectItem>
+                        <SelectItem key={c.id} value={c.id}>{c.code} - {c.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -587,7 +674,7 @@ export default function CreateExam() {
               <CardContent className="space-y-4 text-sm">
                 {[
                   { label: 'Title',           value: form.title || '—' },
-                  { label: 'Course',          value: form.course || '—' },
+                  { label: 'Course',          value: courses.find((course) => course.id === form.course)?.code ? `${courses.find((course) => course.id === form.course)?.code} - ${courses.find((course) => course.id === form.course)?.name}` : '—' },
                   { label: 'Description',     value: form.description || '—' },
                   { label: 'Duration',        value: `${form.duration} minutes` },
                   { label: 'Passing Score',   value: `${form.passingScore}%` },

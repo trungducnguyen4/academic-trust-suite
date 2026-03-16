@@ -84,7 +84,7 @@ interface EnrollResult {
   email: string;
   fullName?: string;
   studentId?: string | null;
-  status: 'success' | 'failed';
+  status: 'success' | 'failed' | 'provisioned';
   reason?: string;
 }
 
@@ -117,6 +117,7 @@ export default function CreateCourse() {
   const [isSearching, setIsSearching] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [enrollResults, setEnrollResults] = useState<EnrollResult[]>([]);
+  const [provisionedCount, setProvisionedCount] = useState(0);
   const [csvText, setCsvText] = useState('');
   const [csvEmails, setCsvEmails] = useState<string[]>([]);
   const [csvFileName, setCsvFileName] = useState('');
@@ -291,10 +292,17 @@ export default function CreateCourse() {
       } else if (enrollTab === 'import' && csvEmails.length > 0) {
         const result = await api.bulkEnrollByEmails(createdCourseId, csvEmails);
         const results: EnrollResult[] = [
-          ...result.success.map(s => ({ email: s.email, fullName: s.fullName, studentId: s.studentId, status: 'success' as const })),
-          ...result.failed.map(f => ({ email: f.email, status: 'failed' as const, reason: f.reason })),
+          ...result.success.map((s: any) => ({
+            email: s.email,
+            fullName: s.fullName,
+            studentId: s.studentId,
+            // Backend provisioned flag isn't per-item, so just mark as success
+            status: 'success' as const,
+          })),
+          ...result.failed.map((f: any) => ({ email: f.email, status: 'failed' as const, reason: f.reason })),
         ];
         setEnrollResults(results);
+        setProvisionedCount(result.provisioned ?? 0);
         const successCount = result.success.length;
         setCourses(prev => prev.map(c => c.id === createdCourseId ? { ...c, students: c.students + successCount } : c));
       }
@@ -318,6 +326,7 @@ export default function CreateCourse() {
       setCsvEmails([]);
       setCsvFileName('');
       setEnrollResults([]);
+      setProvisionedCount(0);
       setEnrollTab('manual');
     }, 200);
   };
@@ -694,7 +703,9 @@ export default function CreateCourse() {
                         ))}
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        {enrollResults.filter(r => r.status === 'success').length} enrolled successfully, {enrollResults.filter(r => r.status === 'failed').length} failed
+                        {enrollResults.filter(r => r.status === 'success').length} enrolled successfully
+                        {provisionedCount > 0 && <span className="text-amber-600 font-medium"> ({provisionedCount} new accounts auto-created with password <code>Examtrust@123</code>)</span>}
+                        {enrollResults.filter(r => r.status === 'failed').length > 0 && `, ${enrollResults.filter(r => r.status === 'failed').length} failed`}
                       </p>
                     </div>
                   )}
