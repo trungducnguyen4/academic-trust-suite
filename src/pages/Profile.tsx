@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
@@ -9,32 +9,120 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Loader2, CheckCircle2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
+import api from '@/lib/api';
 
 export default function Profile() {
-  const { user, isAuthenticated } = useAuth();
-  const [isUpdating, setIsUpdating] = useState(false);
-  const [showSuccess, setShowSuccess] = useState(false);
+  const { user, isAuthenticated, logout, applyProfileToSession } = useAuth();
+  const [isSavingProfile, setIsSavingProfile] = useState(false);
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
+  const [isDeletingProfile, setIsDeletingProfile] = useState(false);
+
+  const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
+  const [department, setDepartment] = useState('');
+  const [studentId, setStudentId] = useState('');
+
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
   }
 
+  useEffect(() => {
+    setFullName(user.fullName || '');
+    setEmail(user.email || '');
+    setDepartment(user.department || '');
+    setStudentId(user.studentId || '');
+  }, [user]);
+
+  const handleProfileUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!fullName.trim() || !email.trim()) {
+      toast.error('Full name and email are required');
+      return;
+    }
+
+    setIsSavingProfile(true);
+    try {
+      const updatedUser = await api.updateMyProfile({
+        fullName: fullName.trim(),
+        email: email.trim(),
+        department: department.trim() || undefined,
+        studentId: user.role === 'STUDENT' ? (studentId.trim() || undefined) : undefined,
+      });
+      applyProfileToSession(updatedUser);
+      toast.success('Profile updated successfully');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update profile');
+    } finally {
+      setIsSavingProfile(false);
+    }
+  };
+
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsUpdating(true);
-    
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-    
-    setIsUpdating(false);
-    setShowSuccess(true);
+
+    if (!currentPassword || !newPassword || !confirmPassword) {
+      toast.error('Please complete all password fields');
+      return;
+    }
+
+    if (newPassword.length < 6) {
+      toast.error('New password must be at least 6 characters');
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      toast.error('New password confirmation does not match');
+      return;
+    }
+
+    setIsUpdatingPassword(true);
+    try {
+      await api.changeMyPassword({
+        currentPassword,
+        newPassword,
+      });
+      toast.success('Password updated successfully');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update password');
+    } finally {
+      setIsUpdatingPassword(false);
+    }
+
     setCurrentPassword('');
     setNewPassword('');
-    
-    setTimeout(() => setShowSuccess(false), 3000);
+    setConfirmPassword('');
+  };
+
+  const handleDeleteProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!deletePassword) {
+      toast.error('Please enter your current password to delete profile');
+      return;
+    }
+
+    const confirmed = window.confirm('This will delete your profile and sign you out. Continue?');
+    if (!confirmed) return;
+
+    setIsDeletingProfile(true);
+    try {
+      await api.deleteMyProfile({ currentPassword: deletePassword });
+      toast.success('Profile deleted successfully');
+      logout();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete profile');
+    } finally {
+      setIsDeletingProfile(false);
+      setDeletePassword('');
+    }
   };
 
   const roleLabel = 
@@ -53,7 +141,7 @@ export default function Profile() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Personal Information</CardTitle>
-              <CardDescription>Your account details and role</CardDescription>
+              <CardDescription>Update personal info for your account (no avatar change)</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -71,73 +159,146 @@ export default function Profile() {
                 </div>
               </div>
               <Separator />
-              <div className="grid gap-4 lg:grid-cols-2">
-                <div className="grid gap-2">
-                  <Label>Full Name</Label>
-                  <Input value={user.fullName} disabled className="bg-secondary/50" />
+              <form className="grid gap-4 lg:grid-cols-2" onSubmit={handleProfileUpdate}>
+                <div className="grid gap-2 lg:col-span-2">
+                  <Label htmlFor="full-name">Full Name</Label>
+                  <Input
+                    id="full-name"
+                    value={fullName}
+                    onChange={(e) => setFullName(e.target.value)}
+                    required
+                  />
+                </div>
+                <div className="grid gap-2 lg:col-span-2">
+                  <Label htmlFor="email-address">Email Address</Label>
+                  <Input
+                    id="email-address"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
                 </div>
                 <div className="grid gap-2">
-                  <Label>Email Address</Label>
-                  <Input value={user.email} disabled className="bg-secondary/50" />
+                  <Label htmlFor="department">Department</Label>
+                  <Input
+                    id="department"
+                    value={department}
+                    onChange={(e) => setDepartment(e.target.value)}
+                    placeholder="e.g. Computer Science"
+                  />
                 </div>
                 <div className="grid gap-2">
+                  <Label htmlFor="student-id">Student ID</Label>
+                  <Input
+                    id="student-id"
+                    value={studentId}
+                    onChange={(e) => setStudentId(e.target.value)}
+                    disabled={user.role !== 'STUDENT'}
+                    placeholder={user.role === 'STUDENT' ? 'Enter your student ID' : 'Only available for students'}
+                  />
+                </div>
+                <div className="grid gap-2 lg:col-span-2">
                   <Label>Role</Label>
                   <Input value={roleLabel} disabled className="bg-secondary/50" />
                   <p className="text-xs text-muted-foreground">
                     Contact your administrator to change your role.
                   </p>
                 </div>
-              </div>
+                <div className="lg:col-span-2">
+                  <Button type="submit" disabled={isSavingProfile}>
+                    {isSavingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Save Profile
+                  </Button>
+                </div>
+              </form>
             </CardContent>
           </Card>
 
           {/* Password Change */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-lg">Change Password</CardTitle>
-              <CardDescription>Update your password to keep your account secure</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {showSuccess && (
-                <div className="mb-4 flex items-center gap-2 rounded-lg bg-success/10 border border-success/20 px-4 py-3 text-sm text-success">
-                  <CheckCircle2 className="h-4 w-4" />
-                  Password updated successfully
-                </div>
-              )}
-              <form onSubmit={handlePasswordChange} className="space-y-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="current-password">Current Password</Label>
-                  <Input
-                    id="current-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    required
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="new-password">New Password</Label>
-                  <Input
-                    id="new-password"
-                    type="password"
-                    placeholder="••••••••"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    required
-                    minLength={8}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Minimum 8 characters
-                  </p>
-                </div>
-                <Button type="submit" disabled={isUpdating}>
-                  {isUpdating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Update Password
-                </Button>
-              </form>
-            </CardContent>
-          </Card>
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-lg">Change Password</CardTitle>
+                <CardDescription>Update your password to keep your account secure</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handlePasswordChange} className="space-y-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="current-password">Current Password</Label>
+                    <Input
+                      id="current-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={currentPassword}
+                      onChange={(e) => setCurrentPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="new-password">New Password</Label>
+                    <Input
+                      id="new-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="confirm-password">Confirm New Password</Label>
+                    <Input
+                      id="confirm-password"
+                      type="password"
+                      placeholder="••••••••"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      required
+                      minLength={6}
+                    />
+                  </div>
+                  <Button type="submit" disabled={isUpdatingPassword}>
+                    {isUpdatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                    Update Password
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card className="border-destructive/30">
+              <CardHeader>
+                <CardTitle className="text-lg flex items-center gap-2 text-destructive">
+                  <AlertTriangle className="h-5 w-5" />
+                  Danger Zone
+                </CardTitle>
+                <CardDescription>Delete your profile permanently from active system access</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleDeleteProfile} className="space-y-4">
+                  <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+                    This action cannot be undone. Your account will be archived and you will be signed out.
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="delete-password">Current Password</Label>
+                    <Input
+                      id="delete-password"
+                      type="password"
+                      placeholder="Enter current password"
+                      value={deletePassword}
+                      onChange={(e) => setDeletePassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                  <Button type="submit" variant="destructive" disabled={isDeletingProfile}>
+                    {isDeletingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                    Delete Profile
+                  </Button>
+                </form>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </div>
     </DashboardLayout>
