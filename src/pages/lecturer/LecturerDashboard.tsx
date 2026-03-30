@@ -8,11 +8,9 @@ import {
   Plus,
   FileText, 
   Users,
-  AlertTriangle,
   BarChart3,
   Clock,
   ArrowRight,
-  CheckCircle2,
   BookOpen,
   Loader2,
   TrendingUp,
@@ -87,7 +85,7 @@ export default function LecturerDashboard() {
 
   if (loading) {
     return (
-      <DashboardLayout>
+      <DashboardLayout notifications={alerts}>
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -99,7 +97,7 @@ export default function LecturerDashboard() {
   }
 
   return (
-    <DashboardLayout>
+    <DashboardLayout notifications={alerts}>
       <div className="space-y-8">
         {/* Header */}
         <div className="flex items-start justify-between">
@@ -182,6 +180,24 @@ export default function LecturerDashboard() {
                   ) : exams.slice(0, 4).map((exam, i) => {
                     const status = statusConfig[exam.status] || statusConfig.DRAFT;
                     const questionCount = exam._count?.examQuestions || 0;
+                    const now = Date.now();
+                    const start = exam.startTime ? new Date(exam.startTime) : null;
+                    const end = start ? new Date(start.getTime() + (exam.duration || 0) * 60000) : null;
+                    const isScheduled = start ? now < start.getTime() : false;
+                    const isExpired = end ? end.getTime() < now : false;
+                    const isLiveByTime = !!start && !!end && now >= start.getTime() && now <= end.getTime();
+                    const shouldMonitor = exam.status === 'ONGOING' || isLiveByTime;
+                    const shouldShowResults = exam.status === 'COMPLETED' || isExpired;
+                    const actionLabel = shouldMonitor
+                      ? 'Monitor'
+                      : shouldShowResults
+                        ? 'View Results'
+                        : 'Preview & Edit';
+                    const actionHref = shouldMonitor
+                      ? `/lecturer/exam/${exam.id}/monitor`
+                      : shouldShowResults
+                        ? `/lecturer/exam/${exam.id}/results`
+                        : `/lecturer/exam/${exam.id}/preview`;
                     return (
                       <div
                         key={exam.id}
@@ -190,9 +206,13 @@ export default function LecturerDashboard() {
                         <div className="space-y-1.5">
                           <div className="flex items-center gap-2.5">
                             <h4 className="font-semibold text-foreground">{exam.title}</h4>
-                            <StatusBadge variant={status.variant}>
-                              {status.label}
-                            </StatusBadge>
+                            {isExpired ? (
+                              <StatusBadge variant="destructive">Expired</StatusBadge>
+                            ) : (
+                              <StatusBadge variant={status.variant}>
+                                {status.label}
+                              </StatusBadge>
+                            )}
                           </div>
                           <div className="flex items-center gap-4 text-sm text-muted-foreground">
                             <span className="font-medium">{exam.course?.code}</span>
@@ -206,33 +226,31 @@ export default function LecturerDashboard() {
                             </span>
                           </div>
                         </div>
-                        {exam.status === 'COMPLETED' && (
-                          <div className="text-right">
-                            <p className="text-lg font-bold text-foreground">
-                              {exam._count?.submissions || 0}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Submissions
-                            </p>
-                          </div>
-                        )}
-                        {exam.status === 'PUBLISHED' && exam.startTime && (
-                          <div className="text-right">
-                            <p className="text-sm font-semibold text-foreground">
-                              {format(new Date(exam.startTime), 'MMM d')}
-                            </p>
-                            <p className="text-xs text-muted-foreground">
-                              Scheduled
-                            </p>
-                          </div>
-                        )}
-                        {exam.status === 'ONGOING' && (
+                        <div className="flex items-center gap-3">
+                          {exam.status === 'COMPLETED' && (
+                            <div className="text-right">
+                              <p className="text-lg font-bold text-foreground">
+                                {exam._count?.submissions || 0}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Submissions
+                              </p>
+                            </div>
+                          )}
+                          {isScheduled && exam.status === 'PUBLISHED' && exam.startTime && (
+                            <div className="text-right">
+                              <p className="text-sm font-semibold text-foreground">
+                                {format(new Date(exam.startTime), 'MMM d')}
+                              </p>
+                              <p className="text-xs text-muted-foreground">
+                                Scheduled
+                              </p>
+                            </div>
+                          )}
                           <Button size="sm" className="rounded-xl" asChild>
-                            <Link to={`/lecturer/exam/${exam.id}/monitor`}>
-                              Monitor
-                            </Link>
+                            <Link to={actionHref}>{actionLabel}</Link>
                           </Button>
-                        )}
+                        </div>
                       </div>
                     );
                   })}
@@ -241,40 +259,8 @@ export default function LecturerDashboard() {
             </Card>
           </div>
 
-          {/* Alerts */}
+          {/* Right panel */}
           <div className="space-y-6">
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold">Notifications</CardTitle>
-                <CardDescription>Items requiring attention</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {alerts.map((alert) => (
-                    <div key={alert.id} className="flex items-start gap-3 p-3 rounded-xl bg-secondary/50">
-                      {alert.type === 'warning' ? (
-                        <div className="h-8 w-8 rounded-lg bg-warning/10 flex items-center justify-center shrink-0">
-                          <AlertTriangle className="h-4 w-4 text-warning" />
-                        </div>
-                      ) : (
-                        <div className="h-8 w-8 rounded-lg bg-info/10 flex items-center justify-center shrink-0">
-                          <CheckCircle2 className="h-4 w-4 text-info" />
-                        </div>
-                      )}
-                      <div className="space-y-0.5">
-                        <p className="text-sm font-semibold text-foreground">
-                          {alert.title}
-                        </p>
-                        <p className="text-sm text-muted-foreground">
-                          {alert.message}
-                        </p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
             {/* AI Quick Action */}
             <Card className="card-elevated overflow-hidden relative">
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5" />

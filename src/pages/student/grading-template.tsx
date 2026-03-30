@@ -1,6 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import api from '@/lib/api';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -26,7 +24,7 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
-// Mock grading data
+// This file is a template copy of the grading UI (keeps mock data UI intact)
 interface GradedQuestion {
   id: number;
   question: string;
@@ -59,90 +57,17 @@ const gradingHistory = [
   { date: '2026-02-25 09:00', action: 'Score adjustment: Q8', by: 'Dr. Nguyen Van A', detail: 'Revised to 6/10 after review appeal' },
 ];
 
-export default function GradingBreakdown() {
+export default function GradingTemplate() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const examId = searchParams.get('examId') || undefined;
 
-  const [loading, setLoading] = useState(false);
-  const [submission, setSubmission] = useState<any | null>(null);
-
-  useEffect(() => {
-    if (!examId) return;
-    let mounted = true;
-    (async () => {
-      try {
-        setLoading(true);
-        const res = await api.getMyExamSubmission(examId);
-        if (!mounted) return;
-        setSubmission(res);
-      } catch (err) {
-        console.error('Failed to load submission:', err);
-      } finally {
-        if (mounted) setLoading(false);
-      }
-    })();
-    return () => { mounted = false; };
-  }, [examId]);
-
-  // Map submission (if available) to gradedQuestions and history
-  const mappedQuestions = (submission?.answers || []).map((a: any, idx: number) => {
-    const q = a.question || {};
-    const autoTypes = ['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE'];
-    const type = autoTypes.includes(q.type) ? 'auto' : 'manual';
-    return {
-      id: idx + 1,
-      question: q.content || q.text || 'Question text',
-      type,
-      yourAnswer: a.answer || '',
-      correctAnswer: q.correctAnswer || '',
-      isCorrect: !!a.isCorrect,
-      points: a.pointsAwarded ?? 0,
-      maxPoints: q.points ?? 1,
-      feedback: a.feedback || undefined,
-    };
-  });
-
-  const autoQuestions = mappedQuestions.filter((q: any) => q.type === 'auto');
-  const manualQuestions = mappedQuestions.filter((q: any) => q.type === 'manual');
-  const autoScore = autoQuestions.reduce((s: number, q: any) => s + q.points, 0);
-  const autoMax = autoQuestions.reduce((s: number, q: any) => s + q.maxPoints, 0) || 1;
-  const manualScore = manualQuestions.reduce((s: number, q: any) => s + q.points, 0);
-  const manualMax = manualQuestions.reduce((s: number, q: any) => s + q.maxPoints, 0) || 1;
+  const autoQuestions = gradedQuestions.filter((q) => q.type === 'auto');
+  const manualQuestions = gradedQuestions.filter((q) => q.type === 'manual');
+  const autoScore = autoQuestions.reduce((s, q) => s + q.points, 0);
+  const autoMax = autoQuestions.reduce((s, q) => s + q.maxPoints, 0);
+  const manualScore = manualQuestions.reduce((s, q) => s + q.points, 0);
+  const manualMax = manualQuestions.reduce((s, q) => s + q.maxPoints, 0);
   const totalScore = autoScore + manualScore;
   const totalMax = autoMax + manualMax;
-
-  const gradingHistory = (() => {
-    if (!submission) return [];
-    const history: any[] = [];
-    if (submission.submittedAt) {
-      history.push({ date: new Date(submission.submittedAt).toLocaleString(), action: 'Auto-grading completed', by: 'System', detail: `${autoQuestions.length} objective questions graded` });
-    }
-    // Add manual grading entries for answers with feedback or pointsAwarded
-    (submission.answers || []).forEach((a: any, i: number) => {
-      if ((a.pointsAwarded != null && a.pointsAwarded !== 0) || a.feedback) {
-        history.push({ date: a.updatedAt ? new Date(a.updatedAt).toLocaleString() : submission.gradedAt ? new Date(submission.gradedAt).toLocaleString() : '', action: `Manual grading: Q${i+1}`, by: a.gradedByName || 'Instructor', detail: `Score: ${a.pointsAwarded ?? 0}/${a.question?.points ?? 1}` });
-      }
-    });
-    if (submission.gradedAt) {
-      history.push({ date: new Date(submission.gradedAt).toLocaleString(), action: 'Final score released', by: 'System', detail: `Total: ${submission.score}/${submission.exam?.totalPoints ?? totalMax}` });
-    }
-    return history;
-  })();
-
-  if (!examId) {
-    return (
-      <DashboardLayout>
-        <div className="max-w-5xl mx-auto text-center py-20">
-          <h2 className="text-lg font-medium">No exam selected</h2>
-          <p className="text-sm text-muted-foreground mt-2">Open an evaluated exam from your dashboard to view grading details.</p>
-          <div className="mt-6">
-            <Button onClick={() => navigate('/student')}>Back to Dashboard</Button>
-          </div>
-        </div>
-      </DashboardLayout>
-    );
-  }
 
   return (
     <DashboardLayout>
@@ -157,9 +82,9 @@ export default function GradingBreakdown() {
           Back to Dashboard
         </Button>
 
-        <h1 className="text-2xl font-semibold text-foreground mb-1">Grading Breakdown</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-1">Grading Breakdown (Template)</h1>
         <p className="text-muted-foreground mb-6">
-          Transparent view of how your exam was scored — auto-graded and manually reviewed questions
+          This is the static template copy of the grading UI (mock data)
         </p>
 
         {/* Score Calculation Summary */}
@@ -177,55 +102,23 @@ export default function GradingBreakdown() {
                 <Cpu className="h-6 w-6 text-blue-600 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-blue-700 dark:text-blue-400">{autoScore}/{autoMax}</p>
                 <p className="text-xs text-muted-foreground mt-1">Auto-Graded ({autoQuestions.length} questions)</p>
-                <Progress value={(autoMax > 0 ? (autoScore / autoMax) * 100 : 0)} className="mt-2 h-1.5" />
+                <Progress value={(autoScore / autoMax) * 100} className="mt-2 h-1.5" />
               </div>
               <div className="text-center p-4 rounded-lg bg-purple-50/50 dark:bg-purple-950/20 border border-purple-100 dark:border-purple-900">
                 <User className="h-6 w-6 text-purple-600 mx-auto mb-2" />
                 <p className="text-2xl font-bold text-purple-700 dark:text-purple-400">{manualScore}/{manualMax}</p>
                 <p className="text-xs text-muted-foreground mt-1">Manual Grading ({manualQuestions.length} questions)</p>
-                <Progress value={(manualMax > 0 ? (manualScore / manualMax) * 100 : 0)} className="mt-2 h-1.5" />
+                <Progress value={(manualScore / manualMax) * 100} className="mt-2 h-1.5" />
               </div>
               <div className="text-center p-4 rounded-lg bg-primary/5 border border-primary/20">
                 <Calculator className="h-6 w-6 text-primary mx-auto mb-2" />
                 <p className="text-3xl font-bold text-primary">{totalScore}/{totalMax}</p>
-                <p className="text-xs text-muted-foreground mt-1">Total Score ({Math.round((totalMax > 0 ? (totalScore / totalMax) * 100 : 0))}%)</p>
-                <Progress value={(totalMax > 0 ? (totalScore / totalMax) * 100 : 0)} className="mt-2 h-1.5" />
+                <p className="text-xs text-muted-foreground mt-1">Total Score ({Math.round((totalScore / totalMax) * 100)}%)</p>
+                <Progress value={(totalScore / totalMax) * 100} className="mt-2 h-1.5" />
               </div>
             </div>
           </CardContent>
         </Card>
-
-        {/* Proctoring Summary */}
-        {submission?.proctoring && (
-          <Card className="mb-6">
-            <CardHeader>
-              <CardTitle className="text-lg flex items-center gap-2">
-                <History className="h-5 w-5 text-primary" />
-                Proctoring Summary
-              </CardTitle>
-              <CardDescription>Summary of integrity events recorded during the exam</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Tab Switches</p>
-                  <p className="text-lg font-semibold">{submission.proctoring.tabSwitchCount ?? 0}</p>
-                </div>
-                <div className="p-4 rounded-lg border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Mouse Anomalies</p>
-                  <p className="text-lg font-semibold">{submission.proctoring.mouseAnomalies ?? 0}</p>
-                </div>
-                <div className="p-4 rounded-lg border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Recorded Events</p>
-                  <p className="text-lg font-semibold">{submission.proctoring.logs?.length ?? 0}</p>
-                </div>
-              </div>
-              {submission.proctoring.logs && submission.proctoring.logs.length > 0 && (
-                <p className="text-sm text-muted-foreground mt-3">Some events were recorded during your exam and are available to your instructor for review.</p>
-              )}
-            </CardContent>
-          </Card>
-        )}
 
         {/* Auto-Graded Questions */}
         <Card className="mb-6">
@@ -250,7 +143,7 @@ export default function GradingBreakdown() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {autoQuestions.map((q: any) => (
+                {autoQuestions.map((q) => (
                   <TableRow key={q.id}>
                     <TableCell className="font-mono">{q.id}</TableCell>
                     <TableCell className="font-medium">{q.question}</TableCell>
@@ -285,7 +178,7 @@ export default function GradingBreakdown() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {manualQuestions.map((q: any) => (
+              {manualQuestions.map((q) => (
                 <div key={q.id} className="p-4 rounded-lg border border-border">
                   <div className="flex items-start justify-between mb-2">
                     <div>
@@ -327,7 +220,7 @@ export default function GradingBreakdown() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {gradingHistory.map((entry: any, idx: number) => (
+              {gradingHistory.map((entry, idx) => (
                 <div key={idx} className="flex items-start gap-4 p-3 rounded-lg border border-border">
                   <div className="text-xs font-mono text-muted-foreground whitespace-nowrap mt-0.5">
                     {entry.date}

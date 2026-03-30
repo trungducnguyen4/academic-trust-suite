@@ -46,19 +46,6 @@ export class SubmissionsService {
       throw new ForbiddenException('Exam has ended');
     }
 
-    // Check if already submitted
-    const existingSubmission = await this.prisma.examSubmission.findFirst({
-      where: {
-        examId: startExamDto.examId,
-        studentId,
-        status: { in: ['SUBMITTED', 'GRADED'] },
-      },
-    });
-
-    if (existingSubmission) {
-      throw new ConflictException('You have already submitted this exam');
-    }
-
     // Check for in-progress submission
     const inProgressSubmission = await this.prisma.examSubmission.findFirst({
       where: {
@@ -70,6 +57,27 @@ export class SubmissionsService {
 
     if (inProgressSubmission) {
       return inProgressSubmission;
+    }
+
+    // Enforce maximum attempts from exam settings (default: 1)
+    const settings: any = exam.settings || {};
+    const parsedMaxAttempts = Number(settings?.maxAttempts);
+    const maxAttempts = Number.isFinite(parsedMaxAttempts)
+      ? Math.max(1, Math.floor(parsedMaxAttempts))
+      : 1;
+
+    const completedAttempts = await this.prisma.examSubmission.count({
+      where: {
+        examId: startExamDto.examId,
+        studentId,
+        status: { in: ['SUBMITTED', 'GRADED', 'FLAGGED'] },
+      },
+    });
+
+    if (completedAttempts >= maxAttempts) {
+      throw new ConflictException(
+        `Attempt limit reached (${completedAttempts}/${maxAttempts}).`,
+      );
     }
 
     // Create new submission
@@ -122,7 +130,24 @@ export class SubmissionsService {
 
     const now = new Date();
 
-    // Use transaction to ensure atomicity of answer creation + submission update
+    // Basic validation / security for logs
+    const logs = submitExamDto.logs || [];
+    if (logs.length > 1000) {
+      throw new BadRequestException('Too many log entries');
+    }
+    let totalLogChars = 0;
+    for (const l of logs) {
+      const detailsStr = l.details ? String(l.details) : '';
+      totalLogChars += detailsStr.length;
+      if (detailsStr.length > 2000) {
+        throw new BadRequestException('Log entry too large');
+      }
+    }
+    if (totalLogChars > 200000) {
+      throw new BadRequestException('Proctoring logs payload too large');
+    }
+
+    // Use transaction to ensure atomicity of answer creation + submission update + logs
     return this.prisma.$transaction(async (tx) => {
       // Create submission answers
       let totalScore = 0;
@@ -165,6 +190,38 @@ export class SubmissionsService {
       const hasManualGrading = submission.exam.examQuestions.some(
         (eq) => !autoGradedTypes.includes(eq.question.type),
       );
+
+      // Create or update proctoring session and logs (inside same transaction)
+      if (logs.length > 0) {
+        // compute simple aggregates
+        const tabSwitchCount = logs.filter((x) => x.type === 'tab_switch').length;
+        // upsert ProctoringSession by submissionId
+        const proctoringSession = await tx.proctoringSession.upsert({
+          where: { submissionId },
+          create: {
+            submissionId,
+            tabSwitchCount,
+            mouseAnomalies: logs.filter((x) => x.type === 'mouse_anomaly').length,
+          },
+          update: {
+            tabSwitchCount: { increment: tabSwitchCount },
+            mouseAnomalies: { increment: logs.filter((x) => x.type === 'mouse_anomaly').length },
+          },
+        });
+        const proctoringId = proctoringSession.id;
+
+        // prepare integrity logs
+        const createLogs = logs.map((l) => ({
+          proctoringId,
+          eventType: String(l.type).slice(0, 100),
+          details: l.details ? String(l.details).slice(0, 2000) : undefined,
+          timestamp: l.ts ? new Date(l.ts) : new Date(),
+        }));
+        if (createLogs.length > 0) {
+          // createMany is faster; fallback to individual create if needed
+          await tx.integrityLog.createMany({ data: createLogs });
+        }
+      }
 
       // Update submission
       return tx.examSubmission.update({
@@ -282,6 +339,208 @@ export class SubmissionsService {
     ]);
 
     return buildPaginatedResult(submissions, total, page, limit);
+  }
+
+  async getExamOverview(examId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: { id: examId },
+      select: {
+        id: true,
+        title: true,
+        totalPoints: true,
+        status: true,
+        startTime: true,
+        endTime: true,
+      },
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    const [submissions, proctoringSessions, integrityLogs] = await Promise.all([
+      this.prisma.examSubmission.findMany({
+        where: { examId },
+        select: {
+          id: true,
+          status: true,
+          score: true,
+          startedAt: true,
+          submittedAt: true,
+          student: {
+            select: {
+              id: true,
+              fullName: true,
+              studentId: true,
+            },
+          },
+        },
+      }),
+      this.prisma.proctoringSession.findMany({
+        where: {
+          submission: {
+            examId,
+          },
+        },
+        select: {
+          id: true,
+          tabSwitchCount: true,
+          mouseAnomalies: true,
+          submission: {
+            select: {
+              id: true,
+              student: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  studentId: true,
+                },
+              },
+            },
+          },
+        },
+      }),
+      this.prisma.integrityLog.findMany({
+        where: {
+          proctoring: {
+            submission: {
+              examId,
+            },
+          },
+        },
+        orderBy: { timestamp: 'desc' },
+        take: 80,
+        select: {
+          id: true,
+          eventType: true,
+          details: true,
+          timestamp: true,
+          proctoring: {
+            select: {
+              submission: {
+                select: {
+                  id: true,
+                  student: {
+                    select: {
+                      id: true,
+                      fullName: true,
+                      studentId: true,
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      }),
+    ]);
+
+    const completed = submissions.filter((s) => ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(s.status));
+    const scoresPct = completed
+      .filter((s) => typeof s.score === 'number')
+      .map((s) => {
+        const scoreValue = Number(s.score || 0);
+        if ((exam.totalPoints || 0) > 0) {
+          return Math.max(0, Math.min(100, (scoreValue / Number(exam.totalPoints)) * 100));
+        }
+        return Math.max(0, Math.min(100, scoreValue));
+      });
+
+    const bins = [
+      { key: '0-20', min: 0, max: 20, count: 0 },
+      { key: '21-40', min: 21, max: 40, count: 0 },
+      { key: '41-60', min: 41, max: 60, count: 0 },
+      { key: '61-80', min: 61, max: 80, count: 0 },
+      { key: '81-100', min: 81, max: 100, count: 0 },
+    ];
+
+    for (const value of scoresPct) {
+      const rounded = Math.round(value);
+      const bucket = bins.find((b) => rounded >= b.min && rounded <= b.max);
+      if (bucket) bucket.count += 1;
+    }
+
+    const suspiciousTypes = new Set([
+      'tab_switch',
+      'mouse_anomaly',
+      'copy',
+      'paste',
+      'fullscreen_exit',
+      'window_blur',
+      'face_not_detected',
+    ]);
+
+    const mappedLogs = integrityLogs
+      .filter((log) => suspiciousTypes.has((log.eventType || '').toLowerCase()))
+      .map((log) => {
+        const event = (log.eventType || 'unknown').toLowerCase();
+        const severity = event.includes('fullscreen') || event.includes('face')
+          ? 'high'
+          : event.includes('tab') || event.includes('paste')
+            ? 'medium'
+            : 'low';
+
+        return {
+          id: log.id,
+          eventType: log.eventType,
+          details: log.details || '',
+          timestamp: log.timestamp,
+          severity,
+          student: log.proctoring?.submission?.student || null,
+          submissionId: log.proctoring?.submission?.id || null,
+        };
+      });
+
+    const syntheticLogs = proctoringSessions.flatMap((p) => {
+      const records: any[] = [];
+      const tabSwitchCount = Number(p.tabSwitchCount || 0);
+      const mouseAnomalies = Number(p.mouseAnomalies || 0);
+
+      if (tabSwitchCount > 0) {
+        records.push({
+          id: `tab-${p.id}`,
+          eventType: 'tab_switch',
+          details: `Detected ${tabSwitchCount} tab switches`,
+          timestamp: new Date(),
+          severity: tabSwitchCount >= 5 ? 'high' : 'medium',
+          student: p.submission.student,
+          submissionId: p.submission.id,
+        });
+      }
+
+      if (mouseAnomalies > 0) {
+        records.push({
+          id: `mouse-${p.id}`,
+          eventType: 'mouse_anomaly',
+          details: `Detected ${mouseAnomalies} mouse anomalies`,
+          timestamp: new Date(),
+          severity: mouseAnomalies >= 8 ? 'high' : 'medium',
+          student: p.submission.student,
+          submissionId: p.submission.id,
+        });
+      }
+
+      return records;
+    });
+
+    const anomalies = [...mappedLogs, ...syntheticLogs]
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+      .slice(0, 25);
+
+    return {
+      exam,
+      summary: {
+        totalSubmissions: submissions.length,
+        inProgress: submissions.filter((s) => s.status === 'IN_PROGRESS').length,
+        completed: completed.length,
+        avgScorePct: scoresPct.length ? Number((scoresPct.reduce((a, b) => a + b, 0) / scoresPct.length).toFixed(1)) : 0,
+        highestScorePct: scoresPct.length ? Number(Math.max(...scoresPct).toFixed(1)) : 0,
+        lowestScorePct: scoresPct.length ? Number(Math.min(...scoresPct).toFixed(1)) : 0,
+      },
+      scoreDistribution: bins,
+      anomalies,
+      updatedAt: new Date().toISOString(),
+    };
   }
 
   async findAll(pagination?: PaginationDto) {
@@ -435,11 +694,17 @@ export class SubmissionsService {
                 type: true,
                 content: true,
                 options: true,
+                points: true,
                 explanation: true,
                 // Include correct answer for review
                 correctAnswer: true,
               },
             },
+          },
+        },
+        proctoring: {
+          include: {
+            logs: true,
           },
         },
       },

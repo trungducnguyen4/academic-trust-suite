@@ -1,0 +1,370 @@
+import {
+  BadRequestException,
+  ForbiddenException,
+  GoneException,
+  Injectable,
+  NotFoundException,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { GenerateExamLinkDto, JoinExamLinkDto, UpdateExamLinkDto } from './dto/exam-link.dto';
+import { createHash, randomBytes } from 'crypto';
+import * as bcrypt from 'bcrypt';
+
+@Injectable()
+export class ExamLinksService {
+  constructor(private prisma: PrismaService) {}
+
+  private makeToken(): string {
+    return randomBytes(32).toString('base64url');
+  }
+
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
+
+  private getAppBaseUrl() {
+    return process.env.APP_BASE_URL || 'http://localhost:5173';
+  }
+
+  private async assertCanManageExam(examId: string, userId: string, role: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: { id: examId },
+      select: { id: true, creatorId: true, startTime: true, endTime: true },
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    if (role !== 'ADMIN' && exam.creatorId !== userId) {
+      throw new ForbiddenException('You do not have permission to manage links for this exam');
+    }
+
+    return exam;
+  }
+
+  async generateLink(examId: string, dto: GenerateExamLinkDto, userId: string, role: string) {
+    const exam = await this.assertCanManageExam(examId, userId, role);
+
+    const expiresAt = dto.expiryDatetime
+      ? new Date(dto.expiryDatetime)
+      : exam.endTime || null;
+
+    if (expiresAt && expiresAt.getTime() <= Date.now()) {
+      throw new BadRequestException('Expiry datetime must be in the future');
+    }
+
+    const token = this.makeToken();
+    const tokenHash = this.hashToken(token);
+
+    const passwordHash = dto.password
+      ? await bcrypt.hash(dto.password, 10)
+      : null;
+
+    const created = await this.prisma.examLink.create({
+      data: {
+        examId,
+        tokenHash,
+        createdBy: userId,
+        expiresAt,
+        maxUses: dto.maxUses ?? null,
+        passwordHash,
+        restrictedToCourse: dto.restrictedToCourse ?? false,
+        note: dto.note,
+      },
+      include: {
+        exam: { select: { id: true, title: true } },
+      },
+    });
+
+    const url = `${this.getAppBaseUrl()}/student/join/${token}`;
+
+    return {
+      id: created.id,
+      token,
+      url,
+      qrDataUrl: `https://quickchart.io/qr?size=240&text=${encodeURIComponent(url)}`,
+      expiresAt: created.expiresAt,
+      maxUses: created.maxUses,
+      restrictedToCourse: created.restrictedToCourse,
+      disabled: created.disabled,
+    };
+  }
+
+  private async getLinkByRawToken(token: string) {
+    const tokenHash = this.hashToken(token);
+    const link = await this.prisma.examLink.findUnique({
+      where: { tokenHash },
+      include: {
+        exam: {
+          select: {
+            id: true,
+            title: true,
+            courseId: true,
+            duration: true,
+            startTime: true,
+            endTime: true,
+            status: true,
+            course: { select: { code: true, name: true } },
+          },
+        },
+      },
+    });
+
+    if (!link) {
+      throw new NotFoundException('Invalid exam link');
+    }
+
+    return link;
+  }
+
+  private async validateEligibility(link: any, userId?: string) {
+    if (link.disabled) {
+      throw new ForbiddenException('Link has been revoked');
+    }
+
+    if (link.lockedUntil && new Date(link.lockedUntil).getTime() > Date.now()) {
+      throw new ForbiddenException('Link is temporarily locked due to multiple failed password attempts');
+    }
+
+    if (link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now()) {
+      throw new GoneException('Link expired or no longer valid');
+    }
+
+    if (link.maxUses != null && link.usedCount >= link.maxUses) {
+      throw new GoneException('Link expired or no longer valid');
+    }
+
+    if (link.exam.status !== 'PUBLISHED' && link.exam.status !== 'ONGOING') {
+      throw new ForbiddenException('Exam is not available');
+    }
+
+    if (link.exam.startTime && new Date(link.exam.startTime).getTime() > Date.now()) {
+      throw new ForbiddenException('Exam has not started yet');
+    }
+
+    if (link.exam.endTime && new Date(link.exam.endTime).getTime() < Date.now()) {
+      throw new ForbiddenException('Exam has ended');
+    }
+
+    if (link.restrictedToCourse) {
+      if (!userId) {
+        throw new UnauthorizedException('Please login to continue');
+      }
+
+      const enrollment = await this.prisma.enrollment.findFirst({
+        where: {
+          studentId: userId,
+          courseId: link.exam.courseId,
+          status: 'ACTIVE',
+        },
+      });
+
+      if (!enrollment) {
+        throw new ForbiddenException('You are not eligible for this exam link');
+      }
+    }
+  }
+
+  async validateToken(token: string) {
+    const link = await this.getLinkByRawToken(token);
+
+    if (link.disabled) {
+      throw new ForbiddenException('Link has been revoked');
+    }
+
+    if (link.lockedUntil && new Date(link.lockedUntil).getTime() > Date.now()) {
+      throw new ForbiddenException('Link is temporarily locked due to multiple failed password attempts');
+    }
+
+    if (link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now()) {
+      throw new GoneException('Link expired or no longer valid');
+    }
+
+    if (link.maxUses != null && link.usedCount >= link.maxUses) {
+      throw new GoneException('Link expired or no longer valid');
+    }
+
+    return {
+      valid: true,
+      requiresPassword: !!link.passwordHash,
+      requiresAuth: !!link.restrictedToCourse,
+      examId: link.exam.id,
+      examTitle: link.exam.title,
+      course: link.exam.course,
+      joinUrl: `/student/exam-ready?examId=${link.exam.id}`,
+      expiresAt: link.expiresAt,
+      maxUses: link.maxUses,
+      usedCount: link.usedCount,
+    };
+  }
+
+  async joinByToken(token: string, dto: JoinExamLinkDto, context: { userId?: string; ip?: string; userAgent?: string }) {
+    const link = await this.getLinkByRawToken(token);
+    await this.validateEligibility(link, context.userId);
+
+    if (link.passwordHash) {
+      const provided = dto.password || '';
+      const matched = await bcrypt.compare(provided, link.passwordHash);
+      if (!matched) {
+        const nextAttempts = Number(link.passwordAttempts || 0) + 1;
+        const shouldLock = nextAttempts >= 5;
+
+        await this.prisma.examLink.update({
+          where: { id: link.id },
+          data: {
+            passwordAttempts: nextAttempts,
+            lockedUntil: shouldLock ? new Date(Date.now() + 10 * 60 * 1000) : null,
+          },
+        });
+
+        throw new ForbiddenException('Password is required or incorrect');
+      }
+    }
+
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const current = await tx.examLink.findUnique({ where: { id: link.id } });
+      if (!current) {
+        throw new NotFoundException('Invalid exam link');
+      }
+
+      if (current.disabled) {
+        throw new ForbiddenException('Link has been revoked');
+      }
+
+      if (current.expiresAt && new Date(current.expiresAt).getTime() <= Date.now()) {
+        throw new GoneException('Link expired or no longer valid');
+      }
+
+      if (current.maxUses != null && current.usedCount >= current.maxUses) {
+        throw new GoneException('Link expired or no longer valid');
+      }
+
+      const saved = await tx.examLink.update({
+        where: { id: link.id },
+        data: {
+          usedCount: { increment: 1 },
+          lastUsedAt: new Date(),
+          passwordAttempts: 0,
+          lockedUntil: null,
+        },
+      });
+
+      await tx.examLinkUsage.create({
+        data: {
+          linkId: link.id,
+          userId: context.userId ?? null,
+          ip: context.ip || null,
+          userAgent: context.userAgent || null,
+        },
+      });
+
+      return saved;
+    });
+
+    return {
+      valid: true,
+      examId: link.exam.id,
+      joinUrl: `/student/exam-ready?examId=${link.exam.id}`,
+      usedCount: updated.usedCount,
+      maxUses: updated.maxUses,
+    };
+  }
+
+  async listByExam(examId: string, userId: string, role: string) {
+    await this.assertCanManageExam(examId, userId, role);
+
+    const links = await this.prisma.examLink.findMany({
+      where: { examId },
+      include: {
+        creator: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return links.map((link) => ({
+      id: link.id,
+      expiresAt: link.expiresAt,
+      maxUses: link.maxUses,
+      usedCount: link.usedCount,
+      lastUsedAt: link.lastUsedAt,
+      restrictedToCourse: link.restrictedToCourse,
+      disabled: link.disabled,
+      note: link.note,
+      createdAt: link.createdAt,
+      createdBy: link.creator,
+      hasPassword: !!link.passwordHash,
+      previewUrl: `${this.getAppBaseUrl()}/student/join/[hidden-token]`,
+    }));
+  }
+
+  async updateLink(id: string, dto: UpdateExamLinkDto, userId: string, role: string) {
+    const link = await this.prisma.examLink.findUnique({
+      where: { id },
+      include: {
+        exam: { select: { creatorId: true } },
+      },
+    });
+
+    if (!link) {
+      throw new NotFoundException('Exam link not found');
+    }
+
+    if (role !== 'ADMIN' && link.exam.creatorId !== userId) {
+      throw new ForbiddenException('You do not have permission to update this link');
+    }
+
+    const updated = await this.prisma.examLink.update({
+      where: { id },
+      data: {
+        disabled: dto.disabled ?? link.disabled,
+        expiresAt: dto.expiryDatetime ? new Date(dto.expiryDatetime) : link.expiresAt,
+        maxUses: dto.maxUses ?? link.maxUses,
+        note: dto.note ?? link.note,
+      },
+    });
+
+    return {
+      id: updated.id,
+      disabled: updated.disabled,
+      expiresAt: updated.expiresAt,
+      maxUses: updated.maxUses,
+      usedCount: updated.usedCount,
+      note: updated.note,
+      updatedAt: updated.updatedAt,
+    };
+  }
+
+  async usageByLink(id: string, userId: string, role: string) {
+    const link = await this.prisma.examLink.findUnique({
+      where: { id },
+      include: {
+        exam: { select: { creatorId: true } },
+      },
+    });
+
+    if (!link) {
+      throw new NotFoundException('Exam link not found');
+    }
+
+    if (role !== 'ADMIN' && link.exam.creatorId !== userId) {
+      throw new ForbiddenException('You do not have permission to view this link usage');
+    }
+
+    return this.prisma.examLinkUsage.findMany({
+      where: { linkId: id },
+      include: {
+        user: {
+          select: {
+            id: true,
+            fullName: true,
+            email: true,
+            studentId: true,
+          },
+        },
+      },
+      orderBy: { usedAt: 'desc' },
+    });
+  }
+}

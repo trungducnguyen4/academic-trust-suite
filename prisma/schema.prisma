@@ -28,6 +28,8 @@ model User {
   enrollments    Enrollment[]
   submissions    ExamSubmission[] @relation("StudentSubmissions")
   questions      Question[]       @relation("AuthorQuestions")
+  createdExamLinks ExamLink[]     @relation("ExamLinkCreator")
+  examLinkUsages   ExamLinkUsage[] @relation("ExamLinkUsageUser")
 
   @@map("users")
 }
@@ -90,11 +92,55 @@ model Exam {
 
   examQuestions  ExamQuestion[]
   submissions    ExamSubmission[]
+  links          ExamLink[]
 
   @@index([courseId])
   @@index([creatorId])
   @@index([status])
   @@map("exams")
+}
+
+model ExamLink {
+  id                  String   @id @default(uuid())
+  exam                Exam     @relation(fields: [examId], references: [id])
+  examId              String
+  tokenHash           String   @unique @db.VarChar(128)
+  createdBy           String
+  creator             User     @relation("ExamLinkCreator", fields: [createdBy], references: [id])
+  expiresAt           DateTime?
+  maxUses             Int?
+  usedCount           Int      @default(0)
+  lastUsedAt          DateTime?
+  passwordHash        String?  @db.VarChar(255)
+  restrictedToCourse  Boolean  @default(false)
+  disabled            Boolean  @default(false)
+  note                String?  @db.Text
+  passwordAttempts    Int      @default(0)
+  lockedUntil         DateTime?
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  usages              ExamLinkUsage[]
+
+  @@index([examId])
+  @@index([createdBy])
+  @@index([expiresAt])
+  @@map("exam_links")
+}
+
+model ExamLinkUsage {
+  id         String   @id @default(uuid())
+  link       ExamLink @relation(fields: [linkId], references: [id])
+  linkId     String
+  user       User?    @relation("ExamLinkUsageUser", fields: [userId], references: [id])
+  userId     String?
+  ip         String?  @db.VarChar(64)
+  userAgent  String?  @db.Text
+  usedAt     DateTime @default(now())
+
+  @@index([linkId])
+  @@index([userId])
+  @@map("exam_link_usages")
 }
 
 model Question {

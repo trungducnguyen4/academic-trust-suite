@@ -56,9 +56,83 @@ export class ExamsService {
             },
           });
         }
+      } else {
+        // Auto-fill from question bank when requested
+        const requestedCount = (createExamDto as any).settings?.requestedQuestionCount ||
+          (examData as any).settings?.requestedQuestionCount || 0;
+
+        const sourceMethod = (createExamDto as any).settings?.sourceMethod ||
+          (examData as any).settings?.sourceMethod || 'bank';
+
+        // Only auto-fill for bank source and a positive requestedCount
+        if (!questionIds && sourceMethod === 'bank' && requestedCount > 0) {
+          // Build basic where clause: same course
+          const qWhere: any = { courseId: createExamDto.courseId };
+
+          // Optionally filter by questionType if provided in settings
+          const qType = (createExamDto as any).settings?.questionType || (examData as any).settings?.questionType;
+          const normalizedType = this.normalizeQuestionType(qType);
+          if (normalizedType) {
+            qWhere.type = normalizedType;
+          }
+
+          // Optionally filter by target difficulty from settings (0.3 / 0.5 / 0.7)
+          const bankDifficulty = (createExamDto as any).settings?.bankDifficulty || (examData as any).settings?.bankDifficulty;
+          if (bankDifficulty && bankDifficulty !== 'mixed') {
+            const parsed = Number(bankDifficulty);
+            if (!Number.isNaN(parsed)) {
+              // Convert 0..1 scale to 1..5 and allow a small band around the center.
+              const center = Math.max(1, Math.min(5, Math.round(parsed * 4 + 1)));
+              qWhere.difficulty = {
+                gte: Math.max(1, center - 1),
+                lte: Math.min(5, center + 1),
+              };
+            }
+          }
+
+          const selected = await tx.question.findMany({
+            where: qWhere,
+            take: Math.max(0, Number(requestedCount)),
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (selected.length === 0) {
+            throw new BadRequestException(
+              'No matching questions found in question bank for selected course/type/difficulty. Please adjust filters or add questions first.',
+            );
+          }
+
+          for (let i = 0; i < selected.length; i++) {
+            const question = selected[i];
+            await tx.examQuestion.create({
+              data: {
+                examId: exam.id,
+                questionId: question.id,
+                orderIndex: i + 1,
+                points: question.points || 1,
+              },
+            });
+          }
+        }
       }
 
-      return exam;
+      // If exam has at least one question, auto-publish by default
+      const qCount = await tx.examQuestion.count({ where: { examId: exam.id } });
+      if (qCount > 0) {
+        await tx.exam.update({ where: { id: exam.id }, data: { status: 'PUBLISHED' } });
+      }
+
+      // Return exam with counts so client shows question count and status immediately
+      const createdExam = await tx.exam.findUnique({
+        where: { id: exam.id },
+        include: {
+          course: { select: { id: true, code: true, name: true } },
+          creator: { select: { id: true, fullName: true } },
+          _count: { select: { examQuestions: true, submissions: true } },
+        },
+      });
+
+      return createdExam;
     });
   }
 
@@ -467,5 +541,31 @@ export class ExamsService {
         ? (scores.filter((s) => s >= exam.passingScore).length / scores.length) * 100
         : 0,
     };
+  }
+
+  private normalizeQuestionType(rawType?: string): string | undefined {
+    if (!rawType) return undefined;
+
+    const map: Record<string, string> = {
+      MIXED: '',
+      CUSTOM: '',
+      MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
+      SINGLE_CHOICE: 'MULTIPLE_CHOICE',
+      'SINGLE-CHOICE': 'MULTIPLE_CHOICE',
+      'MULTIPLE-CHOICE': 'MULTIPLE_CHOICE',
+      MULTI_SELECT: 'MULTI_SELECT',
+      TRUE_FALSE: 'TRUE_FALSE',
+      'TRUE-FALSE': 'TRUE_FALSE',
+      SHORT_ANSWER: 'SHORT_ANSWER',
+      'SHORT-ANSWER': 'SHORT_ANSWER',
+      ESSAY: 'ESSAY',
+      FILL_IN_BLANK: 'FILL_IN_BLANK',
+      'FILL-BLANK': 'FILL_IN_BLANK',
+      MATCHING: 'MATCHING',
+      ORDERING: 'ORDERING',
+    };
+
+    const normalized = map[String(rawType).trim().toUpperCase()];
+    return normalized || undefined;
   }
 }

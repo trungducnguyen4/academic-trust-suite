@@ -8,6 +8,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import api from '@/lib/api';
 import {
   Camera,
   Mic,
@@ -193,11 +194,39 @@ export default function ExamReadyCheck() {
   };
 
   // --- Start exam ---
-  const handleStartExam = () => {
+  const handleStartExam = async () => {
     try {
       document.documentElement.requestFullscreen?.();
     } catch { /* continue */ }
-    navigate('/student/exam-taking');
+
+    // Prefer real examId from URL params when available
+    const realExamId = searchParams.get('examId') || undefined;
+
+    if (!realExamId) {
+      alert('Missing exam id. Please re-open the exam from your dashboard.');
+      return;
+    }
+
+    // Try to create a submission on the server so we can persist logs against it
+    try {
+      const res = await api.startExam(realExamId);
+      if (!res?.id) {
+        alert('Could not start exam submission. Please try again.');
+        return;
+      }
+      try {
+        localStorage.setItem('currentSubmissionId', res.id);
+        localStorage.setItem('currentSubmissionExamId', realExamId);
+      } catch {}
+    } catch (err: any) {
+      console.error('Failed to start submission on server:', err);
+      alert(err?.message || 'Failed to start exam. Please try again.');
+      return;
+    }
+
+    // Navigate to exam-taking with examId so the page can read it
+    const idParam = encodeURIComponent(realExamId);
+    navigate(`/student/exam-taking?examId=${idParam}`);
   };
 
   // Step indicator — hide download/locked steps when not required

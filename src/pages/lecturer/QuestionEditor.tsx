@@ -392,6 +392,8 @@ export default function QuestionEditor() {
         prompt: aiPrompt,
         questionType: backendTypeMap[questionType] || 'MULTIPLE_CHOICE',
         difficulty: Math.max(0, Math.min(1, difficulty[0])),
+        language: 'vi',
+        useCase: 'question_bank',
       });
 
       // Fill in the form with AI-generated content

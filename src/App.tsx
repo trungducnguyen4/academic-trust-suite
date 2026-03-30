@@ -22,8 +22,10 @@ import ExamTaking from "./pages/student/ExamTaking";
 import ExamReadyCheck from "./pages/student/ExamReadyCheck";
 import LearningFeedbackDetail from "./pages/student/LearningFeedbackDetail";
 import JoinExam from "./pages/student/JoinExam";
+import JoinExamByLink from "./pages/student/JoinExamByLink";
 import ScanQRJoinExam from "./pages/student/ScanQRJoinExam";
 import OfflineExamDownload from "./pages/student/OfflineExamDownload";
+import StudentCourseDetail from "./pages/student/StudentCourseDetail";
 
 // Lecturer
 import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
@@ -40,6 +42,7 @@ import GenerateExamLink from "./pages/lecturer/GenerateExamLink";
 import CreateExam from "./pages/lecturer/CreateExam";
 import ExamAnalytics from "./pages/lecturer/ExamAnalytics";
 import ExamResultsList from "./pages/lecturer/ExamResultsList";
+import ExamPreview from "./pages/lecturer/ExamPreview";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -84,8 +87,11 @@ const App = () => {
                 element={<LearningFeedbackDetail />}
               />
               <Route path="/student/join-exam" element={<JoinExam />} />
+              <Route path="/student/join/:token" element={<JoinExamByLink />} />
               <Route path="/student/scan-qr" element={<ScanQRJoinExam />} />
               <Route path="/student/offline-download" element={<OfflineExamDownload />} />
+              <Route path="/student/courses/:id" element={<StudentCourseDetail />} />
+              <Route path="/student/course/:id" element={<StudentCourseDetail />} />
 
               {/* ================= LECTURER ================= */}
               <Route path="/lecturer" element={<LecturerDashboard />} />
@@ -96,6 +102,7 @@ const App = () => {
                 path="/lecturer/exam/:id/monitor"
                 element={<ExamMonitor />}
               />
+              <Route path="/lecturer/exam/:id/preview" element={<ExamPreview />} />
               <Route path="/lecturer/exam/:id/results" element={<ExamResultsList />} />
 
               <Route

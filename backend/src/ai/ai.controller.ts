@@ -19,6 +19,8 @@ export class AiController {
       questionType: dto.questionType,
       difficulty: dto.difficulty,
       language: dto.language,
+      courseName: dto.courseName,
+      useCase: dto.useCase,
     });
     return result;
   }
@@ -29,6 +31,10 @@ export class AiController {
       prompt: dto.prompt,
       questionCount: dto.questionCount,
       difficulty: dto.difficulty,
+      questionType: dto.questionType,
+      language: dto.language,
+      courseName: dto.courseName,
+      useCase: dto.useCase,
     });
     return { questions };
   }

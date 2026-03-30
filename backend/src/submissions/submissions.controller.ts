@@ -69,6 +69,13 @@ export class SubmissionsController {
     return this.submissionsService.findByExam(examId, pagination);
   }
 
+  @Get('exam/:examId/overview')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  getExamOverview(@Param('examId') examId: string) {
+    return this.submissionsService.getExamOverview(examId);
+  }
+
   @Get('exam/:examId/export')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
@@ -86,7 +93,27 @@ export class SubmissionsController {
 
   @Get('exam/:examId/my-submission')
   getMyExamSubmission(@Param('examId') examId: string, @Request() req) {
-    return this.submissionsService.getStudentSubmission(examId, req.user.id);
+    // Return sanitized view for the student: include proctoring summary but not raw logs
+    return this.submissionsService.getStudentSubmission(examId, req.user.id).then((submission) => {
+      if (!submission) return submission;
+      const sanitized = { ...submission } as any;
+      if (sanitized.proctoring) {
+        sanitized.proctoring = {
+          tabSwitchCount: sanitized.proctoring.tabSwitchCount ?? 0,
+          mouseAnomalies: sanitized.proctoring.mouseAnomalies ?? 0,
+          logsCount: Array.isArray(sanitized.proctoring.logs) ? sanitized.proctoring.logs.length : 0,
+        };
+      }
+      return sanitized;
+    });
+  }
+
+  @Get('exam/:examId/student/:studentId')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  getStudentSubmissionForInstructor(@Param('examId') examId: string, @Param('studentId') studentId: string) {
+    // Lecturer / admin endpoint - returns full submission including proctoring.logs
+    return this.submissionsService.getStudentSubmission(examId, studentId);
   }
 
   @Get(':id')

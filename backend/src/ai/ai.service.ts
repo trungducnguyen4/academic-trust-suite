@@ -13,6 +13,8 @@ export class AiService {
   private localUrl: string | undefined;
   private ollamaUrl: string;
   private ollamaModel: string;
+  private appName: string;
+  private defaultLanguage: string;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('GOOGLE_AI_API_KEY');
@@ -20,6 +22,8 @@ export class AiService {
     this.localUrl = this.configService.get<string>('AI_LOCAL_URL') || undefined;
     this.ollamaUrl = this.configService.get<string>('AI_OLLAMA_URL') || 'http://localhost:11434';
     this.ollamaModel = this.configService.get<string>('AI_OLLAMA_MODEL') || 'mistral';
+    this.appName = this.configService.get<string>('AI_APP_NAME') || 'Academic Trust Suite';
+    this.defaultLanguage = this.configService.get<string>('AI_DEFAULT_LANGUAGE') || 'vi';
 
     if (this.provider === 'google') {
       if (!apiKey) {
@@ -42,17 +46,36 @@ export class AiService {
     questionType?: string;
     difficulty?: number; // 0.0 - 1.0
     language?: string;
+    courseName?: string;
+    useCase?: string;
   }) {
-    const { prompt, questionType = 'MULTIPLE_CHOICE', difficulty = 0.5, language = 'en' } = params;
+    const {
+      prompt,
+      questionType = 'MULTIPLE_CHOICE',
+      difficulty = 0.5,
+      language,
+      courseName,
+      useCase = 'question_bank',
+    } = params;
+
+    const targetLanguage = language || this.defaultLanguage;
 
     // normalize to a 1-5 scale for instructions, but keep internal difficulty as 0..1
     const diffScale5 = Math.round(difficulty * 4) + 1; // maps 0..1 -> 1..5
     const difficultyLabel = difficulty <= 0.4 ? 'Easy' : difficulty <= 0.7 ? 'Medium' : 'Hard';
-    const langInstruction = language === 'vi'
+    const langInstruction = targetLanguage === 'vi'
       ? 'Generate the question and all content in Vietnamese.'
       : 'Generate the question and all content in English.';
 
-    const systemPrompt = `You are an expert exam question generator for university-level courses.
+    const profilePrompt = this.buildAppProfilePrompt({
+      useCase,
+      courseName,
+      targetLanguage,
+      questionType,
+      questionCount: 1,
+    });
+
+    const systemPrompt = `${profilePrompt}
 ${langInstruction}
 
 Generate a ${this.getTypeLabel(questionType)} question about the following topic:
@@ -161,14 +184,43 @@ Rules:
     prompt: string;
     questionCount: number;
     difficulty?: number; // 0.0 - 1.0
+    questionType?: string;
+    language?: string;
     courseName?: string;
+    useCase?: string;
   }) {
-    const { prompt, questionCount, difficulty = 0.5, courseName } = params;
+    const {
+      prompt,
+      questionCount,
+      difficulty = 0.5,
+      questionType,
+      language,
+      courseName,
+      useCase = 'exam',
+    } = params;
+
+    const targetLanguage = language || this.defaultLanguage;
 
     const diffLabel = difficulty <= 0.3 ? 'Easy' : difficulty <= 0.5 ? 'Medium' : 'Hard';
     const courseContext = courseName ? `for the course "${courseName}"` : '';
+    const normalizedType = this.normalizeQuestionType(questionType);
+    const typeInstruction = normalizedType === 'MIXED'
+      ? '- Mix question types: mostly MULTIPLE_CHOICE, but include some TRUE_FALSE, SHORT_ANSWER, and ESSAY'
+      : `- Generate ALL questions as ${normalizedType}`;
+    const sampleType = normalizedType === 'MIXED' ? 'MULTIPLE_CHOICE' : normalizedType;
+    const langInstruction = targetLanguage === 'vi'
+      ? 'Generate the question set in Vietnamese.'
+      : 'Generate the question set in English.';
+    const profilePrompt = this.buildAppProfilePrompt({
+      useCase,
+      courseName,
+      targetLanguage,
+      questionType: normalizedType,
+      questionCount,
+    });
 
-    const systemPrompt = `You are an expert exam question generator for university-level courses.
+    const systemPrompt = `${profilePrompt}
+${langInstruction}
 
 Generate ${questionCount} exam questions ${courseContext} about:
 "${prompt}"
@@ -180,7 +232,7 @@ You MUST respond with a valid JSON object (no markdown, no code fences, just pur
   "questions": [
     {
       "content": "Question text",
-      "type": "MULTIPLE_CHOICE",
+      "type": "${sampleType}",
       "explanation": "Explanation of the correct answer",
       "difficulty": <1-5>,
       "points": <1-10>,
@@ -192,7 +244,7 @@ You MUST respond with a valid JSON object (no markdown, no code fences, just pur
 }
 
 Rules:
-- Mix question types: mostly MULTIPLE_CHOICE, but include some TRUE_FALSE, SHORT_ANSWER, and ESSAY
+${typeInstruction}
 - For MULTIPLE_CHOICE: 4 options (A,B,C,D), one correct, correctAnswer: {"answer": "B"}
 - For TRUE_FALSE: options: {"A": "True", "B": "False"}, correctAnswer: {"answer": "A"} or {"answer": "B"}
 - For SHORT_ANSWER: no options field, correctAnswer: {"answer": "expected short answer"}
@@ -221,7 +273,7 @@ Rules:
         const sample = {
           questions: Array.from({ length: questionCount }).map((_, i) => ({
             content: `Mock question ${i + 1} about ${prompt}`,
-            type: 'MULTIPLE_CHOICE',
+            type: sampleType,
             explanation: 'Mocked explanation',
             difficulty: Math.round(difficulty * 4) / 4,
             points: 1,
@@ -256,7 +308,7 @@ Rules:
 
       return parsed.questions.map((q: any) => ({
         content: q.content || '',
-        type: q.type || 'MULTIPLE_CHOICE',
+        type: q.type || sampleType,
         explanation: q.explanation || '',
         difficulty: q.difficulty !== undefined ? normalizeDifficulty(q.difficulty) : difficulty,
         points: q.points || 1,
@@ -321,5 +373,57 @@ Rules:
       default:
         return '"options": {"A": "option text", "B": "option text", "C": "option text", "D": "option text"},\n  "correctAnswer": {"answer": "B"}';
     }
+  }
+
+  private buildAppProfilePrompt(params: {
+    useCase?: string;
+    courseName?: string;
+    targetLanguage: string;
+    questionType?: string;
+    questionCount: number;
+  }): string {
+    const { useCase = 'question_bank', courseName, targetLanguage, questionType, questionCount } = params;
+    const scope = useCase === 'exam' ? 'exam-ready questions' : 'question-bank quality questions';
+    const courseLine = courseName ? `Course context: ${courseName}.` : 'Course context: not explicitly provided.';
+    const typeLine = questionType ? `Preferred question type: ${questionType}.` : '';
+
+    return `You are the official AI item-writer for ${this.appName}.
+Primary objective: generate ${scope} for a university assessment platform.
+${courseLine}
+Language target: ${targetLanguage}.
+Requested quantity: ${questionCount} question(s).
+${typeLine}
+
+Hard constraints:
+- Keep questions academically rigorous, clear, and testable.
+- Avoid vague wording and avoid trivia-only questions.
+- Prefer practical, scenario-based prompts when possible.
+- Ensure output can be saved directly into the app schema without manual rewriting.`;
+  }
+
+  private normalizeQuestionType(type?: string): string {
+    if (!type) return 'MIXED';
+
+    const normalized = String(type).trim().toUpperCase();
+    const map: Record<string, string> = {
+      MIXED: 'MIXED',
+      CUSTOM: 'MIXED',
+      MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
+      SINGLE_CHOICE: 'MULTIPLE_CHOICE',
+      MULTI_SELECT: 'MULTI_SELECT',
+      TRUE_FALSE: 'TRUE_FALSE',
+      SHORT_ANSWER: 'SHORT_ANSWER',
+      ESSAY: 'ESSAY',
+      FILL_IN_BLANK: 'FILL_IN_BLANK',
+      MATCHING: 'MATCHING',
+      ORDERING: 'ORDERING',
+      'SINGLE-CHOICE': 'MULTIPLE_CHOICE',
+      'MULTIPLE-CHOICE': 'MULTIPLE_CHOICE',
+      'TRUE-FALSE': 'TRUE_FALSE',
+      'SHORT-ANSWER': 'SHORT_ANSWER',
+      'FILL-BLANK': 'FILL_IN_BLANK',
+    };
+
+    return map[normalized] || 'MIXED';
   }
 }

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -71,6 +71,7 @@ interface ExamForm {
   shuffleQuestions: boolean;
   showResultImmediately: boolean;
   questionType: string;
+  bankDifficulty: string;
   questionCount: string;
   sourceMethod: 'bank' | 'import' | 'ai';
   aiGenerationMode: boolean;
@@ -129,6 +130,7 @@ const createDefaultForm = (): ExamForm => {
     shuffleQuestions: true,
     showResultImmediately: false,
     questionType: 'mixed',
+    bankDifficulty: 'mixed',
     questionCount: '20',
     sourceMethod: 'bank',
     aiGenerationMode: false,
@@ -144,6 +146,63 @@ interface CourseOption {
   name: string;
 }
 
+const QUESTION_TYPE_OPTIONS = [
+  { value: 'mixed', label: 'Mixed (all types)' },
+  { value: 'single-choice', label: 'Single Choice only' },
+  { value: 'multiple-choice', label: 'Multiple Choice only' },
+  { value: 'true-false', label: 'True / False only' },
+  { value: 'fill-blank', label: 'Fill in the Blank only' },
+  { value: 'matching', label: 'Matching only' },
+  { value: 'ordering', label: 'Ordering only' },
+  { value: 'short-answer', label: 'Short Answer / Essay only' },
+  { value: 'custom', label: 'Custom Selection (Khac)' },
+] as const;
+
+const mapQuestionTypeToAiApi = (value: string) => {
+  const map: Record<string, string> = {
+    mixed: 'MIXED',
+    custom: 'MIXED',
+    'single-choice': 'MULTIPLE_CHOICE',
+    'multiple-choice': 'MULTIPLE_CHOICE',
+    'true-false': 'TRUE_FALSE',
+    'fill-blank': 'FILL_IN_BLANK',
+    matching: 'MATCHING',
+    ordering: 'ORDERING',
+    'short-answer': 'SHORT_ANSWER',
+  };
+  return map[value] || 'MIXED';
+};
+
+const mapQuestionTypeToDb = (value: string) => {
+  const map: Record<string, string> = {
+    MULTIPLE_CHOICE: 'MULTIPLE_CHOICE',
+    MULTI_SELECT: 'MULTI_SELECT',
+    TRUE_FALSE: 'TRUE_FALSE',
+    SHORT_ANSWER: 'SHORT_ANSWER',
+    ESSAY: 'ESSAY',
+    FILL_IN_BLANK: 'FILL_IN_BLANK',
+    MATCHING: 'MATCHING',
+    ORDERING: 'ORDERING',
+    'single-choice': 'MULTIPLE_CHOICE',
+    'multiple-choice': 'MULTIPLE_CHOICE',
+    'true-false': 'TRUE_FALSE',
+    'short-answer': 'SHORT_ANSWER',
+    'fill-blank': 'FILL_IN_BLANK',
+    mixed: 'MULTIPLE_CHOICE',
+    custom: 'MULTIPLE_CHOICE',
+  };
+
+  const normalized = String(value || '').trim();
+  return map[normalized] || map[normalized.toUpperCase()] || 'MULTIPLE_CHOICE';
+};
+
+const normalizeDifficultyForQuestion = (value: unknown) => {
+  const n = Number(value);
+  if (Number.isNaN(n)) return 5;
+  if (n <= 1) return Math.max(1, Math.min(10, Math.round(n * 9 + 1)));
+  return Math.max(1, Math.min(10, Math.round(n)));
+};
+
 export default function CreateExam() {
   const navigate = useNavigate();
   const [step, setStep] = useState<Step>('info');
@@ -151,7 +210,8 @@ export default function CreateExam() {
   const [isCreating, setIsCreating] = useState(false);
   const [created, setCreated] = useState(false);
   const [isStandardizing, setIsStandardizing] = useState(false);
-  const [docFile, setDocFile] = useState<string | null>(null);
+  const [docFile, setDocFile] = useState<File | null>(null);
+  const docFileInputRef = useRef<HTMLInputElement | null>(null);
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiGeneratedQuestions, setAiGeneratedQuestions] = useState<any[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
@@ -193,6 +253,32 @@ export default function CreateExam() {
 
     try {
       setIsCreating(true);
+      let questionIds: string[] | undefined;
+
+      if (form.sourceMethod === 'ai' || form.sourceMethod === 'import') {
+        if (aiGeneratedQuestions.length === 0) {
+          throw new Error('Please extract/generate questions before creating the exam.');
+        }
+
+        const createdQuestions = await Promise.all(
+          aiGeneratedQuestions.map((q) =>
+            api.createQuestion({
+              type: mapQuestionTypeToDb(q.type),
+              content: q.content,
+              options: q.options || undefined,
+              correctAnswer: q.correctAnswer || undefined,
+              explanation: q.explanation || undefined,
+              difficulty: normalizeDifficultyForQuestion(q.difficulty),
+              points: Math.max(1, Number(q.points) || 1),
+              tags: Array.isArray(q.tags) ? q.tags : [],
+              courseId: form.course,
+            }),
+          ),
+        );
+
+        questionIds = createdQuestions.map((item: any) => item.id).filter(Boolean);
+      }
+
       await api.createExam({
         title: form.title.trim(),
         description: form.description.trim() || undefined,
@@ -201,6 +287,7 @@ export default function CreateExam() {
         passingScore: Number(form.passingScore),
         startTime,
         endTime,
+        questionIds,
         settings: {
           maxAttempts: Number(form.maxAttempts || 1),
           requiresProctoring: form.requiresProctoring,
@@ -209,6 +296,7 @@ export default function CreateExam() {
           showResultImmediately: form.showResultImmediately,
           sourceMethod: form.sourceMethod,
           questionType: form.questionType,
+          bankDifficulty: form.bankDifficulty,
           requestedQuestionCount: Number(form.questionCount || 0),
           aiGenerationMode: form.aiGenerationMode,
           aiPrompt: form.aiPrompt || undefined,
@@ -234,6 +322,10 @@ export default function CreateExam() {
         prompt: form.aiPrompt,
         questionCount: parseInt(form.questionCount) || 20,
         difficulty: Math.max(0, Math.min(1, parseFloat(form.aiDifficulty || '0.5'))),
+        questionType: mapQuestionTypeToAiApi(form.questionType),
+        language: 'vi',
+        courseName: courses.find((course) => course.id === form.course)?.name,
+        useCase: 'exam',
       });
       setAiGeneratedQuestions(result.questions);
       alert(`Successfully generated ${result.questions.length} questions! Review them in the preview step.`);
@@ -243,6 +335,74 @@ export default function CreateExam() {
     } finally {
       setIsAiGenerating(false);
     }
+  };
+
+  const handleImportExtract = async () => {
+    if (!docFile) {
+      alert('Please choose a document first.');
+      return;
+    }
+
+    const fileName = docFile.name.toLowerCase();
+    const isTextLike = /\.(txt|md|csv|json)$/i.test(fileName);
+    const isDocx = /\.docx$/i.test(fileName);
+    const isDoc = /\.doc$/i.test(fileName);
+
+    try {
+      setIsStandardizing(true);
+
+      let rawText = '';
+
+      if (isTextLike) {
+        rawText = await docFile.text();
+      } else if (isDocx) {
+        const mammoth = await import('mammoth/mammoth.browser');
+        const arrayBuffer = await docFile.arrayBuffer();
+        const extracted = await mammoth.extractRawText({ arrayBuffer });
+        rawText = extracted.value || '';
+      } else if (isDoc) {
+        throw new Error('Legacy .doc is not supported yet. Please save as .docx and try again.');
+      } else {
+        throw new Error('Unsupported file type. Please use .txt, .md, .csv, .json, or .docx.');
+      }
+
+      const normalized = rawText.replace(/\s+/g, ' ').trim();
+
+      if (!normalized) {
+        throw new Error('The selected file is empty.');
+      }
+
+      const prompt = [
+        `Extract key concepts from the following course material and generate exam questions.`,
+        `Document: ${docFile.name}`,
+        `Material:`,
+        normalized.slice(0, 8000),
+      ].join('\n\n');
+
+      const result = await api.aiGenerateExamQuestions({
+        prompt,
+        questionCount: parseInt(form.questionCount) || 20,
+        difficulty: Math.max(0, Math.min(1, parseFloat(form.aiDifficulty || '0.5'))),
+        questionType: mapQuestionTypeToAiApi(form.questionType),
+        language: 'vi',
+        courseName: courses.find((course) => course.id === form.course)?.name,
+        useCase: 'exam',
+      });
+
+      setAiGeneratedQuestions(result.questions || []);
+      alert(`Extracted and generated ${result.questions?.length || 0} questions from document.`);
+    } catch (error: any) {
+      console.error('Import extraction failed:', error);
+      alert('AI extract failed: ' + (error.message || 'Unknown error'));
+    } finally {
+      setIsStandardizing(false);
+    }
+  };
+
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   // ── Success screen ──────────────────────────────────────────────
@@ -454,7 +614,7 @@ export default function CreateExam() {
 
                   {/* --- TAB: QUESTION BANK --- */}
                   <TabsContent value="bank" className="space-y-5 animate-in fade-in duration-300">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <Label>Number of Questions</Label>
                         <Input
@@ -472,15 +632,23 @@ export default function CreateExam() {
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="mixed">Mixed (all types)</SelectItem>
-                            <SelectItem value="single-choice">Single Choice only</SelectItem>
-                            <SelectItem value="multiple-choice">Multiple Choice only</SelectItem>
-                            <SelectItem value="true-false">True / False only</SelectItem>
-                            <SelectItem value="fill-blank">Fill in the Blank only</SelectItem>
-                            <SelectItem value="matching">Matching only</SelectItem>
-                            <SelectItem value="ordering">Ordering only</SelectItem>
-                            <SelectItem value="short-answer">Short Answer / Essay only</SelectItem>
-                            <SelectItem value="custom">Custom Selection (Khác)</SelectItem>
+                            {QUESTION_TYPE_OPTIONS.map((type) => (
+                              <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div>
+                        <Label>Difficulty</Label>
+                        <Select value={form.bankDifficulty} onValueChange={(v) => set('bankDifficulty', v)}>
+                          <SelectTrigger className="mt-1">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="mixed">Mixed (all levels)</SelectItem>
+                            <SelectItem value="0.3">Easy (0.3)</SelectItem>
+                            <SelectItem value="0.5">Medium (0.5)</SelectItem>
+                            <SelectItem value="0.7">Hard (0.7)</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -524,6 +692,16 @@ export default function CreateExam() {
 
                   {/* --- TAB: IMPORT DOC --- */}
                   <TabsContent value="import" className="space-y-5 animate-in fade-in duration-300">
+                    <input
+                      ref={docFileInputRef}
+                      type="file"
+                      accept=".pdf,.doc,.docx,.txt,.md"
+                      className="hidden"
+                      onChange={(e) => {
+                        const selected = e.target.files?.[0] || null;
+                        setDocFile(selected);
+                      }}
+                    />
                     <div className="p-8 border-2 border-dashed rounded-xl bg-secondary/5 flex flex-col items-center justify-center text-center space-y-4">
                       {!docFile ? (
                         <>
@@ -537,7 +715,7 @@ export default function CreateExam() {
                           <Button 
                             variant="outline" 
                             className="bg-background cursor-pointer" 
-                            onClick={() => setDocFile('Exam_Draft_V1.pdf')}
+                            onClick={() => docFileInputRef.current?.click()}
                           >
                             <FileSearch className="h-4 w-4 mr-2" /> Browse Files
                           </Button>
@@ -550,20 +728,24 @@ export default function CreateExam() {
                                 <FileText className="h-6 w-6" />
                               </div>
                               <div>
-                                <p className="font-bold text-base text-blue-700">{docFile}</p>
-                                <p className="text-xs text-blue-600 opacity-80">Final Draft • 2.4 MB</p>
+                                <p className="font-bold text-base text-blue-700">{docFile.name}</p>
+                                <p className="text-xs text-blue-600 opacity-80">Selected file • {formatFileSize(docFile.size)}</p>
                               </div>
                             </div>
-                            <Button variant="ghost" size="icon" onClick={() => setDocFile(null)}>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setDocFile(null);
+                                if (docFileInputRef.current) docFileInputRef.current.value = '';
+                              }}
+                            >
                               <Plus className="h-5 w-5 rotate-45" />
                             </Button>
                           </div>
                           <Button 
                             className="w-full gap-2 bg-blue-600 hover:bg-blue-700 py-6 text-base"
-                            onClick={() => {
-                              setIsStandardizing(true);
-                              setTimeout(() => setIsStandardizing(false), 2500);
-                            }}
+                            onClick={handleImportExtract}
                             disabled={isStandardizing}
                           >
                             {isStandardizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Wand2 className="h-5 w-5" />}
@@ -576,10 +758,30 @@ export default function CreateExam() {
                     {isStandardizing && (
                       <div className="space-y-2 p-4 border rounded-lg bg-blue-50/30 animate-in slide-in-from-top-4">
                          <div className="flex justify-between text-[11px] text-blue-700 font-bold uppercase tracking-wider">
-                          <span>AI Agent: Analyzing Layout...</span>
-                          <span>82%</span>
+                          <span>AI Agent: Extracting and generating...</span>
+                          <span>Processing</span>
                         </div>
-                        <Progress value={82} className="h-2 bg-blue-100" />
+                        <Progress value={65} className="h-2 bg-blue-100" />
+                      </div>
+                    )}
+
+                    {aiGeneratedQuestions.length > 0 && (
+                      <div className="mt-4 p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <p className="text-sm font-medium text-green-800 mb-2">
+                          ✓ {aiGeneratedQuestions.length} questions extracted
+                        </p>
+                        <div className="space-y-2 max-h-60 overflow-y-auto">
+                          {aiGeneratedQuestions.map((q, i) => (
+                            <div key={i} className="text-xs bg-white p-2 rounded border">
+                              <span className="font-medium text-muted-foreground">Q{i+1}.</span>{' '}
+                              <span className="line-clamp-2">{q.content}</span>
+                              <div className="flex gap-2 mt-1">
+                                <Badge variant="outline" className="text-[10px] h-4">{q.type}</Badge>
+                                <Badge variant="outline" className="text-[10px] h-4">Diff: {q.difficulty}</Badge>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </TabsContent>
@@ -603,6 +805,19 @@ export default function CreateExam() {
                         <div className="space-y-2">
                           <Label>Question Count</Label>
                           <Input type="number" value={form.questionCount} onChange={(e) => set('questionCount', e.target.value)} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label>Question Type Mix</Label>
+                          <Select value={form.questionType} onValueChange={(v) => set('questionType', v)}>
+                            <SelectTrigger><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              {QUESTION_TYPE_OPTIONS
+                                .filter((type) => type.value !== 'custom')
+                                .map((type) => (
+                                  <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="space-y-2">
                           <Label>Difficulty</Label>

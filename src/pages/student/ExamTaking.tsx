@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
@@ -41,6 +41,8 @@ import {
   GripVertical,
   CheckCircle2,
 } from 'lucide-react';
+
+import { api } from '@/lib/api';
 
 // ─── Question types ───────────────────────────────────────────────
 type QType =
@@ -132,6 +134,105 @@ const rawQuestions: Question[] = [
   },
 ];
 
+function parseOptions(options: any): string[] {
+  if (Array.isArray(options)) {
+    return options.map((v) => (typeof v === 'string' ? v : String(v?.text ?? v))).filter(Boolean);
+  }
+  if (options && typeof options === 'object') {
+    return Object.keys(options)
+      .sort()
+      .map((k) => String(options[k]))
+      .filter(Boolean);
+  }
+  return ['Option A', 'Option B', 'Option C', 'Option D'];
+}
+
+function mapBackendToUiQuestion(q: any, index: number): Question {
+  const type = String(q?.type || '').toUpperCase();
+  const base = {
+    id: index + 1,
+    title: `Question ${index + 1}`,
+    points: Number(q?.points ?? 1),
+    content: String(q?.content || ''),
+  };
+
+  if (type === 'TRUE_FALSE') {
+    return { ...base, type: 'true-false' } as TrueFalseQ;
+  }
+  if (type === 'MULTI_SELECT') {
+    return {
+      ...base,
+      type: 'multi-choice',
+      options: parseOptions(q?.options),
+    } as MultiChoiceQ;
+  }
+  if (type === 'MULTIPLE_CHOICE') {
+    return {
+      ...base,
+      type: 'single-choice',
+      options: parseOptions(q?.options),
+    } as SingleChoiceQ;
+  }
+  if (type === 'FILL_IN_BLANK') {
+    const text = String(q?.content || 'Fill in the blank');
+    return {
+      ...base,
+      type: 'fill-blank',
+      template: text.includes('{{1}}') ? text : `${text} {{1}}`,
+      blanks: 1,
+    } as FillBlankQ;
+  }
+  if (type === 'ORDERING') {
+    return {
+      ...base,
+      type: 'ordering',
+      content: String(q?.content || 'Arrange in order'),
+      items: parseOptions(q?.options),
+    } as OrderingQ;
+  }
+  if (type === 'MATCHING') {
+    const options = parseOptions(q?.options);
+    const half = Math.max(1, Math.floor(options.length / 2));
+    return {
+      ...base,
+      type: 'matching',
+      content: String(q?.content || 'Match the following'),
+      left: options.slice(0, half),
+      right: options.slice(half),
+    } as MatchingQ;
+  }
+
+  return {
+    ...base,
+    type: 'short-answer',
+    content: String(q?.content || ''),
+    maxWords: 200,
+  } as ShortAnswerQ;
+}
+
+function normalizeSubmissionAnswer(question: Question | undefined, answer: unknown): unknown {
+  if (!question) return answer;
+
+  if (question.type === 'single-choice' && typeof answer === 'number') {
+    return { answer: String.fromCharCode(65 + answer) };
+  }
+
+  if (question.type === 'multi-choice' && Array.isArray(answer)) {
+    const labels = answer
+      .map((idx) => Number(idx))
+      .filter((idx) => !Number.isNaN(idx))
+      .sort((a, b) => a - b)
+      .map((idx) => String.fromCharCode(65 + idx));
+    return { answer: labels.join(',') };
+  }
+
+  if (question.type === 'true-false' && typeof answer === 'boolean') {
+    return { answer };
+  }
+
+  return answer;
+}
+
 function shuffleArray<T>(arr: T[]): T[] {
   const s = [...arr];
   for (let i = s.length - 1; i > 0; i--) {
@@ -182,23 +283,14 @@ const typeLabel: Record<QType, string> = {
 // ─── Main component ───────────────────────────────────────────────
 export default function ExamTaking() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const examId = searchParams.get('examId') || undefined;
 
-  const [questions] = useState<Question[]>(() =>
-    shuffleArray(rawQuestions).map((q) => {
-      if (q.type === 'single-choice' || q.type === 'multi-choice')
-        return { ...q, options: shuffleArray(q.options) };
-      if (q.type === 'matching')
-        return { ...q, right: shuffleArray(q.right) };
-      return q;
-    })
-  );
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [examTitle, setExamTitle] = useState('Exam Session');
+  const [isLoadingExam, setIsLoadingExam] = useState(true);
 
-  const [orderState, setOrderState] = useState<Record<number, string[]>>(() => {
-    const init: Record<number, string[]> = {};
-    rawQuestions.filter((q): q is OrderingQ => q.type === 'ordering')
-      .forEach((q) => { init[q.id] = shuffleArray(q.items); });
-    return init;
-  });
+  const [orderState, setOrderState] = useState<Record<number, string[]>>({});
 
   const total = questions.length;
   const [current, setCurrent]       = useState(0);
@@ -213,6 +305,66 @@ export default function ExamTaking() {
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const logRef   = useRef<{ type: string; ts: number; detail?: string }[]>([]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadExam = async () => {
+      setIsLoadingExam(true);
+      try {
+        if (!examId) {
+          const fallback = shuffleArray(rawQuestions).map((q) => {
+            if (q.type === 'single-choice' || q.type === 'multi-choice') {
+              return { ...q, options: shuffleArray(q.options) };
+            }
+            if (q.type === 'matching') {
+              return { ...q, right: shuffleArray(q.right) };
+            }
+            return q;
+          });
+          if (!mounted) return;
+          setExamTitle('Practice Exam');
+          setQuestions(fallback);
+          return;
+        }
+
+        const exam = await api.getExam(examId);
+        const backendQuestions = Array.isArray(exam?.examQuestions) ? exam.examQuestions : [];
+        const mapped = backendQuestions.map((eq: any, idx: number) => {
+          const ui = mapBackendToUiQuestion(eq?.question, idx) as any;
+          return {
+            ...ui,
+            questionId: eq?.questionId || eq?.question?.id,
+          };
+        });
+
+        if (!mounted) return;
+        setExamTitle(exam?.title || 'Exam Session');
+        setQuestions(mapped.length > 0 ? mapped : []);
+      } catch (err) {
+        console.error('Failed to load exam questions:', err);
+        if (!mounted) return;
+        setQuestions([]);
+      } finally {
+        if (mounted) setIsLoadingExam(false);
+      }
+    };
+
+    loadExam();
+    return () => {
+      mounted = false;
+    };
+  }, [examId]);
+
+  useEffect(() => {
+    const init: Record<number, string[]> = {};
+    questions
+      .filter((q): q is OrderingQ => q.type === 'ordering')
+      .forEach((q) => {
+        init[q.id] = shuffleArray(q.items);
+      });
+    setOrderState(init);
+  }, [questions]);
 
   const log = useCallback((type: string, detail?: string) => {
     logRef.current.push({ type, ts: Date.now(), detail });
@@ -229,10 +381,65 @@ export default function ExamTaking() {
   const doSubmit = useCallback(async () => {
     setIsSubmitting(true);
     log('submit');
+    // attempt to submit answers + logs if we have a submissionId stored
+    try {
+      let submissionId = localStorage.getItem('currentSubmissionId');
+      const submissionExamId = localStorage.getItem('currentSubmissionExamId');
+
+      // Drop stale submission ids from previous exams.
+      if (examId && submissionExamId && submissionExamId !== examId) {
+        submissionId = null;
+      }
+
+      // Create a submission now if missing.
+      if (!submissionId && examId) {
+        const started = await api.startExam(examId);
+        if (started?.id) {
+          submissionId = started.id;
+          localStorage.setItem('currentSubmissionId', submissionId);
+          localStorage.setItem('currentSubmissionExamId', examId);
+        }
+      }
+
+      if (!submissionId) {
+        throw new Error('No active submission found for this exam.');
+      }
+
+      // build answers payload from current answers map
+      const payloadAnswers = Object.entries(answers)
+        .map(([uiQId, ans]) => {
+          const question = questions.find((q: any) => q.id === Number(uiQId)) as any;
+          if (!question?.questionId) return null;
+          return {
+            questionId: String(question.questionId),
+            answer: normalizeSubmissionAnswer(question as Question, ans),
+            timeTaken: undefined,
+          };
+        })
+        .filter(Boolean) as Array<{ questionId: string; answer: any; timeTaken?: number }>;
+
+      // send logs
+      const logs = logRef.current.map((l) => ({ type: l.type, details: l.detail, ts: l.ts }));
+      await api.submitExam(submissionId, payloadAnswers, logs);
+
+      // Clear active submission markers after successful submit.
+      try {
+        localStorage.removeItem('currentSubmissionId');
+        localStorage.removeItem('currentSubmissionExamId');
+      } catch {}
+    } catch (err) {
+      console.error('Failed to submit to server:', err);
+      alert('Submit failed. Please try again.');
+      setIsSubmitting(false);
+      return;
+    }
+
     await new Promise((r) => setTimeout(r, 1500));
     if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    navigate('/student/grading');
-  }, [log, navigate]);
+    // Navigate to grading for this exam if available
+    if (examId) navigate(`/student/grading?examId=${encodeURIComponent(examId)}`);
+    else navigate('/student/grading');
+  }, [log, navigate, examId, answers, questions]);
 
   useEffect(() => {
     const id = setInterval(() => {
@@ -265,8 +472,32 @@ export default function ExamTaking() {
   const flaggedCount   = Object.values(flagged).filter(Boolean).length;
   const q              = questions[current];
 
+  if (isLoadingExam) {
+    return (
+      <div className="min-h-screen flex items-center justify-center text-muted-foreground">
+        Loading exam...
+      </div>
+    );
+  }
+
+  if (total === 0 || !q) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-6 text-center">
+        <div>
+          <p className="text-lg font-semibold">No questions found for this exam.</p>
+          <p className="text-sm text-muted-foreground mt-1">Please contact your instructor or try again later.</p>
+          <Button className="mt-4" onClick={() => navigate('/student')}>Back to Dashboard</Button>
+        </div>
+      </div>
+    );
+  }
+
   const setAnswer = (qId: number, val: unknown) =>
-    setAnswers((prev) => ({ ...prev, [qId]: val }));
+    setAnswers((prev) => {
+      const next = { ...prev, [qId]: val };
+      log('answer', JSON.stringify({ questionId: qId, value: val }));
+      return next;
+    });
 
   const handleFlag  = () => setFlagged((prev) => ({ ...prev, [q.id]: !prev[q.id] }));
   const handleClear = () =>
@@ -293,6 +524,7 @@ export default function ExamTaking() {
         <div className="flex items-center gap-3">
           <Shield className="h-5 w-5 text-primary" />
           <span className="font-semibold text-sm">Database Systems Quiz</span>
+                    <span className="font-semibold text-sm">{examTitle}</span>
           {tabSwitches > 0 && (
             <StatusBadge variant="destructive">
               {tabSwitches} tab switch{tabSwitches > 1 ? 'es' : ''}

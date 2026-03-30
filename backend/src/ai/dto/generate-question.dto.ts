@@ -17,6 +17,14 @@ export class GenerateQuestionDto {
   @IsOptional()
   @IsString()
   language?: string; // 'en' | 'vi'
+
+  @IsOptional()
+  @IsString()
+  courseName?: string;
+
+  @IsOptional()
+  @IsString()
+  useCase?: string; // 'exam' | 'question_bank'
 }
 
 export class GenerateExamQuestionsDto {
@@ -33,6 +41,22 @@ export class GenerateExamQuestionsDto {
   @Min(0)
   @Max(1)
   difficulty?: number; // 0.3 | 0.5 | 0.7
+
+  @IsOptional()
+  @IsString()
+  questionType?: string;
+
+  @IsOptional()
+  @IsString()
+  language?: string;
+
+  @IsOptional()
+  @IsString()
+  courseName?: string;
+
+  @IsOptional()
+  @IsString()
+  useCase?: string; // 'exam' | 'question_bank'
 
   @IsOptional()
   @IsString()

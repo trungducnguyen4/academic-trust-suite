@@ -20,6 +20,10 @@ export class SubmitAnswerDto {
 export class SubmitExamDto {
   @IsArray()
   answers: SubmitAnswerDto[];
+  // Optional proctoring logs collected during the exam
+  @IsOptional()
+  @IsArray()
+  logs?: Array<{ type: string; details?: any; ts?: number }>;
 }
 
 export class GradeAnswerDto {

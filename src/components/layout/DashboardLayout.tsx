@@ -72,9 +72,16 @@ const adminNavItems: NavItem[] = [
 
 interface DashboardLayoutProps {
   children: ReactNode;
+  notifications?: Array<{
+    id: string;
+    type?: 'info' | 'warning' | 'error';
+    title: string;
+    message: string;
+    time?: string | Date;
+  }>;
 }
 
-export function DashboardLayout({ children }: DashboardLayoutProps) {
+export function DashboardLayout({ children, notifications = [] }: DashboardLayoutProps) {
   const { user, isAuthenticated, logout } = useAuth();
   const location = useLocation();
   const [collapsed, setCollapsed] = useState(false);
@@ -294,6 +301,9 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                     className="relative text-muted-foreground hover:text-foreground h-8 w-8"
                   >
                     <Bell className="h-[18px] w-[18px]" />
+                    {notifications.length > 0 && (
+                      <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive" />
+                    )}
                     <span className="sr-only">Notifications</span>
                   </Button>
                 </PopoverTrigger>
@@ -301,10 +311,26 @@ export function DashboardLayout({ children }: DashboardLayoutProps) {
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
                     <span className="font-semibold text-sm">Thông báo</span>
                   </div>
-                  <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-                    <Bell className="h-8 w-8 mb-2 opacity-30" />
-                    <p className="text-sm">Không có thông báo mới</p>
-                  </div>
+                  {notifications.length === 0 ? (
+                    <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
+                      <Bell className="h-8 w-8 mb-2 opacity-30" />
+                      <p className="text-sm">Không có thông báo mới</p>
+                    </div>
+                  ) : (
+                    <div className="max-h-[360px] overflow-y-auto p-2">
+                      {notifications.map((item) => (
+                        <div key={item.id} className="rounded-lg px-3 py-2.5 hover:bg-muted/60">
+                          <div className="flex items-start justify-between gap-2">
+                            <p className="text-sm font-semibold text-foreground">{item.title}</p>
+                            <span className="text-[11px] text-muted-foreground shrink-0">
+                              {item.time ? new Date(item.time).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                            </span>
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">{item.message}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </PopoverContent>
               </Popover>
               <div className="h-6 w-px bg-border hidden sm:block" />

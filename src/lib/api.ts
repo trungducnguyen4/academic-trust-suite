@@ -293,6 +293,48 @@ class ApiClient {
     return this.request<any>(`/exams/${id}`, { method: 'DELETE' });
   }
 
+  async generateExamLink(
+    examId: string,
+    data: {
+      expiryDatetime?: string;
+      maxUses?: number;
+      password?: string;
+      restrictedToCourse?: boolean;
+      note?: string;
+    },
+  ) {
+    return this.request<any>(`/exams/${examId}/generate-link`, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async getExamLinks(examId: string) {
+    return this.request<any[]>(`/exams/${examId}/links`);
+  }
+
+  async validateExamLink(token: string) {
+    return this.request<any>(`/exam-links/validate/${token}`);
+  }
+
+  async joinExamByLink(token: string, data?: { password?: string }) {
+    return this.request<any>(`/exam-links/${token}/join`, {
+      method: 'POST',
+      body: data || {},
+    });
+  }
+
+  async updateExamLink(id: string, data: { disabled?: boolean; expiryDatetime?: string; maxUses?: number; note?: string }) {
+    return this.request<any>(`/exam-links/${id}`, {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
+  async getExamLinkUsage(id: string) {
+    return this.request<any[]>(`/exam-links/${id}/usage`);
+  }
+
   // Submissions endpoints
   async getSubmissions(page?: number, limit?: number) {
     const params = new URLSearchParams();
@@ -309,10 +351,10 @@ class ApiClient {
     });
   }
 
-  async submitExam(submissionId: string, answers: Array<{ questionId: string; answer: any; timeTaken?: number }>) {
+  async submitExam(submissionId: string, answers: Array<{ questionId: string; answer: any; timeTaken?: number }>, logs?: Array<{ type: string; details?: any; ts?: number }>) {
     return this.request<any>(`/submissions/${submissionId}/submit`, {
       method: 'POST',
-      body: { answers },
+      body: { answers, logs },
     });
   }
 
@@ -330,6 +372,10 @@ class ApiClient {
     if (limit) params.append('limit', String(limit));
     const query = params.toString() ? `?${params.toString()}` : '';
     return this.request<any>(`/submissions/exam/${examId}${query}`);
+  }
+
+  async getExamOverview(examId: string) {
+    return this.request<any>(`/submissions/exam/${examId}/overview`);
   }
 
   async getSubmission(id: string) {
@@ -355,6 +401,8 @@ class ApiClient {
     questionType?: string;
     difficulty?: number;
     language?: string;
+    courseName?: string;
+    useCase?: string;
   }) {
     return this.request<{
       content: string;
@@ -377,6 +425,10 @@ class ApiClient {
     prompt: string;
     questionCount: number;
     difficulty?: number;
+    questionType?: string;
+    language?: string;
+    courseName?: string;
+    useCase?: string;
     courseId?: string;
   }) {
     return this.request<{
