@@ -58,6 +58,7 @@ export default function ExamReadyCheck() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const requiresDownload = searchParams.get('download') !== 'false';
+  const examId = searchParams.get('examId') || undefined;
 
   // Build exam info from URL params (fallback to defaults)
   const examInfo = {
@@ -94,6 +95,33 @@ export default function ExamReadyCheck() {
   // Lock state — simulate lecturer unlock polling
   const [isUnlocked, setIsUnlocked] = useState(examInfo.lecturerUnlocked);
   const [pollingDots, setPollingDots] = useState('');
+  const [blockedAttemptStatus, setBlockedAttemptStatus] = useState<string | null>(null);
+  const [checkingAttempt, setCheckingAttempt] = useState(false);
+
+  useEffect(() => {
+    if (!examId) return;
+    let mounted = true;
+
+    (async () => {
+      try {
+        setCheckingAttempt(true);
+        const existing = await api.getMyExamSubmission(examId);
+        if (!mounted || !existing) return;
+        const status = String(existing.status || '').toUpperCase();
+        if (['SUBMITTED', 'GRADED', 'FLAGGED'].includes(status)) {
+          setBlockedAttemptStatus(status);
+        }
+      } catch {
+        // Ignore not-found and continue normal flow
+      } finally {
+        if (mounted) setCheckingAttempt(false);
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [examId]);
 
   // Polling animation for locked screen
   useEffect(() => {
@@ -195,12 +223,17 @@ export default function ExamReadyCheck() {
 
   // --- Start exam ---
   const handleStartExam = async () => {
+    if (blockedAttemptStatus) {
+      alert(`You already have a ${blockedAttemptStatus.toLowerCase()} attempt for this exam.`);
+      return;
+    }
+
     try {
       document.documentElement.requestFullscreen?.();
     } catch { /* continue */ }
 
     // Prefer real examId from URL params when available
-    const realExamId = searchParams.get('examId') || undefined;
+    const realExamId = examId;
 
     if (!realExamId) {
       alert('Missing exam id. Please re-open the exam from your dashboard.');
@@ -620,20 +653,40 @@ export default function ExamReadyCheck() {
                     <p className="text-muted-foreground">
                       The exam has been unlocked. You may begin now.
                     </p>
+                    {checkingAttempt && (
+                      <p className="text-xs text-muted-foreground mt-2">Checking attempt status...</p>
+                    )}
+                    {blockedAttemptStatus && (
+                      <p className="text-sm text-amber-700 mt-2">
+                        You already have a {blockedAttemptStatus.toLowerCase()} attempt for this exam.
+                      </p>
+                    )}
                   </div>
                 </div>
               </CardContent>
             </Card>
 
             <div className="flex gap-3">
-              <Button
-                onClick={handleStartExam}
-                className="flex-1 h-12 gap-2 text-base"
-                size="lg"
-              >
-                <ArrowRight className="h-5 w-5" />
-                Start Exam Now
-              </Button>
+              {blockedAttemptStatus ? (
+                <Button
+                  className="flex-1 h-12 gap-2 text-base"
+                  size="lg"
+                  variant="outline"
+                  onClick={() => examId ? navigate(`/student/grading?examId=${encodeURIComponent(examId)}`) : navigate('/student')}
+                >
+                  View Submission Status
+                </Button>
+              ) : (
+                <Button
+                  onClick={handleStartExam}
+                  className="flex-1 h-12 gap-2 text-base"
+                  size="lg"
+                  disabled={checkingAttempt}
+                >
+                  <ArrowRight className="h-5 w-5" />
+                  Start Exam Now
+                </Button>
+              )}
               <Button variant="outline" asChild className="h-12">
                 <Link to="/student">Return to Dashboard</Link>
               </Button>

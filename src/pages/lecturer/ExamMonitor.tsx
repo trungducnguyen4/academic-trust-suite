@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -24,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import {
   ArrowLeft,
+  Loader2,
   Users,
   Clock,
   AlertTriangle,
@@ -41,6 +42,7 @@ import {
   Activity,
   MousePointerClick,
 } from 'lucide-react';
+import api, { unwrapPaginatedData } from '@/lib/api';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -55,12 +57,14 @@ import {
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
 
 interface StudentSession {
-  id: string;
+  id: string; // submission id when available, otherwise enrollment id
+  submissionId: string | null;
+  userId: string;
   name: string;
   studentId: string;
   ip: string;
   status: 'in_progress' | 'submitted' | 'not_joined' | 'flagged' | 'disconnected';
-  progress: number; // answered/total
+  progress: number;
   score: number | null;
   tabSwitches: number;
   mouseAnomalies: number;
@@ -71,49 +75,163 @@ interface StudentSession {
 
 interface IntegrityAlert {
   id: string;
+  submissionId: string | null;
   studentName: string;
   type: 'tab_switch' | 'similarity' | 'timing' | 'ip_anomaly' | 'mouse_pattern';
   message: string;
   severity: 'warning' | 'critical';
   time: string;
-  resolved: boolean;
 }
 
-const mockStudents: StudentSession[] = [
-  { id: 's1', name: 'Nguyen Van A', studentId: '2021001', ip: '192.168.1.45', status: 'in_progress', progress: 75, score: null, tabSwitches: 0, mouseAnomalies: 0, startedAt: '09:00:15', submittedAt: null, flagReason: null },
-  { id: 's2', name: 'Tran Thi B', studentId: '2021002', ip: '192.168.1.67', status: 'flagged', progress: 60, score: null, tabSwitches: 4, mouseAnomalies: 2, startedAt: '09:01:03', submittedAt: null, flagReason: 'Multiple tab switches' },
-  { id: 's3', name: 'Le Van C', studentId: '2021003', ip: '10.0.5.22', status: 'not_joined', progress: 0, score: null, tabSwitches: 0, mouseAnomalies: 0, startedAt: null, submittedAt: null, flagReason: null },
-  { id: 's4', name: 'Pham Thi D', studentId: '2021004', ip: '192.168.1.89', status: 'submitted', progress: 100, score: 88, tabSwitches: 1, mouseAnomalies: 0, startedAt: '09:00:30', submittedAt: '10:15:42', flagReason: null },
-  { id: 's5', name: 'Hoang Van E', studentId: '2021005', ip: '192.168.1.102', status: 'in_progress', progress: 45, score: null, tabSwitches: 2, mouseAnomalies: 1, startedAt: '09:02:10', submittedAt: null, flagReason: null },
-  { id: 's6', name: 'Vo Minh F', studentId: '2021006', ip: '192.168.1.55', status: 'in_progress', progress: 90, score: null, tabSwitches: 0, mouseAnomalies: 0, startedAt: '09:00:08', submittedAt: null, flagReason: null },
-  { id: 's7', name: 'Dang Thi G', studentId: '2021007', ip: '172.16.0.15', status: 'disconnected', progress: 30, score: null, tabSwitches: 0, mouseAnomalies: 0, startedAt: '09:01:55', submittedAt: null, flagReason: 'Connection lost' },
-  { id: 's8', name: 'Bui Van H', studentId: '2021008', ip: '192.168.1.73', status: 'submitted', progress: 100, score: 72, tabSwitches: 0, mouseAnomalies: 0, startedAt: '09:00:22', submittedAt: '10:05:18', flagReason: null },
-];
+type ExamOverview = {
+  exam?: { totalPoints?: number };
+  anomalies?: Array<{
+    id: string;
+    eventType: string;
+    details?: string;
+    timestamp: string;
+    severity: 'low' | 'medium' | 'high';
+    student?: { fullName?: string } | null;
+    submissionId?: string | null;
+  }>;
+};
 
-const mockAlerts: IntegrityAlert[] = [
-  { id: 'a1', studentName: 'Tran Thi B', type: 'tab_switch', message: '4 tab switches detected (threshold: 3)', severity: 'critical', time: '09:25:30', resolved: false },
-  { id: 'a2', studentName: 'Tran Thi B', type: 'mouse_pattern', message: 'Unusual mouse movement pattern detected', severity: 'warning', time: '09:30:15', resolved: false },
-  { id: 'a3', studentName: 'Dang Thi G', type: 'ip_anomaly', message: 'IP 172.16.0.15 outside allowed range', severity: 'warning', time: '09:01:55', resolved: false },
-  { id: 'a4', studentName: 'Hoang Van E', type: 'timing', message: 'Answered 5 questions in under 30 seconds', severity: 'warning', time: '09:15:42', resolved: true },
-];
+const mapSubmissionStatus = (status?: string): StudentSession['status'] => {
+  const normalized = String(status || '').toUpperCase();
+  if (normalized === 'IN_PROGRESS') return 'in_progress';
+  if (normalized === 'SUBMITTED' || normalized === 'GRADED') return 'submitted';
+  if (normalized === 'FLAGGED') return 'flagged';
+  return 'not_joined';
+};
+
+const mapEventTypeToAlertType = (eventType?: string): IntegrityAlert['type'] => {
+  const event = String(eventType || '').toLowerCase();
+  if (event.includes('tab')) return 'tab_switch';
+  if (event.includes('mouse')) return 'mouse_pattern';
+  if (event.includes('ip')) return 'ip_anomaly';
+  if (event.includes('timing')) return 'timing';
+  return 'similarity';
+};
 
 export default function ExamMonitor() {
   const { id } = useParams();
-  const [students, setStudents] = useState<StudentSession[]>(mockStudents);
-  const [alerts, setAlerts] = useState<IntegrityAlert[]>(mockAlerts);
+  const [students, setStudents] = useState<StudentSession[]>([]);
+  const [alerts, setAlerts] = useState<IntegrityAlert[]>([]);
+  const [examTitle, setExamTitle] = useState('Live Exam Monitor');
+  const [loading, setLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [resolvedAlertIds, setResolvedAlertIds] = useState<Set<string>>(new Set());
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date().toLocaleTimeString());
 
-  // Simulate auto-refresh
+  const loadMonitorData = async (silent = false) => {
+    if (!id) return;
+
+    if (silent) {
+      setIsRefreshing(true);
+    } else {
+      setLoading(true);
+    }
+
+    try {
+      setError(null);
+
+      const [examRes, submissionsRes, overviewRes] = await Promise.all([
+        api.getExam(id),
+        api.getExamSubmissions(id, 1, 200),
+        api.getExamOverview(id),
+      ]);
+
+      setExamTitle(examRes?.title || 'Live Exam Monitor');
+
+      const overview = (overviewRes || {}) as ExamOverview;
+      const submissions = unwrapPaginatedData<any>(submissionsRes);
+
+      const courseId = examRes?.courseId;
+      let enrollments: any[] = [];
+      if (courseId) {
+        enrollments = await api.getCourseEnrollments(courseId);
+      }
+
+      const submissionByStudentId = new Map<string, any>();
+      for (const submission of submissions) {
+        if (submission?.student?.id) {
+          submissionByStudentId.set(submission.student.id, submission);
+        }
+      }
+
+      const anomalyBySubmissionId = new Map<string, { tab: number; mouse: number }>();
+      for (const anomaly of overview.anomalies || []) {
+        if (!anomaly?.submissionId) continue;
+        const current = anomalyBySubmissionId.get(anomaly.submissionId) || { tab: 0, mouse: 0 };
+        const event = String(anomaly.eventType || '').toLowerCase();
+        if (event.includes('tab')) current.tab += 1;
+        if (event.includes('mouse')) current.mouse += 1;
+        anomalyBySubmissionId.set(anomaly.submissionId, current);
+      }
+
+      const joinedRows: StudentSession[] = enrollments.map((enrollment) => {
+        const student = enrollment.student;
+        const submission = student?.id ? submissionByStudentId.get(student.id) : null;
+        const anomalyCount = submission?.id ? anomalyBySubmissionId.get(submission.id) : undefined;
+        const status = submission ? mapSubmissionStatus(submission.status) : 'not_joined';
+
+        return {
+          id: submission?.id || enrollment.id,
+          submissionId: submission?.id || null,
+          userId: student?.id || '',
+          name: student?.fullName || 'Unknown student',
+          studentId: student?.studentId || '-',
+          ip: '-',
+          status,
+          progress: status === 'submitted' ? 100 : status === 'in_progress' ? 50 : 0,
+          score: submission?.score ?? null,
+          tabSwitches: anomalyCount?.tab || 0,
+          mouseAnomalies: anomalyCount?.mouse || 0,
+          startedAt: submission?.startedAt ? new Date(submission.startedAt).toLocaleTimeString() : null,
+          submittedAt: submission?.submittedAt ? new Date(submission.submittedAt).toLocaleTimeString() : null,
+          flagReason: status === 'flagged' ? 'Submission flagged' : null,
+        };
+      });
+
+      setStudents(joinedRows);
+
+      const mappedAlerts: IntegrityAlert[] = (overview.anomalies || []).map((anomaly) => ({
+        id: anomaly.id,
+        submissionId: anomaly.submissionId || null,
+        studentName: anomaly.student?.fullName || 'Unknown student',
+        type: mapEventTypeToAlertType(anomaly.eventType),
+        message: anomaly.details || anomaly.eventType || 'Suspicious activity detected',
+        severity: anomaly.severity === 'high' ? 'critical' : 'warning',
+        time: new Date(anomaly.timestamp).toLocaleTimeString(),
+      }));
+      setAlerts(mappedAlerts);
+      setLastRefresh(new Date().toLocaleTimeString());
+    } catch (err: any) {
+      setError(err?.message || 'Failed to load monitor data');
+    } finally {
+      if (silent) {
+        setIsRefreshing(false);
+      } else {
+        setLoading(false);
+      }
+    }
+  };
+
+  useEffect(() => {
+    loadMonitorData(false);
+  }, [id]);
+
   useEffect(() => {
     if (!autoRefresh) return;
     const interval = setInterval(() => {
-      setLastRefresh(new Date().toLocaleTimeString());
+      loadMonitorData(true);
     }, 10000);
     return () => clearInterval(interval);
-  }, [autoRefresh]);
+  }, [autoRefresh, id]);
 
   const filtered = students.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.studentId.includes(search);
@@ -130,12 +248,26 @@ export default function ExamMonitor() {
     disconnected: students.filter((s) => s.status === 'disconnected').length,
   };
 
+  const unresolvedAlerts = useMemo(
+    () => alerts.filter((a) => !resolvedAlertIds.has(a.id)),
+    [alerts, resolvedAlertIds],
+  );
+
   const resolveAlert = (alertId: string) => {
-    setAlerts(alerts.map((a) => (a.id === alertId ? { ...a, resolved: true } : a)));
+    setResolvedAlertIds((prev) => new Set(prev).add(alertId));
   };
 
-  const flagStudent = (studentId: string, reason: string) => {
-    setStudents(students.map((s) => (s.id === studentId ? { ...s, status: 'flagged' as const, flagReason: reason } : s)));
+  const flagStudent = async (submissionId: string, reason: string) => {
+    if (!submissionId) return;
+    try {
+      await api.updateSubmissionStatus(submissionId, 'FLAGGED');
+      await loadMonitorData(true);
+      setStudents((prev) => prev.map((s) => (
+        s.submissionId === submissionId ? { ...s, status: 'flagged', flagReason: reason } : s
+      )));
+    } catch (err) {
+      console.error('Failed to flag submission', err);
+    }
   };
 
   // Score distribution chart
@@ -193,7 +325,7 @@ export default function ExamMonitor() {
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-foreground mb-1">
-              Live Exam Monitor
+              {examTitle}
               <span className="ml-3 text-sm font-normal text-muted-foreground">(Exam #{id})</span>
             </h1>
             <p className="text-muted-foreground">
@@ -203,6 +335,7 @@ export default function ExamMonitor() {
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <div className={`h-2 w-2 rounded-full ${autoRefresh ? 'bg-green-500 animate-pulse' : 'bg-muted'}`} />
             <span>Last refresh: {lastRefresh}</span>
+            {isRefreshing && <Loader2 className="h-4 w-4 animate-spin" />}
             <Button
               variant="outline" size="sm"
               onClick={() => setAutoRefresh(!autoRefresh)}
@@ -211,8 +344,30 @@ export default function ExamMonitor() {
               <RefreshCw className={`h-3.5 w-3.5 ${autoRefresh ? 'animate-spin' : ''}`} />
               {autoRefresh ? 'Auto' : 'Manual'}
             </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => loadMonitorData(true)}
+              className="gap-1"
+            >
+              <RefreshCw className="h-3.5 w-3.5" /> Refresh
+            </Button>
           </div>
         </div>
+
+        {error && (
+          <Card className="mb-4 border-red-200">
+            <CardContent className="pt-4 text-sm text-red-600">{error}</CardContent>
+          </Card>
+        )}
+
+        {loading && (
+          <Card className="mb-4">
+            <CardContent className="pt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" /> Loading monitor data...
+            </CardContent>
+          </Card>
+        )}
 
         {/* Stats Cards */}
         <div className="grid grid-cols-6 gap-3 mb-6">
@@ -249,16 +404,16 @@ export default function ExamMonitor() {
         </div>
 
         {/* Integrity Alerts */}
-        {alerts.filter((a) => !a.resolved).length > 0 && (
+        {unresolvedAlerts.length > 0 && (
           <Card className="mb-6 border-red-200">
             <CardHeader className="pb-2">
               <CardTitle className="text-base flex items-center gap-2 text-red-600">
                 <AlertTriangle className="h-4 w-4" />
-                Integrity Alerts ({alerts.filter((a) => !a.resolved).length} unresolved)
+                Integrity Alerts ({unresolvedAlerts.length} unresolved)
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-2">
-              {alerts.filter((a) => !a.resolved).map((alert) => (
+              {unresolvedAlerts.map((alert) => (
                 <div
                   key={alert.id}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
@@ -367,11 +522,11 @@ export default function ExamMonitor() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {s.status === 'in_progress' && (
+                          {s.status === 'in_progress' && s.submissionId && (
                             <Button
                               variant="ghost" size="sm"
                               className="text-red-600 text-xs"
-                              onClick={() => flagStudent(s.id, 'Manually flagged by instructor')}
+                              onClick={() => flagStudent(s.submissionId!, 'Manually flagged by instructor')}
                             >
                               <Flag className="h-3.5 w-3.5 mr-1" /> Flag
                             </Button>

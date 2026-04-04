@@ -26,6 +26,33 @@ import {
   MessageSquare,
 } from 'lucide-react';
 
+function toDisplayText(value: any): string {
+  if (value == null) return '';
+  if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
+  }
+
+  if (Array.isArray(value)) {
+    return value.map((item) => toDisplayText(item)).filter(Boolean).join(', ');
+  }
+
+  if (typeof value === 'object') {
+    // Common backend shape for wrapped answer payloads
+    if ('answer' in value) {
+      return toDisplayText((value as any).answer);
+    }
+    if ('text' in value) {
+      return toDisplayText((value as any).text);
+    }
+    if ('content' in value) {
+      return toDisplayText((value as any).content);
+    }
+    return JSON.stringify(value);
+  }
+
+  return String(value);
+}
+
 // Mock grading data
 interface GradedQuestion {
   id: number;
@@ -92,10 +119,10 @@ export default function GradingBreakdown() {
     const type = autoTypes.includes(q.type) ? 'auto' : 'manual';
     return {
       id: idx + 1,
-      question: q.content || q.text || 'Question text',
+      question: toDisplayText(q.content || q.text || 'Question text'),
       type,
-      yourAnswer: a.answer || '',
-      correctAnswer: q.correctAnswer || '',
+      yourAnswer: toDisplayText(a.answer),
+      correctAnswer: toDisplayText(q.correctAnswer),
       isCorrect: !!a.isCorrect,
       points: a.pointsAwarded ?? 0,
       maxPoints: q.points ?? 1,

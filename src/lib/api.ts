@@ -395,6 +395,13 @@ class ApiClient {
     });
   }
 
+  async updateSubmissionStatus(submissionId: string, status: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED' | 'FLAGGED') {
+    return this.request<any>(`/submissions/${submissionId}/status`, {
+      method: 'PATCH',
+      body: { status },
+    });
+  }
+
   // AI endpoints
   async aiGenerateQuestion(data: {
     prompt: string;

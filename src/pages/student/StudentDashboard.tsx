@@ -37,6 +37,7 @@ interface UpcomingExam {
   endTime: string;
   status: string;
   requiresDownload?: boolean;
+  mySubmissionStatus?: string | null;
 }
 
 interface ExamHistoryItem {
@@ -80,12 +81,25 @@ export default function StudentDashboard() {
           { id: 'c4', code: 'HK3_2023_304105', name: 'Lịch sử Đảng Cộng sản Việt Nam', faculty: 'Faculty of Social Sciences and Humanities', enrolledStudents: 45, totalStudents: 50, progress: 75, lastAccessed: '1 day ago' }
         ];
         const now = new Date();
+        const latestSubmissionByExamId = new Map<string, any>();
+        (submissions || []).forEach((s: any) => {
+          const key = s?.examId;
+          if (!key) return;
+          const prev = latestSubmissionByExamId.get(key);
+          const currentTime = new Date(s?.submittedAt || s?.startedAt || s?.createdAt || 0).getTime();
+          const prevTime = prev ? new Date(prev?.submittedAt || prev?.startedAt || prev?.createdAt || 0).getTime() : -1;
+          if (!prev || currentTime >= prevTime) {
+            latestSubmissionByExamId.set(key, s);
+          }
+        });
+
         const upcoming = exams.filter((exam: any) => {
           const endTime = new Date(exam.endTime);
           return exam.status === 'PUBLISHED' && endTime > now;
         }).map((exam: any) => ({
           ...exam,
           requiresDownload: exam.settings?.proctoring || false,
+          mySubmissionStatus: latestSubmissionByExamId.get(exam.id)?.status ?? null,
         }));
         
         setUpcomingExams(upcoming);
@@ -328,9 +342,20 @@ export default function StudentDashboard() {
                     const isDownloading = progress !== undefined && progress < 100;
                     const isDownloaded = progress === 100;
                     const needsDownload = exam.requiresDownload === true;
+                    const status = String(exam.mySubmissionStatus || '').toUpperCase();
+                    const isCompletedAttempt = ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(status);
                     const startUrl = `/student/exam-ready?examId=${exam.id}&download=false&title=${encodeURIComponent(exam.title)}&course=${encodeURIComponent(exam.course.code)}&duration=${exam.duration}`;
 
-                    const todayCTA = needsDownload ? (
+                    const todayCTA = isCompletedAttempt ? (
+                      <div className="flex items-center gap-2">
+                        <StatusBadge variant={status === 'GRADED' ? 'success' : 'warning'}>
+                          {status.toLowerCase()}
+                        </StatusBadge>
+                        <Button size="sm" variant="outline" asChild>
+                          <Link to={`/student/grading?examId=${exam.id}`}>View Result</Link>
+                        </Button>
+                      </div>
+                    ) : needsDownload ? (
                       isDownloaded ? (
                         <div className="flex items-center gap-2 text-sm text-amber-600 font-medium">
                           <Lock className="h-4 w-4" />
