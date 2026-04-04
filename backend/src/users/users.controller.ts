@@ -33,12 +33,18 @@ export class UsersController {
 
   @Get()
   @Roles('ADMIN', 'LECTURER')
-  findAll(@Query('role') role?: string, @Query('page') page?: string, @Query('limit') limit?: string) {
+  findAll(
+    @Query('role') role?: string,
+    @Query('status') status?: string,
+    @Query('search') search?: string,
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+  ) {
     const pagination = {
       page: page ? parseInt(page, 10) : 1,
       limit: limit ? parseInt(limit, 10) : 20,
     };
-    return this.usersService.findAll(role, pagination);
+    return this.usersService.findAll(role, status, search, pagination);
   }
 
   @Get('students')
@@ -54,11 +60,13 @@ export class UsersController {
   }
 
   @Get(':id')
+  @Roles('ADMIN')
   findOne(@Param('id') id: string) {
     return this.usersService.findOne(id);
   }
 
   @Patch(':id')
+  @Roles('ADMIN')
   update(@Param('id') id: string, @Body() updateUserDto: UpdateUserDto) {
     return this.usersService.update(id, updateUserDto);
   }

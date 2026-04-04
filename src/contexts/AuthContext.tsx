@@ -6,6 +6,8 @@ interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
   logout: () => void;
   resetPassword: (email: string) => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  applyProfileToSession: (user: User) => void;
   register: (data: {
     email: string;
     password: string;
@@ -109,6 +111,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     });
   };
 
+  const refreshProfile = async () => {
+    const refreshedUser = await api.getMe();
+    setAuthState((prev) => ({
+      ...prev,
+      user: refreshedUser,
+      isAuthenticated: true,
+      isLoading: false,
+    }));
+  };
+
+  const applyProfileToSession = (user: User) => {
+    setAuthState((prev) => ({
+      ...prev,
+      user,
+      isAuthenticated: true,
+      isLoading: false,
+    }));
+  };
+
   const resetPassword = async (email: string) => {
     // In real implementation, call API to send reset email
     // For now, just simulate the call
@@ -117,7 +138,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   return (
-    <AuthContext.Provider value={{ ...authState, login, logout, resetPassword, register }}>
+    <AuthContext.Provider value={{ ...authState, login, logout, resetPassword, register, refreshProfile, applyProfileToSession }}>
       {children}
     </AuthContext.Provider>
   );

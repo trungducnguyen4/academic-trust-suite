@@ -131,7 +131,7 @@ const App = () => {
 
               {/* ================= ADMIN ================= */}
               <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/users" element={<AdminDashboard />} />
+              <Route path="/admin/users" element={<UserRoleManagement />} />
               <Route path="/admin/integrity" element={<IntegrityOverview />} />
               <Route path="/admin/settings" element={<AdminDashboard />} />
               <Route path="/admin/reports" element={<AdminDashboard />} />

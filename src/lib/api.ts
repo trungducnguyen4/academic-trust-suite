@@ -78,13 +78,47 @@ class ApiClient {
     return this.request<any>('/auth/me');
   }
 
+  async updateMyProfile(data: {
+    email?: string;
+    fullName?: string;
+    studentId?: string;
+    department?: string;
+  }) {
+    return this.request<any>('/auth/me', {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
+  async changeMyPassword(data: { currentPassword: string; newPassword: string }) {
+    return this.request<{ message: string }>('/auth/me/password', {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
+  async deleteMyProfile(data: { currentPassword: string }) {
+    return this.request<{ message: string }>('/auth/me', {
+      method: 'DELETE',
+      body: data,
+    });
+  }
+
   // Users endpoints
-  async getUsers(role?: string, page?: number, limit?: number) {
-    const params = new URLSearchParams();
-    if (role) params.append('role', role);
-    if (page) params.append('page', String(page));
-    if (limit) params.append('limit', String(limit));
-    const query = params.toString() ? `?${params.toString()}` : '';
+  async getUsers(params?: {
+    role?: string;
+    status?: string;
+    search?: string;
+    page?: number;
+    limit?: number;
+  }) {
+    const queryParams = new URLSearchParams();
+    if (params?.role) queryParams.append('role', params.role);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.search) queryParams.append('search', params.search);
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
     return this.request<any>(`/users${query}`);
   }
 
@@ -98,6 +132,42 @@ class ApiClient {
 
   async getLecturers() {
     return this.request<any[]>('/users/lecturers');
+  }
+
+  async createUser(data: {
+    email: string;
+    password: string;
+    fullName: string;
+    role: 'ADMIN' | 'LECTURER' | 'STUDENT';
+    studentId?: string;
+    department?: string;
+    status?: 'active' | 'suspended' | 'pending';
+  }) {
+    return this.request<any>('/users', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async updateUser(id: string, data: {
+    email?: string;
+    password?: string;
+    fullName?: string;
+    role?: 'ADMIN' | 'LECTURER' | 'STUDENT';
+    studentId?: string;
+    department?: string;
+    status?: 'active' | 'suspended' | 'pending';
+  }) {
+    return this.request<any>(`/users/${id}`, {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
+  async deleteUser(id: string) {
+    return this.request<{ message: string }>(`/users/${id}`, {
+      method: 'DELETE',
+    });
   }
 
   // Courses endpoints

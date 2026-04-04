@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -6,8 +6,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { StatusBadge } from '@/components/ui/status-badge';
-import { Separator } from '@/components/ui/separator';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Table,
   TableBody,
@@ -34,161 +32,252 @@ import {
 } from '@/components/ui/dialog';
 import {
   ArrowLeft,
-  Search,
-  Plus,
-  Users,
-  Shield,
-  Edit2,
-  Trash2,
-  UserPlus,
-  Lock,
-  Unlock,
-  CheckCircle2,
-  XCircle,
   Loader2,
-  Download,
+  Lock,
+  Pencil,
+  Search,
+  Trash2,
+  Unlock,
+  UserPlus,
+  Users,
 } from 'lucide-react';
-import api from '@/lib/api';
+import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
+import api, { unwrapPaginatedData } from '@/lib/api';
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-  role: 'student' | 'lecturer' | 'admin';
-  department: string;
-  status: 'active' | 'suspended' | 'pending';
-  lastLogin: string;
-  createdAt: string;
-}
+type BackendRole = 'STUDENT' | 'LECTURER' | 'ADMIN';
+type BackendStatus = 'active' | 'suspended' | 'pending';
 
-interface APIUser {
+interface UserRow {
   id: string;
   fullName: string;
   email: string;
-  role: 'STUDENT' | 'LECTURER' | 'ADMIN';
+  role: BackendRole;
+  studentId?: string | null;
+  department?: string | null;
+  status?: BackendStatus;
   createdAt: string;
 }
 
-const permissions = [
-  { key: 'create_exam', label: 'Create Exam', student: false, lecturer: true, admin: true },
-  { key: 'take_exam', label: 'Take Exam', student: true, lecturer: false, admin: false },
-  { key: 'manage_questions', label: 'Manage Questions', student: false, lecturer: true, admin: true },
-  { key: 'view_analytics', label: 'View Analytics', student: false, lecturer: true, admin: true },
-  { key: 'monitor_exam', label: 'Monitor Exam', student: false, lecturer: true, admin: true },
-  { key: 'manage_users', label: 'Manage Users', student: false, lecturer: false, admin: true },
-  { key: 'configure_policies', label: 'Configure Policies', student: false, lecturer: false, admin: true },
-  { key: 'view_audit_logs', label: 'View Audit Logs', student: false, lecturer: false, admin: true },
-  { key: 'view_results', label: 'View Own Results', student: true, lecturer: false, admin: false },
-  { key: 'view_all_results', label: 'View All Results', student: false, lecturer: true, admin: true },
-];
+interface UserForm {
+  fullName: string;
+  email: string;
+  password: string;
+  role: BackendRole;
+  department: string;
+  studentId: string;
+  status: BackendStatus;
+}
+
+const EMPTY_CREATE_FORM: UserForm = {
+  fullName: '',
+  email: '',
+  password: '',
+  role: 'STUDENT',
+  department: '',
+  studentId: '',
+  status: 'active',
+};
+
+const EMPTY_EDIT_FORM: UserForm = {
+  fullName: '',
+  email: '',
+  password: '',
+  role: 'STUDENT',
+  department: '',
+  studentId: '',
+  status: 'active',
+};
 
 export default function UserRoleManagement() {
   const navigate = useNavigate();
-  const [users, setUsers] = useState<User[]>([]);
+  const { user: currentUser } = useAuth();
+
+  const [users, setUsers] = useState<UserRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingId, setDeletingId] = useState<string | null>(null);
+
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [showPermDialog, setShowPermDialog] = useState(false);
-  const [adding, setAdding] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingUser, setEditingUser] = useState<UserRow | null>(null);
+
+  const [createForm, setCreateForm] = useState<UserForm>(EMPTY_CREATE_FORM);
+  const [editForm, setEditForm] = useState<UserForm>(EMPTY_EDIT_FORM);
+
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<'all' | BackendRole>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | BackendStatus>('all');
+
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalUsers, setTotalUsers] = useState(0);
   const ITEMS_PER_PAGE = 20;
 
-  // New user form
-  const [newUser, setNewUser] = useState({
-    name: '', email: '', role: 'student' as User['role'], department: '',
-  });
-
   useEffect(() => {
-    const fetchUsers = async () => {
-      try {
-        const res = await api.getUsers(undefined, page, ITEMS_PER_PAGE);
-        const rawData = res?.data ?? res;
-        const data = Array.isArray(rawData) ? rawData : [];
-        setTotalPages(res?.totalPages ?? 1);
-        setTotalUsers(res?.total ?? data.length);
-        const mapped: User[] = data.map((u: APIUser) => ({
-          id: u.id.slice(0, 8),
-          name: u.fullName,
-          email: u.email,
-          role: u.role.toLowerCase() as User['role'],
-          department: 'General',
-          status: 'active' as const,
-          lastLogin: '-',
-          createdAt: new Date(u.createdAt).toISOString().split('T')[0],
-        }));
-        setUsers(mapped);
-      } catch (err) {
-        console.error('Failed to fetch users:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchUsers();
-  }, [page]);
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search.trim());
+      setPage(1);
+    }, 350);
+    return () => clearTimeout(timer);
+  }, [search]);
 
-  const filtered = users.filter((u) => {
-    const matchSearch = u.name.toLowerCase().includes(search.toLowerCase()) ||
-      u.email.toLowerCase().includes(search.toLowerCase()) ||
-      u.id.toLowerCase().includes(search.toLowerCase());
-    const matchRole = roleFilter === 'all' || u.role === roleFilter;
-    const matchStatus = statusFilter === 'all' || u.status === statusFilter;
-    return matchSearch && matchRole && matchStatus;
-  });
-
-  const handleAddUser = async () => {
-    setAdding(true);
+  const fetchUsers = async () => {
     try {
-      const created = await api.register({
-        email: newUser.email,
-        password: '123456', // default password
-        fullName: newUser.name,
-        role: newUser.role.toUpperCase() as 'STUDENT' | 'LECTURER' | 'ADMIN',
+      setLoading(true);
+      const response = await api.getUsers({
+        page,
+        limit: ITEMS_PER_PAGE,
+        role: roleFilter === 'all' ? undefined : roleFilter,
+        status: statusFilter === 'all' ? undefined : statusFilter,
+        search: debouncedSearch || undefined,
       });
-      const mapped: User = {
-        id: created.user.id.slice(0, 8),
-        name: created.user.fullName,
-        email: created.user.email,
-        role: newUser.role,
-        department: newUser.department || 'General',
-        status: 'active',
-        lastLogin: '-',
-        createdAt: new Date().toISOString().split('T')[0],
-      };
-      setUsers([mapped, ...users]);
-      setNewUser({ name: '', email: '', role: 'student', department: '' });
-      setShowAddDialog(false);
-    } catch (err) {
-      console.error('Failed to add user:', err);
+
+      const rows = unwrapPaginatedData<UserRow>(response);
+      setUsers(rows);
+      setTotalPages(response?.totalPages ?? 1);
+      setTotalUsers(response?.total ?? rows.length);
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to load users');
     } finally {
-      setAdding(false);
+      setLoading(false);
     }
   };
 
-  const toggleStatus = (id: string) => {
-    setUsers(users.map((u) => {
-      if (u.id !== id) return u;
-      return { ...u, status: u.status === 'active' ? 'suspended' as const : 'active' as const };
-    }));
+  useEffect(() => {
+    fetchUsers();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [page, roleFilter, statusFilter, debouncedSearch]);
+
+  const openEditDialog = (target: UserRow) => {
+    setEditingUser(target);
+    setEditForm({
+      fullName: target.fullName,
+      email: target.email,
+      password: '',
+      role: target.role,
+      department: target.department || '',
+      studentId: target.studentId || '',
+      status: target.status || 'active',
+    });
+    setShowEditDialog(true);
   };
 
-  const deleteUser = (id: string) => {
-    setUsers(users.filter((u) => u.id !== id));
+  const handleCreateUser = async () => {
+    if (!createForm.fullName || !createForm.email || !createForm.password) {
+      toast.error('Please fill full name, email, and password');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await api.createUser({
+        fullName: createForm.fullName.trim(),
+        email: createForm.email.trim(),
+        password: createForm.password,
+        role: createForm.role,
+        status: createForm.status,
+        department: createForm.department.trim() || undefined,
+        studentId: createForm.role === 'STUDENT' ? (createForm.studentId.trim() || undefined) : undefined,
+      });
+      toast.success('User created successfully');
+      setShowAddDialog(false);
+      setCreateForm(EMPTY_CREATE_FORM);
+      setPage(1);
+      await fetchUsers();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to create user');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const changeRole = (id: string, role: User['role']) => {
-    setUsers(users.map((u) => (u.id === id ? { ...u, role } : u)));
+  const handleUpdateUser = async () => {
+    if (!editingUser) return;
+    if (!editForm.fullName || !editForm.email) {
+      toast.error('Please fill full name and email');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      await api.updateUser(editingUser.id, {
+        fullName: editForm.fullName.trim(),
+        email: editForm.email.trim(),
+        role: editForm.role,
+        status: editForm.status,
+        department: editForm.department.trim() || undefined,
+        studentId: editForm.role === 'STUDENT' ? (editForm.studentId.trim() || undefined) : undefined,
+        password: editForm.password.trim() || undefined,
+      });
+      toast.success('User updated successfully');
+      setShowEditDialog(false);
+      setEditingUser(null);
+      await fetchUsers();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update user');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
-  const stats = {
-    total: users.length,
-    students: users.filter((u) => u.role === 'student').length,
-    lecturers: users.filter((u) => u.role === 'lecturer').length,
-    admins: users.filter((u) => u.role === 'admin').length,
+  const handleQuickRoleChange = async (target: UserRow, role: BackendRole) => {
+    if (target.id === currentUser?.id) {
+      toast.error('Cannot change your own role');
+      return;
+    }
+    try {
+      await api.updateUser(target.id, { role });
+      setUsers((prev) => prev.map((item) => (item.id === target.id ? { ...item, role } : item)));
+      toast.success('Role updated');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update role');
+    }
   };
+
+  const handleToggleStatus = async (target: UserRow) => {
+    if (target.id === currentUser?.id) {
+      toast.error('Cannot suspend your own account');
+      return;
+    }
+
+    const nextStatus: BackendStatus = target.status === 'active' ? 'suspended' : 'active';
+    try {
+      await api.updateUser(target.id, { status: nextStatus });
+      setUsers((prev) => prev.map((item) => (item.id === target.id ? { ...item, status: nextStatus } : item)));
+      toast.success('Account status updated');
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to update status');
+    }
+  };
+
+  const handleDeleteUser = async (target: UserRow) => {
+    if (target.id === currentUser?.id) {
+      toast.error('Cannot delete your own account');
+      return;
+    }
+
+    const confirmed = window.confirm(`Archive user \"${target.fullName}\"?`);
+    if (!confirmed) return;
+
+    try {
+      setDeletingId(target.id);
+      const response = await api.deleteUser(target.id);
+      toast.success(response?.message || 'User archived');
+      await fetchUsers();
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to delete user');
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const pageStats = useMemo(() => ({
+    students: users.filter((item) => item.role === 'STUDENT').length,
+    lecturers: users.filter((item) => item.role === 'LECTURER').length,
+    admins: users.filter((item) => item.role === 'ADMIN').length,
+  }), [users]);
 
   if (loading) {
     return (
@@ -204,254 +293,370 @@ export default function UserRoleManagement() {
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
         <Button
-          variant="ghost" size="sm"
+          variant="ghost"
+          size="sm"
           className="mb-4 gap-2 text-muted-foreground"
           onClick={() => navigate('/admin')}
         >
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
         </Button>
 
-        <div className="flex items-start justify-between mb-6">
+        <div className="flex items-start justify-between mb-6 gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-foreground mb-1">User & Role Management</h1>
-            <p className="text-muted-foreground">Manage user accounts, role assignments, and permissions</p>
+            <p className="text-muted-foreground">Admin CRUD for account lifecycle, role assignment, and access status</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => setShowPermDialog(true)} className="gap-2">
-              <Shield className="h-4 w-4" /> Permissions Matrix
-            </Button>
-            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-              <DialogTrigger asChild>
-                <Button className="gap-2"><UserPlus className="h-4 w-4" /> Add User</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New User</DialogTitle>
-                  <DialogDescription>Create a new user account</DialogDescription>
-                </DialogHeader>
-                <div className="space-y-4 py-4">
-                  <div className="space-y-2">
-                    <Label>Full Name</Label>
-                    <Input placeholder="e.g., Nguyen Van A" value={newUser.name} onChange={(e) => setNewUser({ ...newUser, name: e.target.value })} />
-                  </div>
+          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+            <DialogTrigger asChild>
+              <Button className="gap-2">
+                <UserPlus className="h-4 w-4" /> Add User
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create User</DialogTitle>
+                <DialogDescription>Create a new user directly from admin console</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Full Name</Label>
+                  <Input
+                    value={createForm.fullName}
+                    onChange={(e) => setCreateForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                    placeholder="e.g. Nguyen Van A"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>Email</Label>
-                    <Input type="email" placeholder="e.g., user@university.edu" value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} />
+                    <Input
+                      type="email"
+                      value={createForm.email}
+                      onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder="user@university.edu"
+                    />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label>Role</Label>
-                      <Select value={newUser.role} onValueChange={(v) => setNewUser({ ...newUser, role: v as User['role'] })}>
-                        <SelectTrigger><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="student">Student</SelectItem>
-                          <SelectItem value="lecturer">Lecturer</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-2">
-                      <Label>Department</Label>
-                      <Input placeholder="e.g., Computer Science" value={newUser.department} onChange={(e) => setNewUser({ ...newUser, department: e.target.value })} />
-                    </div>
+                  <div className="space-y-2">
+                    <Label>Initial Password</Label>
+                    <Input
+                      type="password"
+                      value={createForm.password}
+                      onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
+                      placeholder="At least 6 characters"
+                    />
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
-                  <Button onClick={handleAddUser} disabled={adding || !newUser.name || !newUser.email}>
-                    {adding && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} Add User
-                  </Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Role</Label>
+                    <Select value={createForm.role} onValueChange={(value: BackendRole) => setCreateForm((prev) => ({ ...prev, role: value }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="STUDENT">Student</SelectItem>
+                        <SelectItem value="LECTURER">Lecturer</SelectItem>
+                        <SelectItem value="ADMIN">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select value={createForm.status} onValueChange={(value: BackendStatus) => setCreateForm((prev) => ({ ...prev, status: value }))}>
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="pending">Pending</SelectItem>
+                        <SelectItem value="suspended">Suspended</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-2">
+                    <Label>Department</Label>
+                    <Input
+                      value={createForm.department}
+                      onChange={(e) => setCreateForm((prev) => ({ ...prev, department: e.target.value }))}
+                      placeholder="e.g. Computer Science"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Student ID</Label>
+                    <Input
+                      value={createForm.studentId}
+                      onChange={(e) => setCreateForm((prev) => ({ ...prev, studentId: e.target.value }))}
+                      placeholder="Required for students"
+                      disabled={createForm.role !== 'STUDENT'}
+                    />
+                  </div>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+                <Button onClick={handleCreateUser} disabled={isSubmitting}>
+                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Create
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
-        {/* Stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card><CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center"><Users className="h-5 w-5 text-primary" /></div>
-              <div><p className="text-2xl font-semibold">{stats.total}</p><p className="text-xs text-muted-foreground">Total Users</p></div>
-            </div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center"><Users className="h-5 w-5 text-blue-600" /></div>
-              <div><p className="text-2xl font-semibold">{stats.students}</p><p className="text-xs text-muted-foreground">Students</p></div>
-            </div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center"><Users className="h-5 w-5 text-green-600" /></div>
-              <div><p className="text-2xl font-semibold">{stats.lecturers}</p><p className="text-xs text-muted-foreground">Lecturers</p></div>
-            </div>
-          </CardContent></Card>
-          <Card><CardContent className="pt-4 pb-4">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center"><Shield className="h-5 w-5 text-purple-600" /></div>
-              <div><p className="text-2xl font-semibold">{stats.admins}</p><p className="text-xs text-muted-foreground">Admins</p></div>
-            </div>
-          </CardContent></Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-primary" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{totalUsers}</p>
+                  <p className="text-xs text-muted-foreground">Total Users</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-semibold">{pageStats.students}</p>
+              <p className="text-xs text-muted-foreground">Students (current page)</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-semibold">{pageStats.lecturers}</p>
+              <p className="text-xs text-muted-foreground">Lecturers (current page)</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <p className="text-2xl font-semibold">{pageStats.admins}</p>
+              <p className="text-xs text-muted-foreground">Admins (current page)</p>
+            </CardContent>
+          </Card>
         </div>
 
-        {/* Filters */}
         <Card className="mb-6">
           <CardContent className="pt-4 pb-4">
-            <div className="flex gap-3 items-center">
-              <div className="relative flex-1">
+            <div className="flex gap-3 items-center flex-wrap">
+              <div className="relative flex-1 min-w-[240px]">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search by name, email, or ID..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+                <Input
+                  placeholder="Search by name, email, student ID, or department"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="pl-9"
+                />
               </div>
-              <Select value={roleFilter} onValueChange={setRoleFilter}>
-                <SelectTrigger className="w-[130px]"><SelectValue placeholder="Role" /></SelectTrigger>
+              <Select value={roleFilter} onValueChange={(value: 'all' | BackendRole) => setRoleFilter(value)}>
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="student">Student</SelectItem>
-                  <SelectItem value="lecturer">Lecturer</SelectItem>
-                  <SelectItem value="admin">Admin</SelectItem>
+                  <SelectItem value="STUDENT">Student</SelectItem>
+                  <SelectItem value="LECTURER">Lecturer</SelectItem>
+                  <SelectItem value="ADMIN">Admin</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-[130px]"><SelectValue placeholder="Status" /></SelectTrigger>
+              <Select value={statusFilter} onValueChange={(value: 'all' | BackendStatus) => setStatusFilter(value)}>
+                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
                   <SelectItem value="pending">Pending</SelectItem>
+                  <SelectItem value="suspended">Suspended</SelectItem>
                 </SelectContent>
               </Select>
-              <Button variant="outline" size="sm" className="gap-1"><Download className="h-4 w-4" /> Export</Button>
             </div>
           </CardContent>
         </Card>
 
-        {/* User Table */}
         <Card>
+          <CardHeader>
+            <CardTitle>Users</CardTitle>
+            <CardDescription>Role/status changes are persisted directly to database</CardDescription>
+          </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-16">ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead className="w-24">Role</TableHead>
-                  <TableHead>Department</TableHead>
-                  <TableHead className="w-20">Status</TableHead>
-                  <TableHead className="w-32">Last Login</TableHead>
-                  <TableHead className="w-28 text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filtered.map((user) => (
-                  <TableRow key={user.id} className={user.status === 'suspended' ? 'opacity-60' : ''}>
-                    <TableCell className="font-mono text-xs">{user.id}</TableCell>
-                    <TableCell className="font-medium">{user.name}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{user.email}</TableCell>
-                    <TableCell>
-                      <Select value={user.role} onValueChange={(v) => changeRole(user.id, v as User['role'])}>
-                        <SelectTrigger className="h-7 text-xs w-[100px]"><SelectValue /></SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="student">Student</SelectItem>
-                          <SelectItem value="lecturer">Lecturer</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell className="text-sm">{user.department}</TableCell>
-                    <TableCell>
-                      <StatusBadge
-                        variant={user.status === 'active' ? 'success' : user.status === 'suspended' ? 'destructive' : 'warning'}
-                      >
-                        {user.status}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell className="text-xs text-muted-foreground">{user.lastLogin}</TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-0.5">
-                        <Button variant="ghost" size="sm" title={user.status === 'active' ? 'Suspend' : 'Activate'} onClick={() => toggleStatus(user.id)}>
-                          {user.status === 'active' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                        </Button>
-                        <Button variant="ghost" size="sm" className="text-destructive" title="Delete" onClick={() => deleteUser(user.id)}>
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filtered.length === 0 && (
+              <Table>
+                <TableHeader>
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No users found</TableCell>
+                    <TableHead>ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Role</TableHead>
+                    <TableHead>Department</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {users.map((item) => (
+                    <TableRow key={item.id}>
+                      <TableCell className="font-mono text-xs">{item.id.slice(0, 8)}</TableCell>
+                      <TableCell className="font-medium">{item.fullName}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">{item.email}</TableCell>
+                      <TableCell>
+                        <Select
+                          value={item.role}
+                          onValueChange={(value: BackendRole) => handleQuickRoleChange(item, value)}
+                        >
+                          <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="STUDENT">Student</SelectItem>
+                            <SelectItem value="LECTURER">Lecturer</SelectItem>
+                            <SelectItem value="ADMIN">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>{item.department || '-'}</TableCell>
+                      <TableCell>
+                        <StatusBadge
+                          variant={
+                            item.status === 'active'
+                              ? 'success'
+                              : item.status === 'suspended'
+                              ? 'destructive'
+                              : 'warning'
+                          }
+                        >
+                          {item.status || 'active'}
+                        </StatusBadge>
+                      </TableCell>
+                      <TableCell>{new Date(item.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} title="Edit user">
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => handleToggleStatus(item)}
+                            title={item.status === 'active' ? 'Suspend account' : 'Activate account'}
+                          >
+                            {item.status === 'active' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-destructive"
+                            onClick={() => handleDeleteUser(item)}
+                            disabled={deletingId === item.id}
+                            title="Archive user"
+                          >
+                            {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {users.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No users found</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
             </div>
 
-          {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4 px-2">
-              <p className="text-sm text-muted-foreground">
-                Page {page} of {totalPages} ({totalUsers} total)
-              </p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}>
-                  Previous
-                </Button>
-                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                  const start = Math.max(1, Math.min(page - 2, totalPages - 4));
-                  const p = start + i;
-                  if (p > totalPages) return null;
-                  return (
-                    <Button key={p} variant={p === page ? 'default' : 'outline'} size="sm" className="w-8 h-8 p-0" onClick={() => setPage(p)}>
-                      {p}
-                    </Button>
-                  );
-                })}
-                <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}>
-                  Next
-                </Button>
+            {totalPages > 1 && (
+              <div className="flex items-center justify-between px-4 py-4 border-t border-border">
+                <p className="text-sm text-muted-foreground">
+                  Page {page} / {totalPages} ({totalUsers} users)
+                </p>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page <= 1}
+                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={page >= totalPages}
+                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
-
+            )}
           </CardContent>
         </Card>
 
-        {/* Permissions Matrix Dialog */}
-        <Dialog open={showPermDialog} onOpenChange={setShowPermDialog}>
-          <DialogContent className="max-w-2xl">
+        <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+          <DialogContent>
             <DialogHeader>
-              <DialogTitle>Role Permissions Matrix</DialogTitle>
-              <DialogDescription>Overview of permissions assigned to each role</DialogDescription>
+              <DialogTitle>Edit User</DialogTitle>
+              <DialogDescription>Update profile, role, and account status</DialogDescription>
             </DialogHeader>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Permission</TableHead>
-                  <TableHead className="text-center">Student</TableHead>
-                  <TableHead className="text-center">Lecturer</TableHead>
-                  <TableHead className="text-center">Admin</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {permissions.map((p) => (
-                  <TableRow key={p.key}>
-                    <TableCell className="text-sm">{p.label}</TableCell>
-                    <TableCell className="text-center">
-                      {p.student ? <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" /> : <XCircle className="h-4 w-4 text-muted-foreground/30 mx-auto" />}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {p.lecturer ? <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" /> : <XCircle className="h-4 w-4 text-muted-foreground/30 mx-auto" />}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {p.admin ? <CheckCircle2 className="h-4 w-4 text-green-600 mx-auto" /> : <XCircle className="h-4 w-4 text-muted-foreground/30 mx-auto" />}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <Label>Full Name</Label>
+                <Input value={editForm.fullName} onChange={(e) => setEditForm((prev) => ({ ...prev, fullName: e.target.value }))} />
+              </div>
+              <div className="space-y-2">
+                <Label>Email</Label>
+                <Input type="email" value={editForm.email} onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))} />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Role</Label>
+                  <Select value={editForm.role} onValueChange={(value: BackendRole) => setEditForm((prev) => ({ ...prev, role: value }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="STUDENT">Student</SelectItem>
+                      <SelectItem value="LECTURER">Lecturer</SelectItem>
+                      <SelectItem value="ADMIN">Admin</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={editForm.status} onValueChange={(value: BackendStatus) => setEditForm((prev) => ({ ...prev, status: value }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="pending">Pending</SelectItem>
+                      <SelectItem value="suspended">Suspended</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-2">
+                  <Label>Department</Label>
+                  <Input value={editForm.department} onChange={(e) => setEditForm((prev) => ({ ...prev, department: e.target.value }))} />
+                </div>
+                <div className="space-y-2">
+                  <Label>Student ID</Label>
+                  <Input
+                    value={editForm.studentId}
+                    onChange={(e) => setEditForm((prev) => ({ ...prev, studentId: e.target.value }))}
+                    disabled={editForm.role !== 'STUDENT'}
+                  />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Label>New Password (optional)</Label>
+                <Input
+                  type="password"
+                  placeholder="Leave blank to keep current password"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, password: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+              <Button onClick={handleUpdateUser} disabled={isSubmitting}>
+                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                Save Changes
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>

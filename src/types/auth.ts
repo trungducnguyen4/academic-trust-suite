@@ -9,6 +9,7 @@ export interface User {
   email: string;
   fullName: string;
   role: UserRole;
+  status?: 'active' | 'suspended' | 'pending' | 'deleted';
   avatar?: string;
   studentId?: string;
   department?: string;

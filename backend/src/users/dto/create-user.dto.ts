@@ -1,10 +1,11 @@
-import { IsString, IsEmail, IsEnum, IsOptional } from 'class-validator';
+import { IsString, IsEmail, IsEnum, IsOptional, MinLength } from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()
   email: string;
 
   @IsString()
+  @MinLength(6)
   password: string;
 
   @IsString()
@@ -20,4 +21,8 @@ export class CreateUserDto {
   @IsOptional()
   @IsString()
   department?: string;
+
+  @IsOptional()
+  @IsEnum(['active', 'suspended', 'pending'])
+  status?: 'active' | 'suspended' | 'pending';
 }
