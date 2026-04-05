@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { api, unwrapPaginatedData } from '@/lib/api';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -68,6 +69,9 @@ interface Question {
 
 export default function QuestionEditor() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/admin') ? '/admin' : '/lecturer';
+  const questionBankPath = `${basePath}/question-bank`;
   const [searchParams] = useSearchParams();
   const questionId = searchParams.get('id');
   const courseCodeParam = searchParams.get('courseCode');
@@ -361,7 +365,7 @@ export default function QuestionEditor() {
         await api.createQuestion(questionData);
       }
       
-      navigate('/lecturer/question-bank');
+      navigate(questionBankPath);
     } catch (error) {
       console.error('Failed to save question:', error);
       console.error('Question data that failed:', questionData);
@@ -432,7 +436,7 @@ export default function QuestionEditor() {
         <Button
           variant="ghost" size="sm"
           className="mb-3 sm:mb-4 gap-2 text-muted-foreground -ml-2"
-          onClick={() => navigate('/lecturer/question-bank')}
+          onClick={() => navigate(questionBankPath)}
         >
           <ArrowLeft className="h-4 w-4" /> <span className="hidden sm:inline">Back to Question Bank</span><span className="sm:hidden">Back</span>
         </Button>

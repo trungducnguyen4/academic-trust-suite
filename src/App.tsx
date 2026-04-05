@@ -52,6 +52,7 @@ import TransparencyDashboard from "./pages/admin/TransparencyDashboard";
 import UserRoleManagement from "./pages/admin/UserRoleManagement";
 import SystemPolicyConfig from "./pages/admin/SystemPolicyConfig";
 import AuditLogViewer from "./pages/admin/AuditLogViewer";
+import AdminCourseManagement from "./pages/admin/CourseManagement";
 
 import NotFound from "./pages/NotFound";
 
@@ -131,6 +132,10 @@ const App = () => {
 
               {/* ================= ADMIN ================= */}
               <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/courses" element={<AdminCourseManagement />} />
+              <Route path="/admin/question-bank" element={<QuestionBankManagement />} />
+              <Route path="/admin/question-editor" element={<QuestionEditor />} />
+              <Route path="/admin/question-history" element={<QuestionHistoryAnalysis />} />
               <Route path="/admin/users" element={<UserRoleManagement />} />
               <Route path="/admin/integrity" element={<IntegrityOverview />} />
               <Route path="/admin/settings" element={<AdminDashboard />} />

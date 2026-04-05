@@ -1,14 +1,38 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateCourseDto } from './dto/create-course.dto';
 import { UpdateCourseDto } from './dto/update-course.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
 
+interface AuthUser {
+  id: string;
+  role: 'ADMIN' | 'LECTURER' | 'STUDENT';
+}
+
 @Injectable()
 export class CoursesService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createCourseDto: CreateCourseDto, lecturerId: string) {
+  private async assertLecturerExists(lecturerId: string) {
+    const lecturer = await this.prisma.user.findUnique({
+      where: { id: lecturerId },
+      select: { id: true, role: true, status: true },
+    });
+
+    if (!lecturer || lecturer.role !== 'LECTURER' || lecturer.status !== 'active') {
+      throw new BadRequestException('Assigned lecturer is invalid or inactive');
+    }
+  }
+
+  private assertCanAccessCourse(courseLecturerId: string | null, user: AuthUser) {
+    if (user.role === 'ADMIN') return;
+
+    if (user.role !== 'LECTURER' || courseLecturerId !== user.id) {
+      throw new ForbiddenException('You are not allowed to access this course');
+    }
+  }
+
+  async create(createCourseDto: CreateCourseDto, user: AuthUser) {
     const existingCourse = await this.prisma.course.findUnique({
       where: { code: createCourseDto.code },
     });
@@ -17,9 +41,16 @@ export class CoursesService {
       throw new ConflictException('Course code already exists');
     }
 
+    const { lecturerId: requestedLecturerId, ...courseData } = createCourseDto;
+    const lecturerId = user.role === 'ADMIN' ? requestedLecturerId ?? null : user.id;
+
+    if (lecturerId) {
+      await this.assertLecturerExists(lecturerId);
+    }
+
     return this.prisma.course.create({
       data: {
-        ...createCourseDto,
+        ...courseData,
         lecturerId,
       },
       include: {
@@ -67,7 +98,7 @@ export class CoursesService {
     return buildPaginatedResult(courses, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUser) {
     const course = await this.prisma.course.findUnique({
       where: { id },
       include: {
@@ -107,15 +138,19 @@ export class CoursesService {
       throw new NotFoundException('Course not found');
     }
 
+    this.assertCanAccessCourse(course.lecturerId, user);
+
     return course;
   }
 
-  async update(id: string, updateCourseDto: UpdateCourseDto) {
+  async update(id: string, updateCourseDto: UpdateCourseDto, user: AuthUser) {
     const course = await this.prisma.course.findUnique({ where: { id } });
 
     if (!course) {
       throw new NotFoundException('Course not found');
     }
+
+    this.assertCanAccessCourse(course.lecturerId, user);
 
     if (updateCourseDto.code && updateCourseDto.code !== course.code) {
       const existingCourse = await this.prisma.course.findUnique({
@@ -126,9 +161,24 @@ export class CoursesService {
       }
     }
 
+    const { lecturerId: requestedLecturerId, ...courseData } = updateCourseDto;
+
+    if (requestedLecturerId !== undefined && user.role !== 'ADMIN') {
+      throw new ForbiddenException('Only admin can re-assign course lecturer');
+    }
+
+    if (requestedLecturerId) {
+      await this.assertLecturerExists(requestedLecturerId);
+    }
+
+    const data: UpdateCourseDto = {
+      ...courseData,
+      ...(user.role === 'ADMIN' && requestedLecturerId !== undefined ? { lecturerId: requestedLecturerId } : {}),
+    };
+
     return this.prisma.course.update({
       where: { id },
-      data: updateCourseDto,
+      data,
       include: {
         lecturer: {
           select: {
@@ -141,14 +191,23 @@ export class CoursesService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, user: AuthUser) {
     const course = await this.prisma.course.findUnique({ where: { id } });
 
     if (!course) {
       throw new NotFoundException('Course not found');
     }
 
-    await this.prisma.course.delete({ where: { id } });
+    this.assertCanAccessCourse(course.lecturerId, user);
+
+    try {
+      await this.prisma.course.delete({ where: { id } });
+    } catch (error: any) {
+      if (error?.code === 'P2003') {
+        throw new ConflictException('Cannot delete course because it still has related data');
+      }
+      throw error;
+    }
 
     return { message: 'Course deleted successfully' };
   }

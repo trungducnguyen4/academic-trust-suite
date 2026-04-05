@@ -278,7 +278,7 @@ export default function CourseManagement() {
                             )}
                             
                             <Button asChild variant="outline" size="sm" className="w-full">
-                              <Link to={`/lecturer/courses/${course.id}`}>
+                              <Link to={`/lecturer/course/${course.id}`}>
                                 View Details
                               </Link>
                             </Button>

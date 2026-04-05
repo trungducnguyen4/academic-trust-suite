@@ -29,7 +29,7 @@ export class CoursesController {
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
   create(@Body() createCourseDto: CreateCourseDto, @Request() req) {
-    return this.coursesService.create(createCourseDto, req.user.id);
+    return this.coursesService.create(createCourseDto, req.user);
   }
 
   @Get()
@@ -57,21 +57,21 @@ export class CoursesController {
   }
 
   @Get(':id')
-  findOne(@Param('id') id: string) {
-    return this.coursesService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.coursesService.findOne(id, req.user);
   }
 
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  update(@Param('id') id: string, @Body() updateCourseDto: UpdateCourseDto) {
-    return this.coursesService.update(id, updateCourseDto);
+  update(@Param('id') id: string, @Body() updateCourseDto: UpdateCourseDto, @Request() req) {
+    return this.coursesService.update(id, updateCourseDto, req.user);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  remove(@Param('id') id: string) {
-    return this.coursesService.remove(id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.coursesService.remove(id, req.user);
   }
 }

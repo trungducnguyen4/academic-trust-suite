@@ -48,12 +48,15 @@ import {
   Info,
 } from 'lucide-react';
 import api, { unwrapPaginatedData } from '@/lib/api';
+import { toast } from 'sonner';
 
 interface Course {
   id: string;
   code: string;
   name: string;
   semester: string;
+  description?: string;
+  credits?: number;
   students: number;
   exams: number;
   status: 'active' | 'archived' | 'draft';
@@ -65,6 +68,9 @@ interface APICourse {
   code: string;
   name: string;
   description?: string;
+  semester?: string;
+  credits?: number;
+  status?: string;
   createdAt: string;
   _count?: {
     enrollments?: number;
@@ -94,7 +100,10 @@ export default function CreateCourse() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showCreateDialog, setShowCreateDialog] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [isUpdating, setIsUpdating] = useState(false);
+  const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
 
   // Multi-step wizard
   const [step, setStep] = useState<1 | 2>(1);
@@ -105,6 +114,14 @@ export default function CreateCourse() {
     code: '',
     name: '',
     semester: '2025-2026/2',
+    description: '',
+    credits: '',
+  });
+
+  const [editCourse, setEditCourse] = useState({
+    code: '',
+    name: '',
+    semester: '',
     description: '',
     credits: '',
   });
@@ -138,10 +155,12 @@ export default function CreateCourse() {
           id: c.id,
           code: c.code,
           name: c.name,
-          semester: '2025-2026/2',
+          semester: c.semester || 'N/A',
+          description: c.description,
+          credits: c.credits,
           students: c._count?.enrollments || 0,
           exams: c._count?.exams || 0,
-          status: 'active' as const,
+          status: (c.status?.toLowerCase() as Course['status']) || 'draft',
           createdAt: safeIso(c.createdAt),
         }));
         setCourses(mapped);
@@ -261,10 +280,62 @@ export default function CreateCourse() {
       setCourses(prev => [mapped, ...prev]);
       setCreatedCourseId(created.id);
       setStep(2);
+      toast.success('Course created successfully');
     } catch (err) {
       console.error('Failed to create course:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to create course');
     } finally {
       setIsCreating(false);
+    }
+  };
+
+  const openEditDialog = (course: Course) => {
+    setEditingCourseId(course.id);
+    setEditCourse({
+      code: course.code,
+      name: course.name,
+      semester: course.semester || '',
+      description: course.description || '',
+      credits: course.credits ? String(course.credits) : '',
+    });
+    setShowEditDialog(true);
+  };
+
+  const handleUpdate = async () => {
+    if (!editingCourseId) return;
+
+    setIsUpdating(true);
+    try {
+      const updated = await api.updateCourse(editingCourseId, {
+        code: editCourse.code,
+        name: editCourse.name,
+        semester: editCourse.semester || undefined,
+        description: editCourse.description || undefined,
+        credits: editCourse.credits ? Number(editCourse.credits) : undefined,
+      });
+
+      setCourses((prev) =>
+        prev.map((course) =>
+          course.id === editingCourseId
+            ? {
+                ...course,
+                code: updated.code,
+                name: updated.name,
+                semester: updated.semester || course.semester,
+                description: updated.description,
+                credits: updated.credits,
+              }
+            : course,
+        ),
+      );
+
+      setShowEditDialog(false);
+      toast.success('Course updated successfully');
+    } catch (err) {
+      console.error('Failed to update course:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to update course');
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -332,11 +403,15 @@ export default function CreateCourse() {
   };
 
   const handleDelete = async (id: string) => {
+    if (!window.confirm('Delete this course? This action cannot be undone.')) return;
+
     try {
       await api.deleteCourse(id);
       setCourses(prev => prev.filter(c => c.id !== id));
+      toast.success('Course deleted successfully');
     } catch (err) {
       console.error('Failed to delete course:', err);
+      toast.error(err instanceof Error ? err.message : 'Failed to delete course');
     }
   };
 
@@ -729,6 +804,76 @@ export default function CreateCourse() {
               )}
             </DialogContent>
           </Dialog>
+
+          <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+            <DialogContent className="max-w-xl">
+              <DialogHeader>
+                <DialogTitle>Edit Course</DialogTitle>
+                <DialogDescription>Update course information.</DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-4 py-2">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-code">Course Code *</Label>
+                    <Input
+                      id="edit-code"
+                      value={editCourse.code}
+                      onChange={(e) => setEditCourse((prev) => ({ ...prev, code: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-semester">Semester</Label>
+                    <Input
+                      id="edit-semester"
+                      value={editCourse.semester}
+                      onChange={(e) => setEditCourse((prev) => ({ ...prev, semester: e.target.value }))}
+                      placeholder="e.g. 2025-2026/2"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-name">Course Name *</Label>
+                    <Input
+                      id="edit-name"
+                      value={editCourse.name}
+                      onChange={(e) => setEditCourse((prev) => ({ ...prev, name: e.target.value }))}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-credits">Credits</Label>
+                    <Input
+                      id="edit-credits"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={editCourse.credits}
+                      onChange={(e) => setEditCourse((prev) => ({ ...prev, credits: e.target.value }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-description">Description</Label>
+                  <Textarea
+                    id="edit-description"
+                    value={editCourse.description}
+                    onChange={(e) => setEditCourse((prev) => ({ ...prev, description: e.target.value }))}
+                    rows={3}
+                  />
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+                <Button onClick={handleUpdate} disabled={isUpdating || !editCourse.code || !editCourse.name}>
+                  {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         </div>
 
         {/* Stats */}
@@ -829,7 +974,7 @@ export default function CreateCourse() {
                         >
                           <Users className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm">
+                        <Button variant="ghost" size="sm" onClick={() => openEditDialog(course)}>
                           <Edit2 className="h-4 w-4" />
                         </Button>
                         <Button

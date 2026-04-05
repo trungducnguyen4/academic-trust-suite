@@ -29,7 +29,7 @@ export class QuestionsController {
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
   create(@Body() createQuestionDto: CreateQuestionDto, @Request() req) {
-    return this.questionsService.create(createQuestionDto, req.user.id);
+    return this.questionsService.create(createQuestionDto, req.user);
   }
 
   @Get()
@@ -75,29 +75,30 @@ export class QuestionsController {
   @Get('by-tags')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  getByTags(@Query('tags') tags: string) {
+  getByTags(@Request() req, @Query('tags') tags: string) {
     const tagArray = tags.split(',').map((t) => t.trim());
-    return this.questionsService.getQuestionsByTags(tagArray);
+    const creatorId = req.user.role === 'LECTURER' ? req.user.id : undefined;
+    return this.questionsService.getQuestionsByTags(tagArray, creatorId);
   }
 
   @Get(':id')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  findOne(@Param('id') id: string) {
-    return this.questionsService.findOne(id);
+  findOne(@Param('id') id: string, @Request() req) {
+    return this.questionsService.findOne(id, req.user);
   }
 
   @Patch(':id')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  update(@Param('id') id: string, @Body() updateQuestionDto: UpdateQuestionDto) {
-    return this.questionsService.update(id, updateQuestionDto);
+  update(@Param('id') id: string, @Body() updateQuestionDto: UpdateQuestionDto, @Request() req) {
+    return this.questionsService.update(id, updateQuestionDto, req.user);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  remove(@Param('id') id: string) {
-    return this.questionsService.remove(id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.questionsService.remove(id, req.user);
   }
 }

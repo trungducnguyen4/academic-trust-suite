@@ -65,6 +65,8 @@ const lecturerNavItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
   { title: 'Dashboard', href: '/admin', icon: <LayoutDashboard className="h-[18px] w-[18px]" /> },
+  { title: 'Courses', href: '/admin/courses', icon: <GraduationCap className="h-[18px] w-[18px]" /> },
+  { title: 'Question Bank', href: '/admin/question-bank', icon: <BookOpen className="h-[18px] w-[18px]" /> },
   { title: 'Users', href: '/admin/users', icon: <Users className="h-[18px] w-[18px]" /> },
   { title: 'Integrity', href: '/admin/integrity', icon: <Shield className="h-[18px] w-[18px]" /> },
   { title: 'Settings', href: '/admin/settings', icon: <Settings className="h-[18px] w-[18px]" /> },

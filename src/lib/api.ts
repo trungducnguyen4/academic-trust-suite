@@ -171,12 +171,16 @@ class ApiClient {
   }
 
   // Courses endpoints
-  async getCourses() {
-    return this.request<any[]>('/courses');
+  async getCourses(params?: { page?: number; limit?: number }) {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return this.request<any>(`/courses${query}`);
   }
 
   async getMyCourses() {
-    return this.request<any[]>('/courses/my-courses');
+    return this.request<any>('/courses/my-courses');
   }
 
   async getCourse(id: string) {

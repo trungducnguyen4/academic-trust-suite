@@ -13,6 +13,7 @@ import {
   Database,
   ArrowRight,
   Loader2,
+  BookOpen,
 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import { Progress } from '@/components/ui/progress';
@@ -290,9 +291,15 @@ export default function AdminDashboard() {
                 </Link>
               </Button>
               <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
-                <Link to="/admin/reports">
+                <Link to="/admin/courses">
                   <BarChart3 className="h-5 w-5" />
-                  <span>View Reports</span>
+                  <span>Manage Courses</span>
+                </Link>
+              </Button>
+              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+                <Link to="/admin/question-bank">
+                  <BookOpen className="h-5 w-5" />
+                  <span>Question Bank</span>
                 </Link>
               </Button>
             </div>
