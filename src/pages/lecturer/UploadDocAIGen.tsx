@@ -269,9 +269,9 @@ export default function UploadDocAIGen() {
                   <Select value={targetDifficulty} onValueChange={setTargetDifficulty}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="easy">Easy (0.0 – 0.4)</SelectItem>
-                      <SelectItem value="medium">Medium (0.4 – 0.7)</SelectItem>
-                      <SelectItem value="hard">Hard (0.7 – 1.0)</SelectItem>
+                      <SelectItem value="easy">Easy</SelectItem>
+                      <SelectItem value="medium">Medium</SelectItem>
+                      <SelectItem value="hard">Hard</SelectItem>
                       <SelectItem value="mixed">Mixed (recommended)</SelectItem>
                     </SelectContent>
                   </Select>
@@ -376,7 +376,7 @@ export default function UploadDocAIGen() {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-mono text-muted-foreground">#{idx + 1}</span>
                       <StatusBadge variant={q.difficulty < 0.4 ? 'success' : q.difficulty < 0.7 ? 'warning' : 'destructive'}>
-                        {q.difficulty < 0.4 ? 'Easy' : q.difficulty < 0.7 ? 'Medium' : 'Hard'} ({q.difficulty.toFixed(2)})
+                        {q.difficulty < 0.4 ? 'Easy' : q.difficulty < 0.7 ? 'Medium' : 'Hard'}
                       </StatusBadge>
                       <StatusBadge variant="info">{q.type === 'multiple_choice' ? 'MC' : 'T/F'}</StatusBadge>
                       <span className="text-xs text-muted-foreground">{q.topic}</span>

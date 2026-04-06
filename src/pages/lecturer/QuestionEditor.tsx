@@ -116,6 +116,13 @@ export default function QuestionEditor() {
   const [essayMaxScore, setEssayMaxScore] = useState(10);
 
   // Load courses from API
+  const snapDifficulty = (value: number) => {
+    const levels = [0.3, 0.5, 0.7];
+    return levels.reduce((prev, curr) =>
+      Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev,
+    );
+  };
+
   useEffect(() => {
     const fetchCourses = async () => {
       try {
@@ -183,7 +190,7 @@ export default function QuestionEditor() {
           ? Math.max(0, Math.min(1, questionData.difficulty / 10))
           : Math.max(0, Math.min(1, questionData.difficulty))
         : 0.5;
-    setDifficulty([uiDifficulty]);
+    setDifficulty([snapDifficulty(uiDifficulty)]);
     
     // Parse tags
     if (questionData.tags) {
@@ -395,8 +402,8 @@ export default function QuestionEditor() {
       const result = await api.aiGenerateQuestion({
         prompt: aiPrompt,
         questionType: backendTypeMap[questionType] || 'MULTIPLE_CHOICE',
-        difficulty: Math.max(0, Math.min(1, difficulty[0])),
-        language: 'vi',
+        difficulty: snapDifficulty(Math.max(0, Math.min(1, difficulty[0]))),
+        language: 'en',
         useCase: 'question_bank',
       });
 
@@ -404,7 +411,9 @@ export default function QuestionEditor() {
       setContent(result.content);
       if (result.explanation) setExplanation(result.explanation);
       if (result.tags && result.tags.length > 0) setTags(result.tags);
-      if (result.difficulty !== undefined && result.difficulty !== null) setDifficulty([Math.max(0, Math.min(1, result.difficulty))]);
+      if (result.difficulty !== undefined && result.difficulty !== null) {
+        setDifficulty([snapDifficulty(Math.max(0, Math.min(1, result.difficulty)))]);
+      }
       if (result.topic) setTopic(result.topic);
       if (result.learningObjective) setLearningObjective(result.learningObjective);
 
@@ -427,8 +436,8 @@ export default function QuestionEditor() {
     }
   };
 
-  const difficultyLabel = difficulty[0] < 0.4 ? 'Easy' : difficulty[0] < 0.7 ? 'Medium' : 'Hard';
-  const difficultyColor = difficulty[0] < 0.4 ? 'text-green-600' : difficulty[0] < 0.7 ? 'text-yellow-600' : 'text-red-600';
+  const difficultyLabel = difficulty[0] <= 0.3 ? 'Easy' : difficulty[0] <= 0.5 ? 'Medium' : 'Hard';
+  const difficultyColor = difficulty[0] <= 0.3 ? 'text-green-600' : difficulty[0] <= 0.5 ? 'text-yellow-600' : 'text-red-600';
 
   return (
     <DashboardLayout>
@@ -516,7 +525,7 @@ export default function QuestionEditor() {
                   </Button>
                 </div>
                 {!course && (
-                  <p className="text-[10px] text-destructive font-medium px-1">⚠ Chọn môn học bên phải trước khi dùng AI.</p>
+                  <p className="text-[10px] text-destructive font-medium px-1">Select a course from the right panel before using AI.</p>
                 )}
                 <p className="text-[10px] text-muted-foreground italic px-1">
                   * Generated content will overwrite current question text and options.
@@ -824,15 +833,15 @@ export default function QuestionEditor() {
               <Card className={!course ? 'border-destructive/50' : ''}>
                 <CardHeader className="pb-2 px-4 pt-4">
                   <CardTitle className="text-sm flex items-center gap-1">
-                    Môn học <span className="text-destructive">*</span>
+                    Course <span className="text-destructive">*</span>
                   </CardTitle>
                   {!course && (
-                    <CardDescription className="text-xs text-destructive">Bắt buộc để dùng AI</CardDescription>
+                    <CardDescription className="text-xs text-destructive">Required for AI generation</CardDescription>
                   )}
                 </CardHeader>
                 <CardContent className="space-y-3 px-4 pb-4">
                   <Select value={course} onValueChange={setCourse}>
-                    <SelectTrigger className="text-sm"><SelectValue placeholder="Chọn môn học..." /></SelectTrigger>
+                    <SelectTrigger className="text-sm"><SelectValue placeholder="Select a course..." /></SelectTrigger>
                     <SelectContent>
                       {courses.map(c => (
                         <SelectItem key={c.id} value={c.id} className="text-sm">{c.code} - {c.name}</SelectItem>
@@ -864,17 +873,17 @@ export default function QuestionEditor() {
               <Card>
                 <CardHeader className="pb-2 px-4 pt-4">
                   <CardTitle className="text-sm flex items-center justify-between">
-                    Độ khó
-                    <span className={`text-xs font-semibold ${difficultyColor}`}>{difficultyLabel} ({difficulty[0].toFixed(2)})</span>
+                    Difficulty
+                    <span className={`text-xs font-semibold ${difficultyColor}`}>{difficultyLabel}</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="px-4 pb-4">
                   <Slider
                     value={difficulty}
-                    onValueChange={setDifficulty}
-                    min={0}
-                    max={1}
-                    step={0.01}
+                    onValueChange={(value) => setDifficulty([snapDifficulty(value[0] ?? 0.5)])}
+                    min={0.3}
+                    max={0.7}
+                    step={0.2}
                     className="py-1"
                   />
                   <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
@@ -926,8 +935,8 @@ export default function QuestionEditor() {
               <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <CardTitle className="text-sm sm:text-base">Question Preview</CardTitle>
-                  <StatusBadge variant={difficulty[0] < 0.4 ? 'success' : difficulty[0] < 0.7 ? 'warning' : 'destructive'} className="text-[10px] sm:text-xs">
-                    {difficultyLabel} ({difficulty[0].toFixed(2)})
+                  <StatusBadge variant={difficulty[0] <= 0.3 ? 'success' : difficulty[0] <= 0.5 ? 'warning' : 'destructive'} className="text-[10px] sm:text-xs">
+                    {difficultyLabel}
                   </StatusBadge>
                   <StatusBadge variant="info" className="text-[10px] sm:text-xs">{questionType.replace('_', ' ')}</StatusBadge>
                 </div>

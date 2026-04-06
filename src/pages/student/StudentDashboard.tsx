@@ -75,10 +75,10 @@ export default function StudentDashboard() {
         }
         // simple mock fallback if backend returns nothing
         const mockCourses = [
-          { id: 'c1', code: 'HK1_2025_504074', name: 'Kiến tập Công nghiệp', faculty: 'Faculty of Information Technology', enrolledStudents: 38, totalStudents: 40, progress: 33, lastAccessed: '2 days ago' },
-          { id: 'c2', code: 'HK2_2024_502071', name: 'Phát triển ứng dụng di động', faculty: 'Faculty of Information Technology', enrolledStudents: 42, totalStudents: 45, progress: 65, lastAccessed: '3 hours ago' },
-          { id: 'c3', code: 'HK2_2024_503111', name: 'Công nghệ Java', faculty: 'Faculty of Information Technology', enrolledStudents: 35, totalStudents: 40, progress: 90, lastAccessed: '5 hours ago' },
-          { id: 'c4', code: 'HK3_2023_304105', name: 'Lịch sử Đảng Cộng sản Việt Nam', faculty: 'Faculty of Social Sciences and Humanities', enrolledStudents: 45, totalStudents: 50, progress: 75, lastAccessed: '1 day ago' }
+          { id: 'c1', code: 'HK1_2025_504074', name: 'Industry Internship', faculty: 'Faculty of Information Technology', enrolledStudents: 38, totalStudents: 40, progress: 33, lastAccessed: '2 days ago' },
+          { id: 'c2', code: 'HK2_2024_502071', name: 'Mobile Application Development', faculty: 'Faculty of Information Technology', enrolledStudents: 42, totalStudents: 45, progress: 65, lastAccessed: '3 hours ago' },
+          { id: 'c3', code: 'HK2_2024_503111', name: 'Java Technology', faculty: 'Faculty of Information Technology', enrolledStudents: 35, totalStudents: 40, progress: 90, lastAccessed: '5 hours ago' },
+          { id: 'c4', code: 'HK3_2023_304105', name: 'History of the Communist Party of Vietnam', faculty: 'Faculty of Social Sciences and Humanities', enrolledStudents: 45, totalStudents: 50, progress: 75, lastAccessed: '1 day ago' }
         ];
         const now = new Date();
         const latestSubmissionByExamId = new Map<string, any>();

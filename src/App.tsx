@@ -98,7 +98,7 @@ const App = () => {
               <Route path="/lecturer" element={<LecturerDashboard />} />
               <Route path="/lecturer/exams" element={<LecturerDashboard />} />
 
-              {/* ✅ ROUTE QUAN TRỌNG – ĐÃ FIX */}
+              {/* Key route - fixed */}
               <Route
                 path="/lecturer/exam/:id/monitor"
                 element={<ExamMonitor />}

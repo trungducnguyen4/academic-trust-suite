@@ -311,12 +311,12 @@ export function DashboardLayout({ children, notifications = [] }: DashboardLayou
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-80 p-0">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <span className="font-semibold text-sm">Thông báo</span>
+                    <span className="font-semibold text-sm">Notifications</span>
                   </div>
                   {notifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
                       <Bell className="h-8 w-8 mb-2 opacity-30" />
-                      <p className="text-sm">Không có thông báo mới</p>
+                      <p className="text-sm">No new notifications</p>
                     </div>
                   ) : (
                     <div className="max-h-[360px] overflow-y-auto p-2">

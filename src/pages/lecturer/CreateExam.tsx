@@ -135,7 +135,7 @@ const createDefaultForm = (): ExamForm => {
     sourceMethod: 'bank',
     aiGenerationMode: false,
     aiPrompt: '',
-    aiDifficulty: '0.5',
+    aiDifficulty: 'medium',
     aiReviewRequired: true,
   };
 };
@@ -155,8 +155,27 @@ const QUESTION_TYPE_OPTIONS = [
   { value: 'matching', label: 'Matching only' },
   { value: 'ordering', label: 'Ordering only' },
   { value: 'short-answer', label: 'Short Answer / Essay only' },
-  { value: 'custom', label: 'Custom Selection (Khac)' },
+  { value: 'custom', label: 'Custom Selection (Other)' },
 ] as const;
+
+const difficultyOptionToValue = (option: string): number => {
+  if (option === 'easy') return 0.3;
+  if (option === 'hard') return 0.7;
+  return 0.5;
+};
+
+const difficultyOptionToBankValue = (option: string): string => {
+  if (option === 'mixed') return 'mixed';
+  return String(difficultyOptionToValue(option));
+};
+
+const difficultyLabelFromValue = (value: unknown): 'Easy' | 'Medium' | 'Hard' => {
+  const n = Number(value);
+  if (!Number.isFinite(n)) return 'Medium';
+  if (n <= 0.3) return 'Easy';
+  if (n <= 0.5) return 'Medium';
+  return 'Hard';
+};
 
 const mapQuestionTypeToAiApi = (value: string) => {
   const map: Record<string, string> = {
@@ -296,11 +315,11 @@ export default function CreateExam() {
           showResultImmediately: form.showResultImmediately,
           sourceMethod: form.sourceMethod,
           questionType: form.questionType,
-          bankDifficulty: form.bankDifficulty,
+          bankDifficulty: difficultyOptionToBankValue(form.bankDifficulty),
           requestedQuestionCount: Number(form.questionCount || 0),
           aiGenerationMode: form.aiGenerationMode,
           aiPrompt: form.aiPrompt || undefined,
-          aiDifficulty: Number(form.aiDifficulty || 0.5),
+          aiDifficulty: difficultyOptionToValue(form.aiDifficulty),
           aiReviewRequired: form.aiReviewRequired,
         },
       });
@@ -321,9 +340,9 @@ export default function CreateExam() {
       const result = await api.aiGenerateExamQuestions({
         prompt: form.aiPrompt,
         questionCount: parseInt(form.questionCount) || 20,
-        difficulty: Math.max(0, Math.min(1, parseFloat(form.aiDifficulty || '0.5'))),
+        difficulty: difficultyOptionToValue(form.aiDifficulty),
         questionType: mapQuestionTypeToAiApi(form.questionType),
-        language: 'vi',
+        language: 'en',
         courseName: courses.find((course) => course.id === form.course)?.name,
         useCase: 'exam',
       });
@@ -382,9 +401,9 @@ export default function CreateExam() {
       const result = await api.aiGenerateExamQuestions({
         prompt,
         questionCount: parseInt(form.questionCount) || 20,
-        difficulty: Math.max(0, Math.min(1, parseFloat(form.aiDifficulty || '0.5'))),
+        difficulty: difficultyOptionToValue(form.aiDifficulty),
         questionType: mapQuestionTypeToAiApi(form.questionType),
-        language: 'vi',
+        language: 'en',
         courseName: courses.find((course) => course.id === form.course)?.name,
         useCase: 'exam',
       });
@@ -646,9 +665,9 @@ export default function CreateExam() {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="mixed">Mixed (all levels)</SelectItem>
-                            <SelectItem value="0.3">Easy (0.3)</SelectItem>
-                            <SelectItem value="0.5">Medium (0.5)</SelectItem>
-                            <SelectItem value="0.7">Hard (0.7)</SelectItem>
+                            <SelectItem value="easy">Easy</SelectItem>
+                            <SelectItem value="medium">Medium</SelectItem>
+                            <SelectItem value="hard">Hard</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -777,7 +796,7 @@ export default function CreateExam() {
                               <span className="line-clamp-2">{q.content}</span>
                               <div className="flex gap-2 mt-1">
                                 <Badge variant="outline" className="text-[10px] h-4">{q.type}</Badge>
-                                <Badge variant="outline" className="text-[10px] h-4">Diff: {q.difficulty}</Badge>
+                                <Badge variant="outline" className="text-[10px] h-4">Difficulty: {difficultyLabelFromValue(q.difficulty)}</Badge>
                               </div>
                             </div>
                           ))}
@@ -824,9 +843,9 @@ export default function CreateExam() {
                           <Select value={form.aiDifficulty} onValueChange={(v) => set('aiDifficulty', v)}>
                             <SelectTrigger><SelectValue /></SelectTrigger>
                             <SelectContent>
-                              <SelectItem value="0.3">Easy (0.3)</SelectItem>
-                              <SelectItem value="0.5">Medium (0.5)</SelectItem>
-                              <SelectItem value="0.7">Hard (0.7)</SelectItem>
+                              <SelectItem value="easy">Easy</SelectItem>
+                              <SelectItem value="medium">Medium</SelectItem>
+                              <SelectItem value="hard">Hard</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
@@ -866,7 +885,7 @@ export default function CreateExam() {
                                 <span className="line-clamp-2">{q.content}</span>
                                 <div className="flex gap-2 mt-1">
                                   <Badge variant="outline" className="text-[10px] h-4">{q.type}</Badge>
-                                  <Badge variant="outline" className="text-[10px] h-4">Diff: {q.difficulty}</Badge>
+                                  <Badge variant="outline" className="text-[10px] h-4">Difficulty: {difficultyLabelFromValue(q.difficulty)}</Badge>
                                 </div>
                               </div>
                             ))}
