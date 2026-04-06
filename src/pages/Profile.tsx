@@ -9,6 +9,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Separator } from '@/components/ui/separator';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
 import { AlertTriangle, CheckCircle2, Loader2, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 import api from '@/lib/api';
@@ -101,16 +102,11 @@ export default function Profile() {
     setConfirmPassword('');
   };
 
-  const handleDeleteProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-
+  const handleDeleteProfile = async () => {
     if (!deletePassword) {
       toast.error('Please enter your current password to delete profile');
       return;
     }
-
-    const confirmed = window.confirm('This will delete your profile and sign you out. Continue?');
-    if (!confirmed) return;
 
     setIsDeletingProfile(true);
     try {
@@ -276,7 +272,7 @@ export default function Profile() {
                 <CardDescription>Delete your profile permanently from active system access</CardDescription>
               </CardHeader>
               <CardContent>
-                <form onSubmit={handleDeleteProfile} className="space-y-4">
+                <div className="space-y-4">
                   <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
                     This action cannot be undone. Your account will be archived and you will be signed out.
                   </div>
@@ -291,11 +287,19 @@ export default function Profile() {
                       required
                     />
                   </div>
-                  <Button type="submit" variant="destructive" disabled={isDeletingProfile}>
-                    {isDeletingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                    Delete Profile
-                  </Button>
-                </form>
+                  <ConfirmActionDialog
+                    title="Delete profile"
+                    description="This will delete your profile and sign you out. Continue?"
+                    confirmText="Delete profile"
+                    destructive
+                    onConfirm={handleDeleteProfile}
+                  >
+                    <Button type="button" variant="destructive" disabled={isDeletingProfile}>
+                      {isDeletingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      Delete Profile
+                    </Button>
+                  </ConfirmActionDialog>
+                </div>
               </CardContent>
             </Card>
           </div>

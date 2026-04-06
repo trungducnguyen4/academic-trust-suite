@@ -6,12 +6,14 @@ import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AuthProvider } from "@/contexts/AuthContext";
+import { NotificationsProvider } from "@/contexts/NotificationsContext";
 
 // Pages
 import Index from "./pages/Index";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
+import NotificationsPage from "./pages/Notifications";
 
 // Student
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -62,17 +64,19 @@ const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <TooltipProvider>
-          <Toaster />
-          <Sonner />
+        <NotificationsProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Sonner />
 
-          <BrowserRouter>
-            <Routes>
+            <BrowserRouter>
+              <Routes>
               {/* Public */}
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/notifications" element={<NotificationsPage />} />
 
               {/* ================= STUDENT ================= */}
               <Route path="/student" element={<StudentDashboard />} />
@@ -90,9 +94,18 @@ const App = () => {
               <Route path="/student/join-exam" element={<JoinExam />} />
               <Route path="/student/join/:token" element={<JoinExamByLink />} />
               <Route path="/student/scan-qr" element={<ScanQRJoinExam />} />
-              <Route path="/student/offline-download" element={<OfflineExamDownload />} />
-              <Route path="/student/courses/:id" element={<StudentCourseDetail />} />
-              <Route path="/student/course/:id" element={<StudentCourseDetail />} />
+              <Route
+                path="/student/offline-download"
+                element={<OfflineExamDownload />}
+              />
+              <Route
+                path="/student/courses/:id"
+                element={<StudentCourseDetail />}
+              />
+              <Route
+                path="/student/course/:id"
+                element={<StudentCourseDetail />}
+              />
 
               {/* ================= LECTURER ================= */}
               <Route path="/lecturer" element={<LecturerDashboard />} />
@@ -103,8 +116,14 @@ const App = () => {
                 path="/lecturer/exam/:id/monitor"
                 element={<ExamMonitor />}
               />
-              <Route path="/lecturer/exam/:id/preview" element={<ExamPreview />} />
-              <Route path="/lecturer/exam/:id/results" element={<ExamResultsList />} />
+              <Route
+                path="/lecturer/exam/:id/preview"
+                element={<ExamPreview />}
+              />
+              <Route
+                path="/lecturer/exam/:id/results"
+                element={<ExamResultsList />}
+              />
 
               <Route
                 path="/lecturer/question-bank"
@@ -123,19 +142,41 @@ const App = () => {
                 element={<AdvancedExamRuleConfig />}
               />
               <Route path="/lecturer/courses" element={<CourseManagement />} />
-              <Route path="/lecturer/create-course" element={<CreateCourse />} />
+              <Route
+                path="/lecturer/create-course"
+                element={<CreateCourse />}
+              />
               <Route path="/lecturer/course/:id" element={<CourseDetail />} />
-              <Route path="/lecturer/upload-doc-ai" element={<UploadDocAIGen />} />
-              <Route path="/lecturer/generate-link" element={<GenerateExamLink />} />
+              <Route
+                path="/lecturer/upload-doc-ai"
+                element={<UploadDocAIGen />}
+              />
+              <Route
+                path="/lecturer/generate-link"
+                element={<GenerateExamLink />}
+              />
               <Route path="/lecturer/exams/create" element={<CreateExam />} />
               <Route path="/lecturer/analytics" element={<ExamAnalytics />} />
 
               {/* ================= ADMIN ================= */}
               <Route path="/admin" element={<AdminDashboard />} />
-              <Route path="/admin/courses" element={<AdminCourseManagement />} />
-              <Route path="/admin/question-bank" element={<QuestionBankManagement />} />
-              <Route path="/admin/question-editor" element={<QuestionEditor />} />
-              <Route path="/admin/question-history" element={<QuestionHistoryAnalysis />} />
+              <Route
+                path="/admin/courses"
+                element={<AdminCourseManagement />}
+              />
+              <Route path="/admin/course/:id" element={<CourseDetail />} />
+              <Route
+                path="/admin/question-bank"
+                element={<QuestionBankManagement />}
+              />
+              <Route
+                path="/admin/question-editor"
+                element={<QuestionEditor />}
+              />
+              <Route
+                path="/admin/question-history"
+                element={<QuestionHistoryAnalysis />}
+              />
               <Route path="/admin/users" element={<UserRoleManagement />} />
               <Route path="/admin/integrity" element={<IntegrityOverview />} />
               <Route path="/admin/settings" element={<AdminDashboard />} />
@@ -148,15 +189,22 @@ const App = () => {
                 path="/admin/transparency"
                 element={<TransparencyDashboard />}
               />
-              <Route path="/admin/user-management" element={<UserRoleManagement />} />
-              <Route path="/admin/system-policy" element={<SystemPolicyConfig />} />
+              <Route
+                path="/admin/user-management"
+                element={<UserRoleManagement />}
+              />
+              <Route
+                path="/admin/system-policy"
+                element={<SystemPolicyConfig />}
+              />
               <Route path="/admin/audit-logs" element={<AuditLogViewer />} />
 
               {/* Catch all */}
               <Route path="*" element={<NotFound />} />
-            </Routes>
-          </BrowserRouter>
-        </TooltipProvider>
+              </Routes>
+            </BrowserRouter>
+          </TooltipProvider>
+        </NotificationsProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

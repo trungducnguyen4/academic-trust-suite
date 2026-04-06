@@ -27,29 +27,29 @@ export class EnrollmentsController {
   @Post()
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  create(@Body() createEnrollmentDto: CreateEnrollmentDto) {
-    return this.enrollmentsService.create(createEnrollmentDto);
+  create(@Body() createEnrollmentDto: CreateEnrollmentDto, @Request() req) {
+    return this.enrollmentsService.create(createEnrollmentDto, req.user);
   }
 
   @Post('bulk')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  bulkEnroll(@Body() bulkEnrollmentDto: BulkEnrollmentDto) {
-    return this.enrollmentsService.bulkEnroll(bulkEnrollmentDto);
+  bulkEnroll(@Body() bulkEnrollmentDto: BulkEnrollmentDto, @Request() req) {
+    return this.enrollmentsService.bulkEnroll(bulkEnrollmentDto, req.user);
   }
 
   @Post('bulk-by-emails')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  bulkEnrollByEmails(@Body() dto: BulkEnrollByEmailsDto) {
-    return this.enrollmentsService.bulkEnrollByEmails(dto);
+  bulkEnrollByEmails(@Body() dto: BulkEnrollByEmailsDto, @Request() req) {
+    return this.enrollmentsService.bulkEnrollByEmails(dto, req.user);
   }
 
   @Get('course/:courseId')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  findByCourse(@Param('courseId') courseId: string) {
-    return this.enrollmentsService.findByCourse(courseId);
+  findByCourse(@Param('courseId') courseId: string, @Request() req) {
+    return this.enrollmentsService.findByCourse(courseId, req.user);
   }
 
   @Get('student/:studentId')
@@ -72,15 +72,16 @@ export class EnrollmentsController {
   updateStatus(
     @Param('id') id: string,
     @Body() updateStatusDto: UpdateEnrollmentStatusDto,
+    @Request() req,
   ) {
-    return this.enrollmentsService.updateStatus(id, updateStatusDto);
+    return this.enrollmentsService.updateStatus(id, updateStatusDto, req.user);
   }
 
   @Delete(':id')
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  remove(@Param('id') id: string) {
-    return this.enrollmentsService.remove(id);
+  remove(@Param('id') id: string, @Request() req) {
+    return this.enrollmentsService.remove(id, req.user);
   }
 
   @Delete('course/:courseId/student/:studentId')
@@ -89,7 +90,8 @@ export class EnrollmentsController {
   removeByStudentAndCourse(
     @Param('courseId') courseId: string,
     @Param('studentId') studentId: string,
+    @Request() req,
   ) {
-    return this.enrollmentsService.removeByStudentAndCourse(studentId, courseId);
+    return this.enrollmentsService.removeByStudentAndCourse(studentId, courseId, req.user);
   }
 }

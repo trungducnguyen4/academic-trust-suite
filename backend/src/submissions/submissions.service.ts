@@ -2,10 +2,14 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import { PrismaService } from '../prisma/prisma.service';
 import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto } from './dto/submission.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class SubmissionsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async startExam(startExamDto: StartExamDto, studentId: string) {
     const exam = await this.prisma.exam.findUnique({
@@ -81,7 +85,7 @@ export class SubmissionsService {
     }
 
     // Create new submission
-    return this.prisma.examSubmission.create({
+    const startedSubmission = await this.prisma.examSubmission.create({
       data: {
         examId: startExamDto.examId,
         studentId,
@@ -98,6 +102,22 @@ export class SubmissionsService {
         },
       },
     });
+
+    try {
+      await this.notificationsService.create({
+        recipientId: studentId,
+        kind: 'EXAM_SESSION_STARTED',
+        title: 'Exam session started',
+        message: `You started ${startedSubmission.exam.title}.`,
+        link: `/student/exam-ready?examId=${startedSubmission.exam.id}`,
+        priority: 'low',
+        metadata: { submissionId: startedSubmission.id, examId: startedSubmission.exam.id },
+      });
+    } catch {
+      // Notification failures must not block exam start.
+    }
+
+    return startedSubmission;
   }
 
   async submitExam(submissionId: string, submitExamDto: SubmitExamDto, studentId: string) {
@@ -148,7 +168,7 @@ export class SubmissionsService {
     }
 
     // Use transaction to ensure atomicity of answer creation + submission update + logs
-    return this.prisma.$transaction(async (tx) => {
+    const updatedSubmission = await this.prisma.$transaction(async (tx) => {
       // Create submission answers
       let totalScore = 0;
       const autoGradedTypes = ['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE'];
@@ -253,6 +273,98 @@ export class SubmissionsService {
       },
     });
     }); // end $transaction
+
+    try {
+      await this.notificationsService.create({
+        recipientId: studentId,
+        kind: 'SUBMISSION_RECEIVED',
+        title: 'Submission received',
+        message: `Your submission for ${updatedSubmission.exam.title} has been received.`,
+        link: '/student/results',
+        priority: 'normal',
+        metadata: {
+          submissionId: updatedSubmission.id,
+          examId: updatedSubmission.exam.id,
+          status: updatedSubmission.status,
+          score: updatedSubmission.score,
+        },
+      });
+
+      const submissionMeta = await this.prisma.examSubmission.findUnique({
+        where: { id: submissionId },
+        select: {
+          student: { select: { fullName: true } },
+          exam: {
+            select: {
+              id: true,
+              title: true,
+              creatorId: true,
+            },
+          },
+          proctoring: {
+            select: {
+              tabSwitchCount: true,
+              mouseAnomalies: true,
+            },
+          },
+        },
+      });
+
+      if (submissionMeta?.exam.creatorId) {
+        await this.notificationsService.create({
+          recipientId: submissionMeta.exam.creatorId,
+          kind: 'SUBMISSION_RECEIVED',
+          title: 'New submission received',
+          message: `${submissionMeta.student.fullName} submitted ${submissionMeta.exam.title}.`,
+          link: `/lecturer/exam/${submissionMeta.exam.id}/results`,
+          priority: 'normal',
+          metadata: {
+            submissionId,
+            examId: submissionMeta.exam.id,
+            studentName: submissionMeta.student.fullName,
+          },
+        });
+
+        const tabSwitchCount = Number(submissionMeta.proctoring?.tabSwitchCount || 0);
+        const mouseAnomalies = Number(submissionMeta.proctoring?.mouseAnomalies || 0);
+        if (tabSwitchCount >= 5 || mouseAnomalies >= 8) {
+          await this.notificationsService.createMany([
+            {
+              recipientId: submissionMeta.exam.creatorId,
+              kind: 'INTEGRITY_RISK_DETECTED',
+              title: 'Integrity risk detected',
+              message: `${submissionMeta.student.fullName} has suspicious behavior in ${submissionMeta.exam.title}.`,
+              link: `/lecturer/exam/${submissionMeta.exam.id}/monitor`,
+              priority: 'high',
+              metadata: {
+                submissionId,
+                examId: submissionMeta.exam.id,
+                tabSwitchCount,
+                mouseAnomalies,
+              },
+            },
+          ]);
+
+          await this.notificationsService.createForRole('ADMIN', {
+            kind: 'INTEGRITY_RISK_DETECTED',
+            title: 'Integrity risk flagged',
+            message: `Potential integrity risk in exam ${submissionMeta.exam.title}.`,
+            link: '/admin/integrity',
+            priority: 'high',
+            metadata: {
+              submissionId,
+              examId: submissionMeta.exam.id,
+              tabSwitchCount,
+              mouseAnomalies,
+            },
+          });
+        }
+      }
+    } catch {
+      // Notification failures must not block submission flow.
+    }
+
+    return updatedSubmission;
   }
 
   private compareAnswers(submitted: any, correct: any): boolean {
@@ -285,7 +397,7 @@ export class SubmissionsService {
 
   async finalizeGrading(submissionId: string) {
     // Use transaction to ensure score calculation and status update are atomic
-    return this.prisma.$transaction(async (tx) => {
+    const gradedSubmission = await this.prisma.$transaction(async (tx) => {
       const submission = await tx.examSubmission.findUnique({
         where: { id: submissionId },
         include: {
@@ -311,6 +423,51 @@ export class SubmissionsService {
         },
       });
     });
+
+    try {
+      const result = await this.prisma.examSubmission.findUnique({
+        where: { id: submissionId },
+        select: {
+          studentId: true,
+          score: true,
+          exam: {
+            select: {
+              id: true,
+              title: true,
+              totalPoints: true,
+              creatorId: true,
+            },
+          },
+        },
+      });
+
+      if (result) {
+        await this.notificationsService.createMany([
+          {
+            recipientId: result.studentId,
+            kind: 'SUBMISSION_GRADED',
+            title: 'Grade available',
+            message: `Your score for ${result.exam.title} is ${result.score ?? 0}/${result.exam.totalPoints ?? 0}.`,
+            link: '/student/results',
+            priority: 'high',
+            metadata: { submissionId, examId: result.exam.id, score: result.score },
+          },
+          {
+            recipientId: result.exam.creatorId,
+            kind: 'GRADING_COMPLETED',
+            title: 'Grading completed',
+            message: `Grading is finalized for ${result.exam.title}.`,
+            link: `/lecturer/exam/${result.exam.id}/results`,
+            priority: 'normal',
+            metadata: { submissionId, examId: result.exam.id },
+          },
+        ]);
+      }
+    } catch {
+      // Notification failures must not block finalization.
+    }
+
+    return gradedSubmission;
   }
 
   async findByExam(examId: string, pagination?: PaginationDto) {
@@ -720,9 +877,49 @@ export class SubmissionsService {
       throw new NotFoundException('Submission not found');
     }
 
-    return this.prisma.examSubmission.update({
+    const updated = await this.prisma.examSubmission.update({
       where: { id },
       data: { status: updateDto.status },
     });
+
+    try {
+      const context = await this.prisma.examSubmission.findUnique({
+        where: { id },
+        select: {
+          studentId: true,
+          exam: { select: { id: true, title: true, creatorId: true } },
+        },
+      });
+
+      if (context) {
+        const recipients = Array.from(new Set([context.studentId, context.exam.creatorId]));
+        await this.notificationsService.createForUsers(recipients, {
+          kind: 'SUBMISSION_STATUS_UPDATED',
+          title: 'Submission status updated',
+          message: `Submission status for ${context.exam.title} changed to ${updateDto.status}.`,
+          link:
+            updateDto.status === 'FLAGGED'
+              ? `/lecturer/exam/${context.exam.id}/monitor`
+              : `/lecturer/exam/${context.exam.id}/results`,
+          priority: updateDto.status === 'FLAGGED' ? 'high' : 'normal',
+          metadata: { submissionId: id, examId: context.exam.id, status: updateDto.status },
+        });
+
+        if (updateDto.status === 'FLAGGED') {
+          await this.notificationsService.createForRole('ADMIN', {
+            kind: 'SUBMISSION_FLAGGED',
+            title: 'Submission flagged',
+            message: `A submission in ${context.exam.title} was flagged for review.`,
+            link: '/admin/integrity',
+            priority: 'high',
+            metadata: { submissionId: id, examId: context.exam.id },
+          });
+        }
+      }
+    } catch {
+      // Notification failures must not block status update.
+    }
+
+    return updated;
   }
 }

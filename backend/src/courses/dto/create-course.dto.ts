@@ -2,9 +2,6 @@ import { IsString, IsOptional, IsInt, Min, Max, IsUUID } from 'class-validator';
 
 export class CreateCourseDto {
   @IsString()
-  code: string;
-
-  @IsString()
   name: string;
 
   @IsOptional()

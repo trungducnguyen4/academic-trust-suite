@@ -4,10 +4,14 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
 import * as bcrypt from 'bcrypt';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class UsersService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
 
   async create(createUserDto: CreateUserDto) {
     const existingUser = await this.prisma.user.findUnique({
@@ -20,7 +24,7 @@ export class UsersService {
 
     const hashedPassword = await bcrypt.hash(createUserDto.password, 10);
 
-    return this.prisma.user.create({
+    const createdUser = await this.prisma.user.create({
       data: {
         ...createUserDto,
         password: hashedPassword,
@@ -38,6 +42,33 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    try {
+      await this.notificationsService.createMany([
+        {
+          recipientId: createdUser.id,
+          kind: 'ACCOUNT_CREATED',
+          title: 'Account created',
+          message: 'Your account is ready. Please review your profile and start using the system.',
+          link: '/profile',
+          priority: 'normal',
+          metadata: { userId: createdUser.id, role: createdUser.role },
+        },
+      ]);
+
+      await this.notificationsService.createForRole('ADMIN', {
+        kind: 'USER_CREATED',
+        title: 'New user created',
+        message: `${createdUser.fullName} (${createdUser.role}) has been created.`,
+        link: '/admin/users',
+        priority: 'low',
+        metadata: { userId: createdUser.id, role: createdUser.role },
+      });
+    } catch {
+      // Notification failures must not block user creation.
+    }
+
+    return createdUser;
   }
 
   async findAll(role?: string, status?: string, search?: string, pagination?: PaginationDto) {
@@ -145,7 +176,7 @@ export class UsersService {
       data.password = await bcrypt.hash(updateUserDto.password, 10);
     }
 
-    return this.prisma.user.update({
+    const updatedUser = await this.prisma.user.update({
       where: { id },
       data,
       select: {
@@ -160,6 +191,37 @@ export class UsersService {
         updatedAt: true,
       },
     });
+
+    try {
+      await this.notificationsService.create({
+        recipientId: updatedUser.id,
+        kind: 'ACCOUNT_UPDATED',
+        title: 'Account updated',
+        message: 'Your account profile or access settings were updated.',
+        link: '/profile',
+        priority: 'normal',
+        metadata: {
+          userId: updatedUser.id,
+          roleChanged: user.role !== updatedUser.role,
+          statusChanged: user.status !== updatedUser.status,
+        },
+      });
+
+      if (user.role !== updatedUser.role || user.status !== updatedUser.status) {
+        await this.notificationsService.createForRole('ADMIN', {
+          kind: 'USER_ACCESS_UPDATED',
+          title: 'User role/status changed',
+          message: `${updatedUser.fullName}: ${user.role} -> ${updatedUser.role}, status ${user.status} -> ${updatedUser.status}.`,
+          link: '/admin/users',
+          priority: 'high',
+          metadata: { userId: updatedUser.id },
+        });
+      }
+    } catch {
+      // Notification failures must not block user update.
+    }
+
+    return updatedUser;
   }
 
   async remove(id: string) {
@@ -173,6 +235,19 @@ export class UsersService {
       where: { id },
       data: { status: 'deleted' },
     });
+
+    try {
+      await this.notificationsService.createForRole('ADMIN', {
+        kind: 'USER_ARCHIVED',
+        title: 'User archived',
+        message: `${user.fullName} has been archived.`,
+        link: '/admin/users',
+        priority: 'high',
+        metadata: { userId: user.id },
+      });
+    } catch {
+      // Notification failures must not block user archival.
+    }
 
     return { message: 'User archived successfully' };
   }

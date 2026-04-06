@@ -34,6 +34,7 @@ import {
   Shield,
   Users,
 } from 'lucide-react';
+import { toast } from 'sonner';
 import api, { unwrapPaginatedData } from '@/lib/api';
 
 interface ExamItem {
@@ -181,7 +182,7 @@ export default function GenerateExamLink() {
       setPassword('');
       setNote('');
     } catch (error: any) {
-      alert(error?.message || 'Failed to generate exam link');
+      toast.error(error?.message || 'Failed to generate exam link');
     } finally {
       setCreating(false);
     }
@@ -204,7 +205,7 @@ export default function GenerateExamLink() {
         setUsage([]);
       }
     } catch (error: any) {
-      alert(error?.message || 'Failed to revoke link');
+      toast.error(error?.message || 'Failed to revoke link');
     } finally {
       setRevokingId(null);
     }

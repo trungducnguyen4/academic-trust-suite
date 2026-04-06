@@ -49,6 +49,8 @@ import {
 } from 'lucide-react';
 import api, { unwrapPaginatedData } from '@/lib/api';
 import { toast } from 'sonner';
+import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Course {
   id: string;
@@ -94,8 +96,24 @@ interface EnrollResult {
   reason?: string;
 }
 
+const toAsciiUpper = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .toUpperCase();
+
+const buildToken = (value: string, maxLength: number, fallback: string) => {
+  const compact = toAsciiUpper(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .join('');
+  return (compact.slice(0, maxLength) || fallback).toUpperCase();
+};
+
 export default function CreateCourse() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -108,10 +126,10 @@ export default function CreateCourse() {
   // Multi-step wizard
   const [step, setStep] = useState<1 | 2>(1);
   const [createdCourseId, setCreatedCourseId] = useState<string | null>(null);
+  const [createdCourseCode, setCreatedCourseCode] = useState('');
 
   // Form state
   const [newCourse, setNewCourse] = useState({
-    code: '',
     name: '',
     semester: '2025-2026/2',
     description: '',
@@ -125,6 +143,8 @@ export default function CreateCourse() {
     description: '',
     credits: '',
   });
+
+  const previewCourseCode = `${buildToken(newCourse.name, 6, 'COURSE')}-${buildToken(user?.fullName || user?.email || '', 4, 'USER')}-XX`;
 
   // Student enrollment state
   const [enrollTab, setEnrollTab] = useState<'manual' | 'import'>('manual');
@@ -258,7 +278,6 @@ export default function CreateCourse() {
     setIsCreating(true);
     try {
       const created = await api.createCourse({
-        code: newCourse.code,
         name: newCourse.name,
         description: newCourse.description || undefined,
         credits: newCourse.credits ? parseInt(newCourse.credits) : undefined,
@@ -279,6 +298,7 @@ export default function CreateCourse() {
       };
       setCourses(prev => [mapped, ...prev]);
       setCreatedCourseId(created.id);
+      setCreatedCourseCode(created.code);
       setStep(2);
       toast.success('Course created successfully');
     } catch (err) {
@@ -307,7 +327,6 @@ export default function CreateCourse() {
     setIsUpdating(true);
     try {
       const updated = await api.updateCourse(editingCourseId, {
-        code: editCourse.code,
         name: editCourse.name,
         semester: editCourse.semester || undefined,
         description: editCourse.description || undefined,
@@ -389,7 +408,8 @@ export default function CreateCourse() {
     setTimeout(() => {
       setStep(1);
       setCreatedCourseId(null);
-      setNewCourse({ code: '', name: '', semester: '2025-2026/2', description: '', credits: '' });
+    setCreatedCourseCode('');
+    setNewCourse({ name: '', semester: '2025-2026/2', description: '', credits: '' });
       setSelectedStudents([]);
       setSearchResults([]);
       setStudentSearch('');
@@ -403,8 +423,6 @@ export default function CreateCourse() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this course? This action cannot be undone.')) return;
-
     try {
       await api.deleteCourse(id);
       setCourses(prev => prev.filter(c => c.id !== id));
@@ -493,12 +511,12 @@ export default function CreateCourse() {
                   <div className="space-y-5 py-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="courseCode">Course Code *</Label>
+                        <Label htmlFor="courseCode">Course Code (auto-generated)</Label>
                         <Input
                           id="courseCode"
-                          placeholder="e.g., CS301"
-                          value={newCourse.code}
-                          onChange={(e) => setNewCourse({ ...newCourse, code: e.target.value })}
+                          value={previewCourseCode}
+                          className="font-mono"
+                          disabled
                         />
                       </div>
                       <div className="space-y-2">
@@ -552,7 +570,7 @@ export default function CreateCourse() {
                   </div>
                   <DialogFooter className="gap-2">
                     <Button variant="outline" onClick={handleCloseDialog}>Cancel</Button>
-                    <Button onClick={handleCreate} disabled={isCreating || !newCourse.code || !newCourse.name} className="gap-2">
+                    <Button onClick={handleCreate} disabled={isCreating || !newCourse.name} className="gap-2">
                       {isCreating ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
                       Create & Add Students
                     </Button>
@@ -569,7 +587,7 @@ export default function CreateCourse() {
                       Course Created — Add Students
                     </DialogTitle>
                     <DialogDescription>
-                      <span className="font-semibold text-foreground">{newCourse.code}</span> — {newCourse.name} has been created. Now add students to this course.
+                      <span className="font-semibold text-foreground">{createdCourseCode || previewCourseCode}</span> — {newCourse.name} has been created. Now add students to this course.
                     </DialogDescription>
                   </DialogHeader>
 
@@ -815,11 +833,12 @@ export default function CreateCourse() {
               <div className="space-y-4 py-2">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="edit-code">Course Code *</Label>
+                    <Label htmlFor="edit-code">Course Code (readonly)</Label>
                     <Input
                       id="edit-code"
                       value={editCourse.code}
-                      onChange={(e) => setEditCourse((prev) => ({ ...prev, code: e.target.value }))}
+                      className="font-mono"
+                      disabled
                     />
                   </div>
                   <div className="space-y-2">
@@ -868,7 +887,7 @@ export default function CreateCourse() {
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
-                <Button onClick={handleUpdate} disabled={isUpdating || !editCourse.code || !editCourse.name}>
+                <Button onClick={handleUpdate} disabled={isUpdating || !editCourse.name}>
                   {isUpdating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save Changes'}
                 </Button>
               </DialogFooter>
@@ -977,14 +996,21 @@ export default function CreateCourse() {
                         <Button variant="ghost" size="sm" onClick={() => openEditDialog(course)}>
                           <Edit2 className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-destructive hover:text-destructive"
-                          onClick={() => handleDelete(course.id)}
+                        <ConfirmActionDialog
+                          title="Delete course"
+                          description="This action cannot be undone. The course will be deleted if no dependent data blocks deletion."
+                          confirmText="Delete"
+                          destructive
+                          onConfirm={() => handleDelete(course.id)}
                         >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </ConfirmActionDialog>
                       </div>
                     </TableCell>
                   </TableRow>

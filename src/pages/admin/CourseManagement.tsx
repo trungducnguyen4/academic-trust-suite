@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import {
   Card,
@@ -36,9 +37,11 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { Loader2, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
 import api, { unwrapPaginatedData } from '@/lib/api';
 import { toast } from 'sonner';
+import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface Lecturer {
   id: string;
@@ -63,7 +66,6 @@ interface CourseItem {
 }
 
 interface CourseForm {
-  code: string;
   name: string;
   semester: string;
   description: string;
@@ -72,7 +74,6 @@ interface CourseForm {
 }
 
 const defaultForm: CourseForm = {
-  code: '',
   name: '',
   semester: '',
   description: '',
@@ -80,7 +81,24 @@ const defaultForm: CourseForm = {
   lecturerId: 'unassigned',
 };
 
+const toAsciiUpper = (value: string) =>
+  value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9\s]/g, ' ')
+    .toUpperCase();
+
+const buildToken = (value: string, maxLength: number, fallback: string) => {
+  const compact = toAsciiUpper(value)
+    .split(/\s+/)
+    .filter(Boolean)
+    .join('');
+  return (compact.slice(0, maxLength) || fallback).toUpperCase();
+};
+
 export default function AdminCourseManagement() {
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<CourseItem[]>([]);
@@ -131,13 +149,18 @@ export default function AdminCourseManagement() {
   }, [courses, search]);
 
   const toPayload = (form: CourseForm, allowUnassign = false) => ({
-    code: form.code.trim(),
     name: form.name.trim(),
     semester: form.semester.trim() || undefined,
     description: form.description.trim() || undefined,
     credits: form.credits ? Number(form.credits) : undefined,
     lecturerId: form.lecturerId === 'unassigned' ? (allowUnassign ? null : undefined) : form.lecturerId,
   });
+
+  const getPreviewCode = (courseName: string) => {
+    const courseToken = buildToken(courseName, 6, 'COURSE');
+    const creatorToken = buildToken(user?.fullName || user?.email || '', 4, 'USER');
+    return `${courseToken}-${creatorToken}-XX`;
+  };
 
   const handleCreate = async () => {
     setSaving(true);
@@ -158,7 +181,6 @@ export default function AdminCourseManagement() {
   const openEditDialog = (course: CourseItem) => {
     setEditingCourseId(course.id);
     setEditForm({
-      code: course.code,
       name: course.name,
       semester: course.semester || '',
       description: course.description || '',
@@ -187,8 +209,6 @@ export default function AdminCourseManagement() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this course? This action cannot be undone.')) return;
-
     try {
       await api.deleteCourse(id);
       setCourses((prev) => prev.filter((item) => item.id !== id));
@@ -213,12 +233,12 @@ export default function AdminCourseManagement() {
     <div className="space-y-4 py-2">
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="course-code">Course Code *</Label>
+          <Label htmlFor="course-code">Course Code (auto-generated)</Label>
           <Input
             id="course-code"
-            value={form.code}
-            onChange={(e) => onChange({ code: e.target.value })}
-            placeholder="e.g. CS301"
+            value={getPreviewCode(form.name)}
+            disabled
+            className="font-mono"
           />
         </div>
         <div className="space-y-2">
@@ -309,7 +329,7 @@ export default function AdminCourseManagement() {
 
               <DialogFooter>
                 <Button variant="outline" onClick={() => setShowCreateDialog(false)}>Cancel</Button>
-                <Button onClick={handleCreate} disabled={saving || !createForm.code.trim() || !createForm.name.trim()}>
+                <Button onClick={handleCreate} disabled={saving || !createForm.name.trim()}>
                   {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Create'}
                 </Button>
               </DialogFooter>
@@ -374,17 +394,27 @@ export default function AdminCourseManagement() {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="inline-flex items-center gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => navigate(`/admin/course/${course.id}`)}>
+                            <Users className="h-4 w-4" />
+                          </Button>
                           <Button variant="ghost" size="sm" onClick={() => openEditDialog(course)}>
                             <Pencil className="h-4 w-4" />
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="text-destructive hover:text-destructive"
-                            onClick={() => handleDelete(course.id)}
+                          <ConfirmActionDialog
+                            title="Delete course"
+                            description="This action cannot be undone. The course will be removed if no dependent data blocks deletion."
+                            confirmText="Delete"
+                            destructive
+                            onConfirm={() => handleDelete(course.id)}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </ConfirmActionDialog>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -413,7 +443,7 @@ export default function AdminCourseManagement() {
 
           <DialogFooter>
             <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
-            <Button onClick={handleUpdate} disabled={saving || !editForm.code.trim() || !editForm.name.trim()}>
+            <Button onClick={handleUpdate} disabled={saving || !editForm.name.trim()}>
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Save'}
             </Button>
           </DialogFooter>

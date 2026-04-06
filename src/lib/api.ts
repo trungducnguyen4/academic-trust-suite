@@ -188,11 +188,11 @@ class ApiClient {
   }
 
   async createCourse(data: {
-    code: string;
     name: string;
     description?: string;
     credits?: number;
     semester?: string;
+    lecturerId?: string;
   }) {
     return this.request<any>('/courses', {
       method: 'POST',
@@ -473,6 +473,38 @@ class ApiClient {
     return this.request<any>(`/submissions/${submissionId}/status`, {
       method: 'PATCH',
       body: { status },
+    });
+  }
+
+  // Notifications endpoints
+  async getMyNotifications(params?: { page?: number; limit?: number; unreadOnly?: boolean }) {
+    const queryParams = new URLSearchParams();
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+    if (params?.unreadOnly !== undefined) queryParams.append('unreadOnly', String(params.unreadOnly));
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return this.request<any>(`/notifications/my${query}`);
+  }
+
+  async getUnreadNotificationCount() {
+    return this.request<{ count: number }>('/notifications/unread-count');
+  }
+
+  async markNotificationAsRead(id: string) {
+    return this.request<any>(`/notifications/${id}/read`, {
+      method: 'PATCH',
+    });
+  }
+
+  async markAllNotificationsAsRead() {
+    return this.request<{ message: string }>('/notifications/read-all', {
+      method: 'PATCH',
+    });
+  }
+
+  async deleteNotification(id: string) {
+    return this.request<{ message: string }>(`/notifications/${id}`, {
+      method: 'DELETE',
     });
   }
 
