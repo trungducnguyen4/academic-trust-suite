@@ -25,38 +25,56 @@ export interface CreateNotificationInput {
 export class NotificationsService {
   constructor(private readonly prisma: PrismaService) {}
 
+  private isNotificationTableMissing(error: unknown) {
+    const knownError = error as { code?: string; meta?: { table?: string } };
+    return (
+      knownError?.code === "P2021" &&
+      String(knownError?.meta?.table || "").toLowerCase().includes("notification")
+    );
+  }
+
   async create(input: CreateNotificationInput) {
-    return this.prisma.notification.create({
-      data: {
-        recipientId: input.recipientId,
-        kind: input.kind,
-        title: input.title,
-        message: input.message,
-        link: input.link ?? null,
-        priority: input.priority ?? "normal",
-        metadata: input.metadata ?? undefined,
-      },
-    });
+    try {
+      return await this.prisma.notification.create({
+        data: {
+          recipientId: input.recipientId,
+          kind: input.kind,
+          title: input.title,
+          message: input.message,
+          link: input.link ?? null,
+          priority: input.priority ?? "normal",
+          metadata: input.metadata ?? undefined,
+        },
+      });
+    } catch (error) {
+      if (this.isNotificationTableMissing(error)) return null;
+      throw error;
+    }
   }
 
   async createMany(inputs: CreateNotificationInput[]) {
     if (inputs.length === 0) return [];
 
-    return this.prisma.$transaction(
-      inputs.map((input) =>
-        this.prisma.notification.create({
-          data: {
-            recipientId: input.recipientId,
-            kind: input.kind,
-            title: input.title,
-            message: input.message,
-            link: input.link ?? null,
-            priority: input.priority ?? "normal",
-            metadata: input.metadata ?? undefined,
-          },
-        }),
-      ),
-    );
+    try {
+      return await this.prisma.$transaction(
+        inputs.map((input) =>
+          this.prisma.notification.create({
+            data: {
+              recipientId: input.recipientId,
+              kind: input.kind,
+              title: input.title,
+              message: input.message,
+              link: input.link ?? null,
+              priority: input.priority ?? "normal",
+              metadata: input.metadata ?? undefined,
+            },
+          }),
+        ),
+      );
+    } catch (error) {
+      if (this.isNotificationTableMissing(error)) return [];
+      throw error;
+    }
   }
 
   async createForRole(
@@ -104,32 +122,54 @@ export class NotificationsService {
       ...(unreadOnly ? { isRead: false } : {}),
     };
 
-    const [notifications, total] = await Promise.all([
-      this.prisma.notification.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-      }),
-      this.prisma.notification.count({ where }),
-    ]);
+    let notifications: any[] = [];
+    let total = 0;
+
+    try {
+      [notifications, total] = await Promise.all([
+        this.prisma.notification.findMany({
+          where,
+          orderBy: { createdAt: "desc" },
+          skip: (page - 1) * limit,
+          take: limit,
+        }),
+        this.prisma.notification.count({ where }),
+      ]);
+    } catch (error) {
+      if (!this.isNotificationTableMissing(error)) {
+        throw error;
+      }
+    }
 
     return buildPaginatedResult(notifications, total, page, limit);
   }
 
   async getUnreadCount(userId: string) {
-    return this.prisma.notification.count({
-      where: {
-        recipientId: userId,
-        isRead: false,
-      },
-    });
+    try {
+      return await this.prisma.notification.count({
+        where: {
+          recipientId: userId,
+          isRead: false,
+        },
+      });
+    } catch (error) {
+      if (this.isNotificationTableMissing(error)) return 0;
+      throw error;
+    }
   }
 
   async markAsRead(id: string, userId: string) {
-    const notification = await this.prisma.notification.findUnique({
-      where: { id },
-    });
+    let notification: any = null;
+    try {
+      notification = await this.prisma.notification.findUnique({
+        where: { id },
+      });
+    } catch (error) {
+      if (this.isNotificationTableMissing(error)) {
+        return { message: "Notification not available" };
+      }
+      throw error;
+    }
 
     if (!notification) {
       throw new NotFoundException("Notification not found");
@@ -149,24 +189,38 @@ export class NotificationsService {
   }
 
   async markAllAsRead(userId: string) {
-    await this.prisma.notification.updateMany({
-      where: {
-        recipientId: userId,
-        isRead: false,
-      },
-      data: {
-        isRead: true,
-        readAt: new Date(),
-      },
-    });
+    try {
+      await this.prisma.notification.updateMany({
+        where: {
+          recipientId: userId,
+          isRead: false,
+        },
+        data: {
+          isRead: true,
+          readAt: new Date(),
+        },
+      });
+    } catch (error) {
+      if (!this.isNotificationTableMissing(error)) {
+        throw error;
+      }
+    }
 
     return { message: "All notifications marked as read" };
   }
 
   async remove(id: string, userId: string) {
-    const notification = await this.prisma.notification.findUnique({
-      where: { id },
-    });
+    let notification: any = null;
+    try {
+      notification = await this.prisma.notification.findUnique({
+        where: { id },
+      });
+    } catch (error) {
+      if (this.isNotificationTableMissing(error)) {
+        return { message: "Notification not available" };
+      }
+      throw error;
+    }
 
     if (!notification) {
       throw new NotFoundException("Notification not found");
@@ -176,7 +230,13 @@ export class NotificationsService {
       throw new ForbiddenException("Not authorized");
     }
 
-    await this.prisma.notification.delete({ where: { id } });
+    try {
+      await this.prisma.notification.delete({ where: { id } });
+    } catch (error) {
+      if (!this.isNotificationTableMissing(error)) {
+        throw error;
+      }
+    }
 
     return { message: "Notification deleted successfully" };
   }

@@ -62,7 +62,7 @@ export class EnrollmentsService {
     // Check if already enrolled
     const existingEnrollment = await this.prisma.enrollment.findUnique({
       where: {
-        studentId_courseId: {
+        courseId_studentId: {
           studentId: createEnrollmentDto.studentId,
           courseId: createEnrollmentDto.courseId,
         },
@@ -164,7 +164,7 @@ export class EnrollmentsService {
 
         const existingEnrollment = await this.prisma.enrollment.findUnique({
           where: {
-            studentId_courseId: { studentId, courseId },
+            courseId_studentId: { studentId, courseId },
           },
         });
 
@@ -253,7 +253,7 @@ export class EnrollmentsService {
         if (student.role !== 'STUDENT') { results.failed.push({ email, reason: 'User is not a student (role: ' + student.role + ')' }); continue; }
 
         const existing = await this.prisma.enrollment.findUnique({
-          where: { studentId_courseId: { studentId: student.id, courseId } },
+          where: { courseId_studentId: { studentId: student.id, courseId } },
         });
         if (existing) { results.failed.push({ email, reason: 'Already enrolled' }); continue; }
 
@@ -460,7 +460,7 @@ export class EnrollmentsService {
   async removeByStudentAndCourse(studentId: string, courseId: string, user: { id: string; role: 'ADMIN' | 'LECTURER' | 'STUDENT' }) {
     const enrollment = await this.prisma.enrollment.findUnique({
       where: {
-        studentId_courseId: { studentId, courseId },
+        courseId_studentId: { studentId, courseId },
       },
       include: {
         course: {

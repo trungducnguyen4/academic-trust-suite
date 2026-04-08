@@ -361,11 +361,11 @@ export default function AdminCourseManagement() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Code</TableHead>
-                  <TableHead>Name</TableHead>
+                  <TableHead>Course Name</TableHead>
                   <TableHead>Semester</TableHead>
                   <TableHead>Lecturer</TableHead>
-                  <TableHead className="text-center">Students</TableHead>
-                  <TableHead className="text-center">Exams</TableHead>
+                  <TableHead className="text-center min-w-20">Students</TableHead>
+                  <TableHead className="text-center min-w-20">Exams</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -387,8 +387,8 @@ export default function AdminCourseManagement() {
                           <span className="text-muted-foreground">Unassigned</span>
                         )}
                       </TableCell>
-                      <TableCell className="text-center">{course._count?.enrollments || 0}</TableCell>
-                      <TableCell className="text-center">{course._count?.exams || 0}</TableCell>
+                      <TableCell className="text-center font-semibold">{course._count?.enrollments || 0}</TableCell>
+                      <TableCell className="text-center font-semibold">{course._count?.exams || 0}</TableCell>
                       <TableCell>
                         <Badge variant="secondary">{(course.status || 'draft').toLowerCase()}</Badge>
                       </TableCell>

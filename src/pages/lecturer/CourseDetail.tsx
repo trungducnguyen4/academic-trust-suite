@@ -409,8 +409,11 @@ export default function CourseDetail() {
                     <TableRow key={student.enrollmentId}>
                       <TableCell className="font-mono font-medium">{student.studentCode}</TableCell>
                       <TableCell>{student.name}</TableCell>
-                      <TableCell className="text-muted-foreground flex items-center gap-2">
-                        <Mail className="h-3 w-3" /> {student.email}
+                      <TableCell className="text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-3 w-3 flex-shrink-0" /> 
+                          <span>{student.email}</span>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant={student.status === 'active' ? 'default' : 'secondary'}>

@@ -7,6 +7,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 
 import { AuthProvider } from "@/contexts/AuthContext";
 import { NotificationsProvider } from "@/contexts/NotificationsContext";
+import { NotificationPopupProvider, useNotificationPopup } from "@/contexts/NotificationPopupContext";
+import NotificationPopup from "@/components/common/NotificationPopup";
 
 // Pages
 import Index from "./pages/Index";
@@ -60,14 +62,22 @@ import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
 
+// Component that renders the notification popup
+function NotificationPopupContainer() {
+  const { showNotifications } = useNotificationPopup();
+  return <NotificationPopup notifications={showNotifications} position="top-right" />;
+}
+
 const App = () => {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
         <NotificationsProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
+          <NotificationPopupProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
+              <NotificationPopupContainer />
 
             <BrowserRouter>
               <Routes>
@@ -203,7 +213,8 @@ const App = () => {
               <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
-          </TooltipProvider>
+            </TooltipProvider>
+          </NotificationPopupProvider>
         </NotificationsProvider>
       </AuthProvider>
     </QueryClientProvider>
