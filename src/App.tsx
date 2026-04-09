@@ -38,6 +38,7 @@ import QuestionEditor from "./pages/lecturer/QuestionEditor";
 import QuestionHistoryAnalysis from "./pages/lecturer/QuestionHistoryAnalysis";
 import AdvancedExamRuleConfig from "./pages/lecturer/AdvancedExamRuleConfig";
 import ExamMonitor from "./pages/lecturer/ExamMonitor";
+import ExamManagement from "./pages/lecturer/ExamManagement";
 import CreateCourse from "./pages/lecturer/CreateCourse";
 import CourseManagement from "./pages/lecturer/CourseManagement";
 import CourseDetail from "./pages/lecturer/CourseDetail";
@@ -57,6 +58,7 @@ import UserRoleManagement from "./pages/admin/UserRoleManagement";
 import SystemPolicyConfig from "./pages/admin/SystemPolicyConfig";
 import AuditLogViewer from "./pages/admin/AuditLogViewer";
 import AdminCourseManagement from "./pages/admin/CourseManagement";
+import AdminExamManagement from "./pages/admin/ExamManagement";
 
 import NotFound from "./pages/NotFound";
 
@@ -119,7 +121,7 @@ const App = () => {
 
               {/* ================= LECTURER ================= */}
               <Route path="/lecturer" element={<LecturerDashboard />} />
-              <Route path="/lecturer/exams" element={<LecturerDashboard />} />
+              <Route path="/lecturer/exams" element={<ExamManagement />} />
 
               {/* Key route - fixed */}
               <Route
@@ -170,6 +172,7 @@ const App = () => {
 
               {/* ================= ADMIN ================= */}
               <Route path="/admin" element={<AdminDashboard />} />
+              <Route path="/admin/exams" element={<AdminExamManagement />} />
               <Route
                 path="/admin/courses"
                 element={<AdminCourseManagement />}

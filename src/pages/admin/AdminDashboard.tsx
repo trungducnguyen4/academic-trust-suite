@@ -47,20 +47,23 @@ export default function AdminDashboard() {
   const { user } = useAuth();
   const [users, setUsers] = useState<User[]>([]);
   const [exams, setExams] = useState<Exam[]>([]);
+  const [courses, setCourses] = useState<any[]>([]);
   const [submissions, setSubmissions] = useState<Submission[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, examsRes, submissionsRes] = await Promise.all([
+        const [usersRes, examsRes, submissionsRes, coursesRes] = await Promise.all([
           api.getUsers(),
           api.getExams(),
-          api.getSubmissions()
+          api.getSubmissions(),
+          api.getCourses(),
         ]);
         setUsers(unwrapPaginatedData(usersRes));
         setExams(unwrapPaginatedData(examsRes));
         setSubmissions(unwrapPaginatedData(submissionsRes));
+        setCourses(unwrapPaginatedData(coursesRes));
       } catch (err) {
         console.error('Failed to fetch admin data:', err);
       } finally {
@@ -172,8 +175,8 @@ export default function AdminDashboard() {
                   <Database className="h-5 w-5 text-success" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{exams.length}</p>
-                  <p className="text-sm text-muted-foreground">Total Exams</p>
+                  <p className="text-2xl font-semibold">{courses.length}</p>
+                  <p className="text-sm text-muted-foreground">Total Courses</p>
                 </div>
               </div>
             </CardContent>
@@ -276,6 +279,12 @@ export default function AdminDashboard() {
                 <Link to="/admin/users">
                   <Users className="h-5 w-5" />
                   <span>Manage Users</span>
+                </Link>
+              </Button>
+              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+                <Link to="/admin/exams">
+                  <FileText className="h-5 w-5" />
+                  <span>Manage Exams</span>
                 </Link>
               </Button>
               <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>

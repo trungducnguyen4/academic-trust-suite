@@ -12,6 +12,7 @@ import {
   Clock,
   ArrowRight,
   BookOpen,
+  GraduationCap,
   Loader2,
   TrendingUp,
   Sparkles,
@@ -33,6 +34,14 @@ interface Exam {
   _count?: { examQuestions: number; submissions: number };
 }
 
+interface CourseSummary {
+  id: string;
+  code: string;
+  name: string;
+  enrolledStudents?: number;
+  _count?: { enrollments?: number; exams?: number };
+}
+
 const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'warning' | 'info' }> = {
   DRAFT: { label: 'Draft', variant: 'default' },
   PUBLISHED: { label: 'Published', variant: 'info' },
@@ -44,6 +53,7 @@ const statusConfig: Record<string, { label: string; variant: 'default' | 'succes
 export default function LecturerDashboard() {
   const { user } = useAuth();
   const [exams, setExams] = useState<Exam[]>([]);
+  const [courses, setCourses] = useState<CourseSummary[]>([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -51,12 +61,14 @@ export default function LecturerDashboard() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [examsData, questionsData] = await Promise.all([
+        const [examsData, questionsData, coursesData] = await Promise.all([
           api.getExams(),
           api.getQuestions(),
+          api.getMyCourses(),
         ]);
         setExams(unwrapPaginatedData(examsData));
         setQuestionCount(unwrapPaginatedData(questionsData).length);
+        setCourses(Array.isArray(coursesData) ? coursesData : unwrapPaginatedData(coursesData));
       } catch (error) {
         console.error('Failed to fetch dashboard data:', error);
       } finally {
@@ -71,15 +83,17 @@ export default function LecturerDashboard() {
       id: '1',
       type: 'info',
       title: 'Dashboard Ready',
-      message: `You have ${exams.length} exams and ${questionCount} questions in your bank`,
+      message: `You have ${courses.length} courses, ${exams.length} exams, and ${questionCount} questions in your bank`,
       time: addHours(new Date(), -2),
     },
   ];
 
+  const totalStudents = courses.reduce((acc, c) => acc + (c.enrolledStudents ?? c._count?.enrollments ?? 0), 0);
+
   const stats = {
-    totalExams: exams.length,
+    totalCourses: courses.length,
+    totalStudents,
     activeExams: exams.filter((e) => e.status === 'PUBLISHED' || e.status === 'ONGOING').length,
-    totalSubmissions: exams.reduce((acc, e) => acc + (e._count?.submissions || 0), 0),
     questionsInBank: questionCount,
   };
 
@@ -106,7 +120,7 @@ export default function LecturerDashboard() {
               Welcome back, {user?.fullName.split(' ')[0]} 👋
             </h1>
             <p className="text-muted-foreground mt-1">
-              Here's what's happening with your exams today.
+              Here's an overview of your courses, exams, and question bank.
             </p>
           </div>
           <Button asChild className="rounded-xl shadow-sm gap-2 shine animate-fade-in opacity-0" style={{ animationDelay: '0.1s' }}>
@@ -120,9 +134,9 @@ export default function LecturerDashboard() {
         {/* Quick Stats */}
         <div className="grid gap-4 md:grid-cols-4">
           {[
-            { label: 'Total Exams', value: stats.totalExams, icon: FileText, color: 'text-blue-600', bg: 'bg-blue-500/10', gradient: 'card-gradient-blue', trend: '+2 this month' },
-            { label: 'Active Exams', value: stats.activeExams, icon: Clock, color: 'text-violet-600', bg: 'bg-violet-500/10', gradient: 'card-gradient-violet', trend: 'In progress' },
-            { label: 'Submissions', value: stats.totalSubmissions, icon: Users, color: 'text-emerald-600', bg: 'bg-emerald-500/10', gradient: 'card-gradient-emerald', trend: 'Total received' },
+            { label: 'Courses', value: stats.totalCourses, icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-500/10', gradient: 'card-gradient-blue', trend: 'Assigned to you' },
+            { label: 'Students', value: stats.totalStudents, icon: Users, color: 'text-violet-600', bg: 'bg-violet-500/10', gradient: 'card-gradient-violet', trend: 'Across all courses' },
+            { label: 'Active Exams', value: stats.activeExams, icon: Clock, color: 'text-emerald-600', bg: 'bg-emerald-500/10', gradient: 'card-gradient-emerald', trend: 'Published or ongoing' },
             { label: 'Questions', value: stats.questionsInBank, icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-500/10', gradient: 'card-gradient-amber', trend: 'In question bank' },
           ].map((stat, i) => (
             <Card key={stat.label} className={`card-elevated ${stat.gradient} animate-fade-in-up opacity-0 stagger-${i + 1}`}>
@@ -261,6 +275,32 @@ export default function LecturerDashboard() {
 
           {/* Right panel */}
           <div className="space-y-6">
+            <Card className="card-elevated">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base font-bold">Course Snapshot</CardTitle>
+                <CardDescription>Your recently managed courses</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {courses.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No courses yet.</div>
+                ) : (
+                  courses.slice(0, 4).map((course) => (
+                    <div key={course.id} className="rounded-lg border border-border/60 p-3">
+                      <p className="text-sm font-semibold text-foreground line-clamp-1">{course.code}</p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">{course.name}</p>
+                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+                        <span>{course.enrolledStudents ?? course._count?.enrollments ?? 0} students</span>
+                        <span>{course._count?.exams ?? 0} exams</span>
+                      </div>
+                    </div>
+                  ))
+                )}
+                <Button asChild variant="outline" size="sm" className="w-full rounded-xl">
+                  <Link to="/lecturer/courses">Manage Courses</Link>
+                </Button>
+              </CardContent>
+            </Card>
+
             {/* AI Quick Action */}
             <Card className="card-elevated overflow-hidden relative">
               <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-primary/5 to-accent/5" />
@@ -298,9 +338,10 @@ export default function LecturerDashboard() {
             <div className="grid gap-4 md:grid-cols-4">
               {[
                 { icon: Plus, label: 'Create Exam', href: '/lecturer/exams/create', color: 'text-blue-600', bg: 'bg-blue-500/10' },
+                { icon: GraduationCap, label: 'Manage Courses', href: '/lecturer/courses', color: 'text-fuchsia-600', bg: 'bg-fuchsia-500/10' },
                 { icon: BookOpen, label: 'Question Bank', href: '/lecturer/question-bank', color: 'text-violet-600', bg: 'bg-violet-500/10' },
-                { icon: BarChart3, label: 'View Analytics', href: '/lecturer/analytics', color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
                 { icon: FileText, label: 'Manage Exams', href: '/lecturer/exams', color: 'text-amber-600', bg: 'bg-amber-500/10' },
+                { icon: BarChart3, label: 'View Analytics', href: '/lecturer/analytics', color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
               ].map((action) => (
                 <Button
                   key={action.label}

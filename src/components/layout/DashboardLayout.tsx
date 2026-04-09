@@ -110,6 +110,11 @@ const adminNavItems: NavItem[] = [
     icon: <GraduationCap className="h-[18px] w-[18px]" />,
   },
   {
+    title: "Exams",
+    href: "/admin/exams",
+    icon: <FileText className="h-[18px] w-[18px]" />,
+  },
+  {
     title: "Question Bank",
     href: "/admin/question-bank",
     icon: <BookOpen className="h-[18px] w-[18px]" />,

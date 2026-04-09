@@ -274,8 +274,17 @@ export default function StudentDashboard() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-4">
           {[
+            {
+              label: "My Courses",
+              value: courses.length,
+              icon: BookOpen,
+              color: "text-indigo-600",
+              bg: "bg-indigo-500/10",
+              gradient: "card-gradient-violet",
+              sub: "Currently enrolled",
+            },
             {
               label: "Upcoming Exams",
               value: upcomingExams.length,

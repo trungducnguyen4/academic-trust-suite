@@ -178,8 +178,12 @@ export default function CreateCourse() {
           semester: c.semester || 'N/A',
           description: c.description,
           credits: c.credits,
-          students: c._count?.enrollments || 0,
-          exams: c._count?.exams || 0,
+          // Accept multiple possible shapes returned by the backend:
+          // - admin list: _count.enrollments / _count.exams
+          // - lecturer-specific endpoints: enrolledStudents / exams
+          // - generic: students / exams
+          students: (c as any).students ?? (c as any).enrolledStudents ?? c._count?.enrollments ?? 0,
+          exams: (c as any).exams ?? c._count?.exams ?? 0,
           status: (c.status?.toLowerCase() as Course['status']) || 'draft',
           createdAt: safeIso(c.createdAt),
         }));
