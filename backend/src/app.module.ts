@@ -10,6 +10,7 @@ import { QuestionsModule } from './questions/questions.module';
 import { SubmissionsModule } from './submissions/submissions.module';
 import { AiModule } from './ai/ai.module';
 import { ExamLinksModule } from './exam-links/exam-links.module';
+import { MailerModule } from './mailer/mailer.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { ExamLinksModule } from './exam-links/exam-links.module';
     CoursesModule,
     EnrollmentsModule,
     ExamsModule,
+    MailerModule,
     QuestionsModule,
     SubmissionsModule,
     AiModule,

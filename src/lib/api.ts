@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+export const API_BASE_URL = 'http://localhost:3001/api';
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -313,6 +313,13 @@ class ApiClient {
     return this.request<any>(`/exams/${id}`);
   }
 
+  async shareExam(examId: string, emails: string[] = [], sendToCourse?: boolean) {
+    return this.request<any>(`/exams/${examId}/share`, {
+      method: 'POST',
+      body: { emails, sendToCourse },
+    });
+  }
+
   async createExam(data: {
     title: string;
     description?: string;
@@ -425,6 +432,13 @@ class ApiClient {
     return this.request<any>(`/submissions/${submissionId}/submit`, {
       method: 'POST',
       body: { answers, logs },
+    });
+  }
+
+  async sendExamLogs(submissionId: string, logs: Array<{ type: string; details?: any; ts?: number }>) {
+    return this.request<any>(`/submissions/${submissionId}/logs`, {
+      method: 'POST',
+      body: { logs },
     });
   }
 

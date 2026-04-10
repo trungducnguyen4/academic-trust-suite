@@ -15,6 +15,7 @@ import api from '@/lib/api';
 
 export default function Profile() {
   const { user, isAuthenticated, logout, applyProfileToSession } = useAuth();
+  const isStudent = user?.role === 'STUDENT';
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
   const [isDeletingProfile, setIsDeletingProfile] = useState(false);
@@ -43,6 +44,11 @@ export default function Profile() {
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (isStudent) {
+      toast.error('Profile editing is temporarily disabled for students');
+      return;
+    }
+
     if (!fullName.trim() || !email.trim()) {
       toast.error('Full name and email are required');
       return;
@@ -67,6 +73,11 @@ export default function Profile() {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isStudent) {
+      toast.error('Password change is temporarily disabled for students');
+      return;
+    }
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error('Please complete all password fields');
@@ -103,6 +114,11 @@ export default function Profile() {
 
   const handleDeleteProfile = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (isStudent) {
+      toast.error('Profile deletion is temporarily disabled for students');
+      return;
+    }
 
     if (!deletePassword) {
       toast.error('Please enter your current password to delete profile');
@@ -142,6 +158,11 @@ export default function Profile() {
             <CardHeader>
               <CardTitle className="text-lg">Personal Information</CardTitle>
               <CardDescription>Update personal info for your account (no avatar change)</CardDescription>
+              {isStudent && (
+                <p className="text-sm text-muted-foreground">
+                  Editing is temporarily disabled for student accounts.
+                </p>
+              )}
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -166,6 +187,7 @@ export default function Profile() {
                     id="full-name"
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
+                    disabled={isStudent}
                     required
                   />
                 </div>
@@ -176,6 +198,7 @@ export default function Profile() {
                     type="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    disabled={isStudent}
                     required
                   />
                 </div>
@@ -185,6 +208,7 @@ export default function Profile() {
                     id="department"
                     value={department}
                     onChange={(e) => setDepartment(e.target.value)}
+                    disabled={isStudent}
                     placeholder="e.g. Computer Science"
                   />
                 </div>
@@ -194,7 +218,7 @@ export default function Profile() {
                     id="student-id"
                     value={studentId}
                     onChange={(e) => setStudentId(e.target.value)}
-                    disabled={user.role !== 'STUDENT'}
+                    disabled={isStudent || user.role !== 'STUDENT'}
                     placeholder={user.role === 'STUDENT' ? 'Enter your student ID' : 'Only available for students'}
                   />
                 </div>
@@ -206,7 +230,7 @@ export default function Profile() {
                   </p>
                 </div>
                 <div className="lg:col-span-2">
-                  <Button type="submit" disabled={isSavingProfile}>
+                  <Button type="submit" disabled={isSavingProfile || isStudent}>
                     {isSavingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Save Profile
                   </Button>
@@ -232,6 +256,7 @@ export default function Profile() {
                       placeholder="••••••••"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
+                      disabled={isStudent}
                       required
                     />
                   </div>
@@ -243,6 +268,7 @@ export default function Profile() {
                       placeholder="••••••••"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
+                      disabled={isStudent}
                       required
                       minLength={6}
                     />
@@ -255,11 +281,12 @@ export default function Profile() {
                       placeholder="••••••••"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
+                      disabled={isStudent}
                       required
                       minLength={6}
                     />
                   </div>
-                  <Button type="submit" disabled={isUpdatingPassword}>
+                  <Button type="submit" disabled={isUpdatingPassword || isStudent}>
                     {isUpdatingPassword && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                     Update Password
                   </Button>
@@ -288,10 +315,11 @@ export default function Profile() {
                       placeholder="Enter current password"
                       value={deletePassword}
                       onChange={(e) => setDeletePassword(e.target.value)}
+                      disabled={isStudent}
                       required
                     />
                   </div>
-                  <Button type="submit" variant="destructive" disabled={isDeletingProfile}>
+                  <Button type="submit" variant="destructive" disabled={isDeletingProfile || isStudent}>
                     {isDeletingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
                     Delete Profile
                   </Button>

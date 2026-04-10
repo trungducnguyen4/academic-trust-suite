@@ -26,6 +26,10 @@ export class SubmitExamDto {
   logs?: Array<{ type: string; details?: any; ts?: number }>;
 }
 
+export class AddLogsDto {
+  @IsArray()
+  logs: Array<{ type: string; details?: any; ts?: number }>;
+}
 export class GradeAnswerDto {
   @IsString()
   submissionAnswerId: string;

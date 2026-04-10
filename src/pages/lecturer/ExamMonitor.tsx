@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -33,6 +33,7 @@ import {
   Globe,
   Search,
   RefreshCw,
+  QrCode,
   Monitor,
   Wifi,
   Ban,
@@ -42,7 +43,7 @@ import {
   Activity,
   MousePointerClick,
 } from 'lucide-react';
-import api, { unwrapPaginatedData } from '@/lib/api';
+import api, { API_BASE_URL, unwrapPaginatedData } from '@/lib/api';
 import { Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -77,9 +78,9 @@ interface IntegrityAlert {
   id: string;
   submissionId: string | null;
   studentName: string;
-  type: 'tab_switch' | 'similarity' | 'timing' | 'ip_anomaly' | 'mouse_pattern';
+  type: 'tab_switch' | 'similarity' | 'timing' | 'ip_anomaly' | 'mouse_pattern' | 'fullscreen_exit';
   message: string;
-  severity: 'warning' | 'critical';
+  severity: 'low' | 'warning' | 'critical';
   time: string;
 }
 
@@ -106,6 +107,7 @@ const mapSubmissionStatus = (status?: string): StudentSession['status'] => {
 
 const mapEventTypeToAlertType = (eventType?: string): IntegrityAlert['type'] => {
   const event = String(eventType || '').toLowerCase();
+  if (event.includes('fullscreen')) return 'fullscreen_exit';
   if (event.includes('tab')) return 'tab_switch';
   if (event.includes('mouse')) return 'mouse_pattern';
   if (event.includes('ip')) return 'ip_anomaly';
@@ -126,6 +128,7 @@ export default function ExamMonitor() {
   const [statusFilter, setStatusFilter] = useState('all');
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(new Date().toLocaleTimeString());
+  const eventSourceRef = useRef<EventSource | null>(null);
 
   const loadMonitorData = async (silent = false) => {
     if (!id) return;
@@ -205,7 +208,7 @@ export default function ExamMonitor() {
         studentName: anomaly.student?.fullName || 'Unknown student',
         type: mapEventTypeToAlertType(anomaly.eventType),
         message: anomaly.details || anomaly.eventType || 'Suspicious activity detected',
-        severity: anomaly.severity === 'high' ? 'critical' : 'warning',
+        severity: anomaly.severity === 'high' ? 'critical' : anomaly.severity === 'low' ? 'low' : 'warning',
         time: new Date(anomaly.timestamp).toLocaleTimeString(),
       }));
       setAlerts(mappedAlerts);
@@ -232,6 +235,61 @@ export default function ExamMonitor() {
     }, 10000);
     return () => clearInterval(interval);
   }, [autoRefresh, id]);
+
+  useEffect(() => {
+    if (!id) return;
+    const token = localStorage.getItem('accessToken');
+    if (!token) return;
+
+    const streamUrl = `${API_BASE_URL}/submissions/exam/${encodeURIComponent(id)}/events?token=${encodeURIComponent(token)}`;
+    const source = new EventSource(streamUrl);
+    eventSourceRef.current = source;
+
+    const onIntegrity = (evt: MessageEvent) => {
+      try {
+        const data = JSON.parse(evt.data || '{}');
+        const eventType = String(data?.eventType || 'unknown');
+        const alertType = mapEventTypeToAlertType(eventType);
+        const mapped: IntegrityAlert = {
+          id: String(data?.id || `${Date.now()}-${Math.random()}`),
+          submissionId: data?.submissionId || null,
+          studentName: data?.student?.fullName || 'Unknown student',
+          type: alertType,
+          message: data?.details || eventType,
+          severity: data?.severity === 'high' ? 'critical' : data?.severity === 'low' ? 'low' : 'warning',
+          time: data?.timestamp ? new Date(data.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString(),
+        };
+
+        setAlerts((prev) => [mapped, ...prev].slice(0, 100));
+
+        if (mapped.submissionId) {
+          setStudents((prev) => prev.map((s) => {
+            if (s.submissionId !== mapped.submissionId) return s;
+            const next = { ...s };
+            if (alertType === 'tab_switch') next.tabSwitches += 1;
+            if (alertType === 'mouse_pattern') next.mouseAnomalies += 1;
+            return next;
+          }));
+        }
+      } catch (e) {
+        console.error('Failed to parse realtime integrity event', e);
+      }
+    };
+
+    source.addEventListener('integrity', onIntegrity as EventListener);
+    source.onerror = () => {
+      // keep existing polling as fallback; EventSource auto-reconnects
+      console.warn('Realtime stream disconnected, fallback polling is still active.');
+    };
+
+    return () => {
+      source.removeEventListener('integrity', onIntegrity as EventListener);
+      source.close();
+      if (eventSourceRef.current === source) {
+        eventSourceRef.current = null;
+      }
+    };
+  }, [id]);
 
   const filtered = students.filter((s) => {
     const matchSearch = s.name.toLowerCase().includes(search.toLowerCase()) || s.studentId.includes(search);
@@ -352,6 +410,11 @@ export default function ExamMonitor() {
             >
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to={`/lecturer/exam/${id}/qr`} className="gap-1">
+                <QrCode className="h-3.5 w-3.5" /> Show QR
+              </Link>
+            </Button>
           </div>
         </div>
 
@@ -417,7 +480,11 @@ export default function ExamMonitor() {
                 <div
                   key={alert.id}
                   className={`flex items-center justify-between p-3 rounded-lg border ${
-                    alert.severity === 'critical' ? 'border-red-300 bg-red-50' : 'border-yellow-300 bg-yellow-50'
+                    alert.severity === 'critical'
+                      ? 'border-red-300 bg-red-50'
+                      : alert.severity === 'warning'
+                        ? 'border-yellow-300 bg-yellow-50'
+                        : 'border-blue-300 bg-blue-50'
                   }`}
                 >
                   <div className="flex items-center gap-3">
@@ -426,6 +493,7 @@ export default function ExamMonitor() {
                     {alert.type === 'timing' && <Clock className="h-4 w-4" />}
                     {alert.type === 'ip_anomaly' && <Globe className="h-4 w-4" />}
                     {alert.type === 'mouse_pattern' && <MousePointerClick className="h-4 w-4" />}
+                    {alert.type === 'fullscreen_exit' && <Monitor className="h-4 w-4" />}
                     <div>
                       <p className="text-sm font-medium">{alert.studentName}</p>
                       <p className="text-xs text-muted-foreground">{alert.message}</p>
@@ -433,7 +501,7 @@ export default function ExamMonitor() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">{alert.time}</span>
-                    <StatusBadge variant={alert.severity === 'critical' ? 'destructive' : 'warning'}>
+                    <StatusBadge variant={alert.severity === 'critical' ? 'destructive' : alert.severity === 'warning' ? 'warning' : 'info'}>
                       {alert.severity}
                     </StatusBadge>
                     <Button variant="outline" size="sm" onClick={() => resolveAlert(alert.id)}>

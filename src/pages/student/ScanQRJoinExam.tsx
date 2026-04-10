@@ -44,11 +44,59 @@ export default function ScanQRJoinExam() {
   const startScanning = useCallback(() => {
     setScanning(true);
     setError('');
-    // Simulate QR scanning process
-    setTimeout(() => {
-      setScannedCode('EX-2026-CS301-MID');
-      setScanning(false);
-    }, 2500);
+
+    // Try to use native BarcodeDetector if available
+    const runCameraScan = async () => {
+      try {
+        if ((window as any).BarcodeDetector) {
+          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+          const video = document.createElement('video');
+          video.playsInline = true;
+          video.srcObject = stream;
+          await video.play();
+
+          const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+
+          let stopped = false;
+
+          const stopAll = () => {
+            stopped = true;
+            try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
+            try { video.pause(); video.srcObject = null; } catch (e) {}
+            setScanning(false);
+          };
+
+          const scanFrame = async () => {
+            if (stopped) return;
+            try {
+              const bitmap = await createImageBitmap(video);
+              const codes = await detector.detect(bitmap);
+              if (codes && codes.length) {
+                setScannedCode(codes[0].rawValue || codes[0].rawValue?.toString() || '');
+                stopAll();
+                return;
+              }
+            } catch (err) {
+              // ignore frame errors
+            }
+            requestAnimationFrame(scanFrame);
+          };
+
+          scanFrame();
+          return;
+        }
+      } catch (err) {
+        console.warn('Camera scan failed, falling back to simulated scan', err);
+      }
+
+      // Fallback: simulated scan
+      setTimeout(() => {
+        setScannedCode('EX-2026-CS301-MID');
+        setScanning(false);
+      }, 2500);
+    };
+
+    runCameraScan();
   }, []);
 
   const handleValidateCode = async (code: string) => {
