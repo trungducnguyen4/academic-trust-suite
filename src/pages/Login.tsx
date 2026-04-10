@@ -1,17 +1,20 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNotificationPopup } from '@/contexts/NotificationPopupContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { GraduationCap, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import api from '@/lib/api';
 
 export default function Login() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const { login, isLoading } = useAuth();
+  const { addNotification } = useNotificationPopup();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -20,6 +23,35 @@ export default function Login() {
 
     try {
       await login(email, password);
+      
+      // Show welcome notification
+      addNotification({
+        title: 'Welcome back!',
+        message: 'You have successfully logged in.',
+        type: 'success',
+      });
+
+      // Try to fetch and show recent notifications
+      try {
+        const notificationsRes = await api.getMyNotifications({ limit: 3, unreadOnly: true });
+        const recentNotifications = notificationsRes.data || [];
+        
+        if (Array.isArray(recentNotifications) && recentNotifications.length > 0) {
+          // Show recent notifications
+          recentNotifications.forEach((notif: any) => {
+            addNotification({
+              title: notif.title || 'Notification',
+              message: notif.message || notif.content || 'You have a new notification',
+              type: notif.type || 'info',
+              timestamp: notif.createdAt ? new Date(notif.createdAt) : new Date(),
+            });
+          });
+        }
+      } catch (error) {
+        // Silently fail notification fetch
+        console.debug('Could not fetch recent notifications:', error);
+      }
+
       const user = email.toLowerCase();
       if (user.includes('student')) {
         navigate('/student');

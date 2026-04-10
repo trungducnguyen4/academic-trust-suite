@@ -30,6 +30,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from '@/components/ui/dialog';
+import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
 import {
   ArrowLeft,
   Loader2,
@@ -257,9 +258,6 @@ export default function UserRoleManagement() {
       toast.error('Cannot delete your own account');
       return;
     }
-
-    const confirmed = window.confirm(`Archive user \"${target.fullName}\"?`);
-    if (!confirmed) return;
 
     try {
       setDeletingId(target.id);
@@ -536,16 +534,23 @@ export default function UserRoleManagement() {
                           >
                             {item.status === 'active' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                           </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-destructive"
-                            onClick={() => handleDeleteUser(item)}
-                            disabled={deletingId === item.id}
+                          <ConfirmActionDialog
                             title="Archive user"
+                            description={`Archive user "${item.fullName}"?`}
+                            confirmText="Archive"
+                            destructive
+                            onConfirm={() => handleDeleteUser(item)}
                           >
-                            {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-                          </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              disabled={deletingId === item.id}
+                              title="Archive user"
+                            >
+                              {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          </ConfirmActionDialog>
                         </div>
                       </TableCell>
                     </TableRow>

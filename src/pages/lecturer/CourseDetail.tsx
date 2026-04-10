@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,7 +44,9 @@ import { toast } from 'sonner';
 import api, { unwrapPaginatedData } from '@/lib/api';
 
 interface Student {
-  id: string;
+  enrollmentId: string;
+  userId: string;
+  studentCode: string;
   name: string;
   email: string;
   status: string;
@@ -56,6 +59,7 @@ interface Enrollment {
     id: string;
     fullName: string;
     email: string;
+    studentId?: string | null;
   };
   joinedAt: string;
 }
@@ -70,6 +74,8 @@ interface Course {
 export default function CourseDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/admin') ? '/admin' : '/lecturer';
   const [students, setStudents] = useState<Student[]>([]);
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,9 +84,39 @@ export default function CourseDetail() {
   const [search, setSearch] = useState('');
   const [isImporting, setIsImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
+  const [isAdding, setIsAdding] = useState(false);
 
   // Manual Add Form
   const [newStudent, setNewStudent] = useState({ name: '', id: '', email: '' });
+
+  const parseEmailsFromCSV = (text: string): string[] => {
+    const lines = text.split(/\r?\n/).filter((line) => line.trim());
+    const emails: string[] = [];
+    for (const line of lines) {
+      const parts = line.split(/[,;\t]/).map((part) => part.trim().replace(/^["']|["']$/g, ''));
+      for (const part of parts) {
+        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part)) {
+          emails.push(part.toLowerCase());
+        }
+      }
+    }
+    return [...new Set(emails)];
+  };
+
+  const reloadEnrollments = async (courseId: string) => {
+    const enrollments: Enrollment[] = await api.getCourseEnrollments(courseId);
+    const mapped: Student[] = enrollments.map((e: Enrollment) => ({
+      enrollmentId: e.id,
+      userId: e.student.id,
+      studentCode: e.student.studentId || e.student.id.slice(0, 8),
+      name: e.student.fullName,
+      email: e.student.email,
+      status: 'active',
+      joinedAt: new Date(e.joinedAt).toISOString().split('T')[0],
+    }));
+    setStudents(mapped);
+    setEnrollmentsRaw(enrollments || []);
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -126,7 +162,9 @@ export default function CourseDetail() {
         }
 
         const mapped: Student[] = enrollments.map((e: Enrollment) => ({
-          id: e.student.id.slice(0, 8),
+          enrollmentId: e.id,
+          userId: e.student.id,
+          studentCode: e.student.studentId || e.student.id.slice(0, 8),
           name: e.student.fullName,
           email: e.student.email,
           status: 'active',
@@ -146,44 +184,71 @@ export default function CourseDetail() {
   const filteredStudents = students.filter(
     (s) =>
       s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.id.includes(search) ||
+      s.studentCode.toLowerCase().includes(search.toLowerCase()) ||
       s.email.toLowerCase().includes(search.toLowerCase())
   );
 
-  const handleAddManual = () => {
-    if (!newStudent.name || !newStudent.id) return;
-    const student: Student = {
-      id: newStudent.id,
-      name: newStudent.name,
-      email: newStudent.email,
-      status: 'active',
-      joinedAt: new Date().toISOString().split('T')[0],
-    };
-    setStudents([student, ...students]);
-    setNewStudent({ name: '', id: '', email: '' });
-    toast.success("Student added successfully");
+  const handleAddManual = async () => {
+    if (!resolvedCourseId) return;
+    const keyword = newStudent.id.trim().toLowerCase();
+    if (!keyword) return;
+
+    try {
+      setIsAdding(true);
+      const studentsDb = await api.getStudents();
+      const target = studentsDb.find((s: any) =>
+        String(s.email || '').toLowerCase() === keyword ||
+        String(s.studentId || '').toLowerCase() === keyword,
+      );
+
+      if (!target) {
+        toast.error('No student found with the provided email or student ID');
+        return;
+      }
+
+      await api.enrollStudent(resolvedCourseId, target.id);
+      await reloadEnrollments(resolvedCourseId);
+      setNewStudent({ name: '', id: '', email: '' });
+      toast.success('Student added successfully');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to add student');
+    } finally {
+      setIsAdding(false);
+    }
   };
 
   const handleImportCSV = async () => {
-    if (!importFile) return;
-    setIsImporting(true);
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 1500));
-    
-    // Mock imported data (would be replaced with real CSV parsing)
-    const imported: Student[] = [
-      { id: '20120045', name: 'Pham Van D', email: 'd.pham@university.edu', status: 'active', joinedAt: new Date().toISOString().split('T')[0] },
-      { id: '20120046', name: 'Hoang Thi E', email: 'e.hoang@university.edu', status: 'active', joinedAt: new Date().toISOString().split('T')[0] },
-    ];
-    setStudents([...imported, ...students]);
-    setIsImporting(false);
-    setImportFile(null);
-    toast.success(`Successfully imported ${imported.length} students from CSV`);
+    if (!importFile || !resolvedCourseId) return;
+
+    try {
+      setIsImporting(true);
+      const text = await importFile.text();
+      const emails = parseEmailsFromCSV(text);
+
+      if (emails.length === 0) {
+        toast.error('No valid emails found in file');
+        return;
+      }
+
+      const result = await api.bulkEnrollByEmails(resolvedCourseId, emails);
+      await reloadEnrollments(resolvedCourseId);
+      setImportFile(null);
+      toast.success(`Imported ${result.success.length} student(s)`);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to import CSV');
+    } finally {
+      setIsImporting(false);
+    }
   };
 
-  const handleDelete = (studentId: string) => {
-    setStudents(students.filter(s => s.id !== studentId));
-    toast.success("Student removed from course");
+  const handleDelete = async (enrollmentId: string) => {
+    try {
+      await api.removeEnrollment(enrollmentId);
+      setStudents((prev) => prev.filter((s) => s.enrollmentId !== enrollmentId));
+      toast.success('Student removed from course');
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to remove student');
+    }
   };
 
   if (loading) {
@@ -205,7 +270,7 @@ export default function CourseDetail() {
             <Button 
               variant="ghost" 
               className="pl-0 gap-2 mb-2 text-muted-foreground hover:text-foreground"
-              onClick={() => navigate('/lecturer/create-course')}
+              onClick={() => navigate(basePath === '/admin' ? '/admin/courses' : '/lecturer/create-course')}
             >
               <ArrowLeft className="h-4 w-4" /> Back to Courses
             </Button>
@@ -252,34 +317,16 @@ export default function CourseDetail() {
                   {/* Manual Entry Tab */}
                   <TabsContent value="manual" className="space-y-4 py-4">
                     <div className="space-y-2">
-                      <Label htmlFor="sid">Student ID <span className="text-destructive">*</span></Label>
+                      <Label htmlFor="sid">Student Email / Student ID <span className="text-destructive">*</span></Label>
                       <Input 
                         id="sid" 
-                        placeholder="e.g. 20120001" 
+                        placeholder="e.g. student@university.edu or 20120001" 
                         value={newStudent.id}
                         onChange={(e) => setNewStudent({...newStudent, id: e.target.value})}
                       />
                     </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="sname">Full Name <span className="text-destructive">*</span></Label>
-                      <Input 
-                        id="sname" 
-                        placeholder="e.g. Nguyen Van A"
-                        value={newStudent.name}
-                        onChange={(e) => setNewStudent({...newStudent, name: e.target.value})}
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="semail">Email Address</Label>
-                      <Input 
-                        id="semail" 
-                        type="email"
-                        placeholder="e.g. name@university.edu"
-                        value={newStudent.email}
-                        onChange={(e) => setNewStudent({...newStudent, email: e.target.value})}
-                      />
-                    </div>
-                    <Button onClick={handleAddManual} className="w-full mt-2" disabled={!newStudent.id || !newStudent.name}>
+                    <Button onClick={handleAddManual} className="w-full mt-2" disabled={!newStudent.id || isAdding}>
+                      {isAdding ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                       Add Student
                     </Button>
                   </TabsContent>
@@ -306,9 +353,9 @@ export default function CourseDetail() {
                           </div>
                         )}
                      </div>
-                     <div className="text-xs text-muted-foreground space-y-1">
+                    <div className="text-xs text-muted-foreground space-y-1">
                         <p className="font-medium">Required CSV Format:</p>
-                        <p className="font-mono bg-muted p-1 rounded">Student ID, Full Name, Email</p>
+                      <p className="font-mono bg-muted p-1 rounded">Email</p>
                      </div>
                      <Button onClick={handleImportCSV} className="w-full" disabled={!importFile || isImporting}>
                         {isImporting ? (
@@ -359,11 +406,14 @@ export default function CourseDetail() {
               <TableBody>
                 {filteredStudents.length > 0 ? (
                   filteredStudents.map((student) => (
-                    <TableRow key={student.id}>
-                      <TableCell className="font-mono font-medium">{student.id}</TableCell>
+                    <TableRow key={student.enrollmentId}>
+                      <TableCell className="font-mono font-medium">{student.studentCode}</TableCell>
                       <TableCell>{student.name}</TableCell>
-                      <TableCell className="text-muted-foreground flex items-center gap-2">
-                        <Mail className="h-3 w-3" /> {student.email}
+                      <TableCell className="text-muted-foreground">
+                        <div className="flex items-center gap-2">
+                          <Mail className="h-3 w-3 flex-shrink-0" /> 
+                          <span>{student.email}</span>
+                        </div>
                       </TableCell>
                       <TableCell>
                         <Badge variant={student.status === 'active' ? 'default' : 'secondary'}>
@@ -376,7 +426,7 @@ export default function CourseDetail() {
                           variant="ghost" 
                           size="icon" 
                           className="text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(student.id)}
+                          onClick={() => handleDelete(student.enrollmentId)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>

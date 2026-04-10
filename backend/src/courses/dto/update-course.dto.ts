@@ -1,10 +1,6 @@
-import { IsString, IsOptional, IsInt, Min, Max } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsUUID } from 'class-validator';
 
 export class UpdateCourseDto {
-  @IsOptional()
-  @IsString()
-  code?: string;
-
   @IsOptional()
   @IsString()
   name?: string;
@@ -22,4 +18,8 @@ export class UpdateCourseDto {
   @IsOptional()
   @IsString()
   semester?: string;
+
+  @IsOptional()
+  @IsUUID()
+  lecturerId?: string | null;
 }

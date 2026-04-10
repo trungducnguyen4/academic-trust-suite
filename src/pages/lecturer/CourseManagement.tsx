@@ -35,6 +35,10 @@ interface Course {
   totalStudents?: number;
   progress?: number;
   lastAccessed?: string;
+  _count?: {
+    enrollments?: number;
+    exams?: number;
+  };
 }
 
 interface GroupedCourses {
@@ -85,6 +89,10 @@ export default function CourseManagement() {
         totalStudents: c.totalStudents ?? c._count?.enrollments ?? 0,
         progress: c.progress ?? 0,
         lastAccessed: safeRelativeTime(c.lastAccessed),
+        _count: {
+          enrollments: c._count?.enrollments ?? 0,
+          exams: c._count?.exams ?? 0,
+        },
       }));
       setCourses(list);
       setRecentCourses(list.slice(0, 2));
@@ -172,6 +180,27 @@ export default function CourseManagement() {
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </div>
+
+                    <div className="grid grid-cols-3 gap-1 py-2 border-t border-b border-border text-center">
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="text-base font-semibold text-foreground">
+                          {course._count?.enrollments || 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Students</div>
+                      </div>
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="text-base font-semibold text-foreground">
+                          {course._count?.exams || 0}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Exams</div>
+                      </div>
+                      <div className="flex flex-col items-center justify-center">
+                        <div className="text-xs font-medium text-foreground line-clamp-1">
+                          {course.lastAccessed}
+                        </div>
+                        <div className="text-xs text-muted-foreground">Accessed</div>
+                      </div>
+                    </div>
                     
                     {course.progress && (
                       <div className="space-y-1">
@@ -252,14 +281,33 @@ export default function CourseManagement() {
                               <p className="text-sm text-muted-foreground line-clamp-2">{course.name}</p>
                             </div>
                             
-                            <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                              <div className="flex items-center gap-1">
-                                <Users className="h-3 w-3" />
-                                <span>{course.enrolledStudents}/{course.totalStudents}</span>
+                            <div className="grid grid-cols-3 gap-2 py-2 border-t border-b border-border">
+                              <div className="flex flex-col items-center justify-center">
+                                <div className="text-lg font-semibold text-foreground">
+                                  {course._count?.enrollments || 0}
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-0.5">
+                                  <Users className="h-3 w-3" />
+                                  <span>Students</span>
+                                </div>
                               </div>
-                              <div className="flex items-center gap-1">
-                                <Clock className="h-3 w-3" />
-                                <span>{course.lastAccessed}</span>
+                              <div className="flex flex-col items-center justify-center">
+                                <div className="text-lg font-semibold text-foreground">
+                                  {course._count?.exams || 0}
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-0.5">
+                                  <BookOpen className="h-3 w-3" />
+                                  <span>Exams</span>
+                                </div>
+                              </div>
+                              <div className="flex flex-col items-center justify-center">
+                                <div className="text-xs font-medium text-foreground text-center">
+                                  {course.lastAccessed}
+                                </div>
+                                <div className="text-xs text-muted-foreground flex items-center gap-0.5">
+                                  <Clock className="h-3 w-3" />
+                                  <span>Accessed</span>
+                                </div>
                               </div>
                             </div>
                             
@@ -278,7 +326,7 @@ export default function CourseManagement() {
                             )}
                             
                             <Button asChild variant="outline" size="sm" className="w-full">
-                              <Link to={`/lecturer/courses/${course.id}`}>
+                              <Link to={`/lecturer/course/${course.id}`}>
                                 View Details
                               </Link>
                             </Button>

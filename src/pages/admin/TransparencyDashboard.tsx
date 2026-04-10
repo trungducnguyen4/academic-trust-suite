@@ -1,6 +1,6 @@
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Separator } from "@/components/ui/separator";
 
 export default function TransparencyDashboard() {
   return (
@@ -10,40 +10,56 @@ export default function TransparencyDashboard() {
           <CardHeader>
             <CardTitle>System Transparency Dashboard</CardTitle>
             <p className="text-muted-foreground mt-2">
-              Báo cáo tổng quát về tính minh bạch, thống kê, kiểm định và các quyết định học thuật của hệ thống.
+              High-level reporting on transparency, statistics, validation, and
+              academic decisions in the system.
             </p>
           </CardHeader>
           <CardContent>
             <Separator className="my-4" />
             <section>
-              <h2 className="text-lg font-semibold mb-2">1. Statistical Summary</h2>
+              <h2 className="text-lg font-semibold mb-2">
+                1. Statistical Summary
+              </h2>
               <p>
-                Tổng hợp các chỉ số: số lượng kỳ thi, câu hỏi, sinh viên, điểm trung bình, độ phân biệt, độ khó.<br />
-                <b>Ví dụ:</b> 10 kỳ thi, 500 câu hỏi, 200 sinh viên, điểm TB: 7.5
+                Aggregate key metrics: number of exams, question volume, student
+                participation, average score, discrimination, and difficulty.
+                <br />
+                <b>Example:</b> 10 exams, 500 questions, 200 students, average
+                score: 7.5
               </p>
             </section>
             <Separator className="my-4" />
             <section>
-              <h2 className="text-lg font-semibold mb-2">2. Integrity Alerts & Evidence</h2>
+              <h2 className="text-lg font-semibold mb-2">
+                2. Integrity Alerts & Evidence
+              </h2>
               <p>
-                Báo cáo các cảnh báo AI, bằng chứng trung thực, quyết định của hội đồng.<br />
-                <b>Ví dụ:</b> 5 cảnh báo, 2 quyết định "Không gian lận", 1 quyết định "Gian lận"
+                Report AI alerts, integrity evidence, and committee decisions.
+                <br />
+                <b>Example:</b> 5 alerts, 2 decisions of "No Cheating", 1
+                decision of "Cheating"
               </p>
             </section>
             <Separator className="my-4" />
             <section>
-              <h2 className="text-lg font-semibold mb-2">3. Academic Actions</h2>
+              <h2 className="text-lg font-semibold mb-2">
+                3. Academic Actions
+              </h2>
               <p>
-                Quyết định học thuật dựa trên bằng chứng, nhật ký sự kiện, thống kê.<br />
-                <b>Ví dụ:</b> Đình chỉ 1 sinh viên, cảnh báo 2 sinh viên
+                Academic decisions based on evidence, event logs, and
+                statistics.
+                <br />
+                <b>Example:</b> 1 student suspended, 2 students warned
               </p>
             </section>
             <Separator className="my-4" />
             <section>
               <h2 className="text-lg font-semibold mb-2">4. Audit Log</h2>
               <p>
-                Lưu trữ và hiển thị lịch sử hoạt động hệ thống, các lần chỉnh sửa, quyết định.<br />
-                <b>Ví dụ:</b> Ngày 10/01/2026: Cập nhật chính sách integrity
+                Store and display system activity history, policy updates, and
+                decisions.
+                <br />
+                <b>Example:</b> 2026-01-10: Integrity policy updated
               </p>
             </section>
           </CardContent>

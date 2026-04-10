@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -134,6 +134,10 @@ const revisionHistory = [
 
 export default function QuestionHistoryAnalysis() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/admin') ? '/admin' : '/lecturer';
+  const questionBankPath = `${basePath}/question-bank`;
+  const questionEditorPath = `${basePath}/question-editor`;
   const [selectedQuestion, setSelectedQuestion] = useState<QuestionMetricHistory>(mockHistory[0]);
   const [courseFilter, setCourseFilter] = useState('all');
 
@@ -198,7 +202,7 @@ export default function QuestionHistoryAnalysis() {
         <Button
           variant="ghost" size="sm"
           className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/lecturer/question-bank')}
+          onClick={() => navigate(questionBankPath)}
         >
           <ArrowLeft className="h-4 w-4" /> Back to Question Bank
         </Button>
@@ -309,7 +313,7 @@ export default function QuestionHistoryAnalysis() {
                             <Button size="sm" variant="outline" className="gap-1 text-xs">
                               <RefreshCw className="h-3 w-3" /> Replace Question
                             </Button>
-                            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`/lecturer/question-editor?id=${selectedQuestion.id}`)}>
+                            <Button size="sm" variant="outline" className="gap-1 text-xs" onClick={() => navigate(`${questionEditorPath}?id=${selectedQuestion.id}`)}>
                               Edit Question <ArrowRight className="h-3 w-3" />
                             </Button>
                           </div>

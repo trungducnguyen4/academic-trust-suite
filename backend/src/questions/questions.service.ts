@@ -1,20 +1,54 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateQuestionDto, UpdateQuestionDto } from './dto/question.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
+
+interface AuthUser {
+  id: string;
+  role: 'ADMIN' | 'LECTURER' | 'STUDENT';
+}
 
 @Injectable()
 export class QuestionsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(createQuestionDto: CreateQuestionDto, creatorId: string) {
+  private async assertCourseAccessible(courseId: string, user: AuthUser) {
+    const course = await this.prisma.course.findUnique({
+      where: { id: courseId },
+      select: { id: true, lecturerId: true },
+    });
+
+    if (!course) {
+      throw new NotFoundException('Course not found');
+    }
+
+    if (user.role === 'LECTURER' && course.lecturerId !== user.id) {
+      throw new ForbiddenException('You are not allowed to use this course');
+    }
+  }
+
+  private assertCanAccessQuestion(question: { creatorId: string | null; courseId: string | null }, user: AuthUser) {
+    if (user.role === 'ADMIN') return;
+
+    if (user.role !== 'LECTURER' || question.creatorId !== user.id) {
+      throw new ForbiddenException('You are not allowed to access this question');
+    }
+  }
+
+  async create(createQuestionDto: CreateQuestionDto, user: AuthUser) {
     const { tags, ...questionData } = createQuestionDto;
+
+    if (questionData.courseId) {
+      await this.assertCourseAccessible(questionData.courseId, user);
+    } else if (user.role === 'LECTURER') {
+      throw new BadRequestException('Course is required for lecturer-created questions');
+    }
 
     return this.prisma.question.create({
       data: {
         ...questionData,
         tags: tags ? JSON.stringify(tags) : null,
-        creatorId,
+        creatorId: user.id,
       },
     });
   }
@@ -88,7 +122,7 @@ export class QuestionsService {
     return buildPaginatedResult(parsed, total, page, limit);
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, user: AuthUser) {
     const question = await this.prisma.question.findUnique({
       where: { id },
       include: {
@@ -113,18 +147,22 @@ export class QuestionsService {
       throw new NotFoundException('Question not found');
     }
 
+    this.assertCanAccessQuestion(question, user);
+
     return {
       ...question,
       tags: question.tags ? JSON.parse(question.tags) : [],
     };
   }
 
-  async update(id: string, updateQuestionDto: UpdateQuestionDto) {
+  async update(id: string, updateQuestionDto: UpdateQuestionDto, user: AuthUser) {
     const question = await this.prisma.question.findUnique({ where: { id } });
 
     if (!question) {
       throw new NotFoundException('Question not found');
     }
+
+    this.assertCanAccessQuestion(question, user);
 
     const { tags, ...questionData } = updateQuestionDto;
 
@@ -137,20 +175,23 @@ export class QuestionsService {
     });
   }
 
-  async remove(id: string) {
+  async remove(id: string, user: AuthUser) {
     const question = await this.prisma.question.findUnique({ where: { id } });
 
     if (!question) {
       throw new NotFoundException('Question not found');
     }
 
+    this.assertCanAccessQuestion(question, user);
+
     await this.prisma.question.delete({ where: { id } });
 
     return { message: 'Question deleted successfully' };
   }
 
-  async getQuestionsByTags(tags: string[]) {
+  async getQuestionsByTags(tags: string[], creatorId?: string) {
     const questions = await this.prisma.question.findMany({
+      where: creatorId ? { creatorId } : undefined,
       orderBy: { createdAt: 'desc' },
     });
 

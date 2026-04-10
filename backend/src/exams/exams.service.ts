@@ -2,10 +2,22 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto } from './dto/exam.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
+import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ExamsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notificationsService: NotificationsService,
+  ) {}
+
+  private async getCourseRecipientIds(courseId: string) {
+    const enrollments = await this.prisma.enrollment.findMany({
+      where: { courseId },
+      select: { studentId: true },
+    });
+    return enrollments.map((e) => e.studentId);
+  }
 
   async create(createExamDto: CreateExamDto, creatorId: string) {
     const { questionIds, ...examData } = createExamDto;
@@ -20,7 +32,7 @@ export class ExamsService {
     }
 
     // Use transaction: create exam + attach questions atomically
-    return this.prisma.$transaction(async (tx) => {
+    const createdExam = await this.prisma.$transaction(async (tx) => {
       const exam = await tx.exam.create({
         data: {
           ...examData,
@@ -134,6 +146,32 @@ export class ExamsService {
 
       return createdExam;
     });
+
+    try {
+      const studentIds = await this.getCourseRecipientIds(createdExam.course.id);
+
+      await this.notificationsService.createForUsers(studentIds, {
+        kind: 'EXAM_CREATED',
+        title: 'New exam available',
+        message: `A new exam \"${createdExam.title}\" is available in ${createdExam.course.code}.`,
+        link: '/student/exams',
+        priority: 'high',
+        metadata: { examId: createdExam.id, courseId: createdExam.course.id },
+      });
+
+      await this.notificationsService.createForRole('ADMIN', {
+        kind: 'EXAM_CREATED',
+        title: 'Exam created',
+        message: `${createdExam.creator.fullName} created exam \"${createdExam.title}\".`,
+        link: '/admin',
+        priority: 'low',
+        metadata: { examId: createdExam.id, creatorId },
+      });
+    } catch {
+      // Notification failures must not block exam creation.
+    }
+
+    return createdExam;
   }
 
   async findAll(filters?: {
@@ -301,7 +339,7 @@ export class ExamsService {
       updateData.endTime = new Date(updateExamDto.endTime);
     }
 
-    return this.prisma.exam.update({
+    const updatedExam = await this.prisma.exam.update({
       where: { id },
       data: updateData,
       include: {
@@ -314,10 +352,33 @@ export class ExamsService {
         },
       },
     });
+
+    try {
+      const studentIds = await this.getCourseRecipientIds(updatedExam.course.id);
+      await this.notificationsService.createForUsers(studentIds, {
+        kind: 'EXAM_UPDATED',
+        title: 'Exam updated',
+        message: `Exam \"${updatedExam.title}\" has updated details or schedule.`,
+        link: '/student/exams',
+        priority: 'high',
+        metadata: { examId: updatedExam.id, courseId: updatedExam.course.id },
+      });
+    } catch {
+      // Notification failures must not block exam update.
+    }
+
+    return updatedExam;
   }
 
   async remove(id: string) {
-    const exam = await this.prisma.exam.findUnique({ where: { id } });
+    const exam = await this.prisma.exam.findUnique({
+      where: { id },
+      include: {
+        course: {
+          select: { id: true, code: true, name: true },
+        },
+      },
+    });
 
     if (!exam) {
       throw new NotFoundException('Exam not found');
@@ -327,6 +388,20 @@ export class ExamsService {
     await this.prisma.examQuestion.deleteMany({ where: { examId: id } });
 
     await this.prisma.exam.delete({ where: { id } });
+
+    try {
+      const studentIds = await this.getCourseRecipientIds(exam.course.id);
+      await this.notificationsService.createForUsers(studentIds, {
+        kind: 'EXAM_DELETED',
+        title: 'Exam removed',
+        message: `Exam \"${exam.title}\" in ${exam.course.code} has been removed.`,
+        link: '/student/exams',
+        priority: 'high',
+        metadata: { examId: exam.id, courseId: exam.course.id },
+      });
+    } catch {
+      // Notification failures must not block exam deletion.
+    }
 
     return { message: 'Exam deleted successfully' };
   }
@@ -443,10 +518,47 @@ export class ExamsService {
       throw new BadRequestException('Cannot publish exam without questions');
     }
 
-    return this.prisma.exam.update({
+    const publishedExam = await this.prisma.exam.update({
       where: { id },
       data: { status: 'PUBLISHED' },
     });
+
+    try {
+      const fullExam = await this.prisma.exam.findUnique({
+        where: { id },
+        select: {
+          id: true,
+          title: true,
+          endTime: true,
+          course: { select: { id: true, code: true } },
+        },
+      });
+
+      if (fullExam) {
+        const studentIds = await this.getCourseRecipientIds(fullExam.course.id);
+        await this.notificationsService.createForUsers(studentIds, {
+          kind: 'EXAM_PUBLISHED',
+          title: 'Exam published',
+          message: `Exam \"${fullExam.title}\" is now open${fullExam.endTime ? ` until ${fullExam.endTime.toISOString()}` : ''}.`,
+          link: '/student/exams',
+          priority: 'high',
+          metadata: { examId: fullExam.id, courseId: fullExam.course.id },
+        });
+
+        await this.notificationsService.createForRole('ADMIN', {
+          kind: 'EXAM_PUBLISHED',
+          title: 'Exam published',
+          message: `Exam \"${fullExam.title}\" (${fullExam.course.code}) has been published.`,
+          link: '/admin',
+          priority: 'normal',
+          metadata: { examId: fullExam.id, courseId: fullExam.course.id },
+        });
+      }
+    } catch {
+      // Notification failures must not block exam publishing.
+    }
+
+    return publishedExam;
   }
 
   async getAvailableExamsForStudent(studentId: string) {

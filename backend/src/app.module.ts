@@ -11,6 +11,7 @@ import { SubmissionsModule } from './submissions/submissions.module';
 import { AiModule } from './ai/ai.module';
 import { ExamLinksModule } from './exam-links/exam-links.module';
 import { MailerModule } from './mailer/mailer.module';
+import { NotificationsModule } from './notifications/notifications.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { MailerModule } from './mailer/mailer.module';
     SubmissionsModule,
     AiModule,
     ExamLinksModule,
+    NotificationsModule,
   ],
 })
 export class AppModule {}

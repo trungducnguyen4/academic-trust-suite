@@ -9,6 +9,7 @@ import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import api from '@/lib/api';
+import { toast } from 'sonner';
 import {
   Camera,
   Mic,
@@ -224,7 +225,7 @@ export default function ExamReadyCheck() {
   // --- Start exam ---
   const handleStartExam = async () => {
     if (blockedAttemptStatus) {
-      alert(`You already have a ${blockedAttemptStatus.toLowerCase()} attempt for this exam.`);
+      toast.error(`You already have a ${blockedAttemptStatus.toLowerCase()} attempt for this exam.`);
       return;
     }
 
@@ -236,7 +237,7 @@ export default function ExamReadyCheck() {
     const realExamId = examId;
 
     if (!realExamId) {
-      alert('Missing exam id. Please re-open the exam from your dashboard.');
+      toast.error('Missing exam id. Please re-open the exam from your dashboard.');
       return;
     }
 
@@ -244,7 +245,7 @@ export default function ExamReadyCheck() {
     try {
       const res = await api.startExam(realExamId);
       if (!res?.id) {
-        alert('Could not start exam submission. Please try again.');
+        toast.error('Could not start exam submission. Please try again.');
         return;
       }
       try {
@@ -253,7 +254,7 @@ export default function ExamReadyCheck() {
       } catch {}
     } catch (err: any) {
       console.error('Failed to start submission on server:', err);
-      alert(err?.message || 'Failed to start exam. Please try again.');
+      toast.error(err?.message || 'Failed to start exam. Please try again.');
       return;
     }
 

@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -96,6 +96,9 @@ const safeParseTags = (tags: unknown): string[] => {
 
 export default function QuestionBankManagement() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith('/admin') ? '/admin' : '/lecturer';
+  const questionEditorPath = `${basePath}/question-editor`;
   const [questions, setQuestions] = useState<Question[]>([]);
   const [courses, setCourses] = useState<{ id: string; code: string; name: string; faculty?: string }[]>([]);
   const [loading, setLoading] = useState(true);
@@ -231,7 +234,7 @@ export default function QuestionBankManagement() {
         <Button
           variant="ghost" size="sm"
           className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/lecturer')}
+          onClick={() => navigate(basePath)}
         >
           <ArrowLeft className="h-4 w-4" /> Back to Dashboard
         </Button>
@@ -246,7 +249,7 @@ export default function QuestionBankManagement() {
                   Select a course to manage its questions
                 </p>
               </div>
-              <Button className="gap-2" onClick={() => navigate('/lecturer/question-editor')}>
+              <Button className="gap-2" onClick={() => navigate(questionEditorPath)}>
                 <Plus className="h-4 w-4" /> New Question
               </Button>
             </div>
@@ -391,10 +394,10 @@ export default function QuestionBankManagement() {
                 </div>
               </div>
               <div className="flex gap-2">
-                <Button variant="outline" className="gap-2" onClick={() => navigate('/lecturer/question-history')}>
+                <Button variant="outline" className="gap-2" onClick={() => navigate(`${basePath}/question-history`)}>
                   <BarChart3 className="h-4 w-4" /> Analytics
                 </Button>
-                <Button className="gap-2" onClick={() => navigate(`/lecturer/question-editor?courseCode=${selectedCourse}`)}>
+                <Button className="gap-2" onClick={() => navigate(`${questionEditorPath}?courseCode=${selectedCourse}`)}>
                   <Plus className="h-4 w-4" /> New Question
                 </Button>
               </div>
@@ -439,7 +442,7 @@ export default function QuestionBankManagement() {
                         <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-6 w-6 p-0" onClick={() => setPreviewQuestion(question)}>
                           <Eye className="h-3 w-3" />
                         </Button>
-                        <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-6 w-6 p-0" onClick={() => navigate(`/lecturer/question-editor?id=${question.id}&courseCode=${selectedCourse}`)}>
+                        <Button variant="ghost" size="sm" className="text-white hover:bg-white/20 h-6 w-6 p-0" onClick={() => navigate(`${questionEditorPath}?id=${question.id}&courseCode=${selectedCourse}`)}>
                           <Edit2 className="h-3 w-3" />
                         </Button>
                       </div>
