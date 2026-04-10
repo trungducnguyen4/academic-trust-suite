@@ -30,6 +30,8 @@ import JoinExamByLink from "./pages/student/JoinExamByLink";
 import ScanQRJoinExam from "./pages/student/ScanQRJoinExam";
 import OfflineExamDownload from "./pages/student/OfflineExamDownload";
 import StudentCourseDetail from "./pages/student/StudentCourseDetail";
+import StudentExams from "./pages/student/StudentExams";
+import StudentResults from "./pages/student/StudentResults";
 
 // Lecturer
 import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
@@ -48,6 +50,7 @@ import CreateExam from "./pages/lecturer/CreateExam";
 import ExamAnalytics from "./pages/lecturer/ExamAnalytics";
 import ExamResultsList from "./pages/lecturer/ExamResultsList";
 import ExamPreview from "./pages/lecturer/ExamPreview";
+import ExamQR from "./pages/lecturer/ExamQR";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -92,8 +95,8 @@ const App = () => {
 
               {/* ================= STUDENT ================= */}
               <Route path="/student" element={<StudentDashboard />} />
-              <Route path="/student/exams" element={<StudentDashboard />} />
-              <Route path="/student/results" element={<StudentDashboard />} />
+              <Route path="/student/exams" element={<StudentExams />} />
+              <Route path="/student/results" element={<StudentResults />} />
               <Route path="/student/feedback" element={<FeedbackDetail />} />
               <Route path="/student/timeline" element={<ExamEventTimeline />} />
               <Route path="/student/grading" element={<GradingBreakdown />} />
@@ -128,6 +131,9 @@ const App = () => {
                 path="/lecturer/exam/:id/monitor"
                 element={<ExamMonitor />}
               />
+              <Route path="/lecturer/exam/:id/preview" element={<ExamPreview />} />
+              <Route path="/lecturer/exam/:id/qr" element={<ExamQR />} />
+              <Route path="/lecturer/exam/:id/results" element={<ExamResultsList />} />
               <Route
                 path="/lecturer/exam/:id/preview"
                 element={<ExamPreview />}

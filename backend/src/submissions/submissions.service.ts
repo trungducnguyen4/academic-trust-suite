@@ -2,12 +2,56 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException,
 import { PrismaService } from '../prisma/prisma.service';
 import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto } from './dto/submission.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
+import { SubmissionsEventsService } from './submissions-events.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class SubmissionsService {
   constructor(
     private prisma: PrismaService,
+    private submissionsEvents: SubmissionsEventsService,
+  ) {}
+
+  private getRealtimeSeverity(eventType: string): 'low' | 'medium' | 'high' {
+    const e = String(eventType || '').toLowerCase();
+    if (e.includes('fullscreen') || e.includes('face')) return 'high';
+    if (e.includes('tab') || e.includes('paste')) return 'medium';
+    return 'low';
+  }
+
+  private publishRealtimeLogs(
+    examId: string,
+    submissionId: string,
+    student: { id?: string; fullName?: string; studentId?: string },
+    logs: Array<{ type: string; details?: any; ts?: number }>,
+  ) {
+    const suspiciousTypes = new Set([
+      'tab_switch',
+      'mouse_anomaly',
+      'mouse_idle',
+      'copy',
+      'paste',
+      'fullscreen_exit',
+      'window_blur',
+      'face_not_detected',
+    ]);
+
+    for (const entry of logs || []) {
+      const eventType = String(entry?.type || '').toLowerCase();
+      if (!suspiciousTypes.has(eventType)) continue;
+
+      const id = `${submissionId}-${eventType}-${entry?.ts || Date.now()}`;
+      this.submissionsEvents.emitIntegrityEvent(examId, {
+        id,
+        submissionId,
+        eventType,
+        details: entry?.details ? String(entry.details) : eventType,
+        timestamp: new Date(entry?.ts || Date.now()).toISOString(),
+        severity: this.getRealtimeSeverity(eventType),
+        student,
+      });
+    }
+  }
     private notificationsService: NotificationsService,
   ) {}
 
@@ -124,6 +168,13 @@ export class SubmissionsService {
     const submission = await this.prisma.examSubmission.findUnique({
       where: { id: submissionId },
       include: {
+        student: {
+          select: {
+            id: true,
+            fullName: true,
+            studentId: true,
+          },
+        },
         exam: {
           include: {
             examQuestions: {
@@ -168,6 +219,7 @@ export class SubmissionsService {
     }
 
     // Use transaction to ensure atomicity of answer creation + submission update + logs
+    const result = await this.prisma.$transaction(async (tx) => {
     const updatedSubmission = await this.prisma.$transaction(async (tx) => {
       // Create submission answers
       let totalScore = 0;
@@ -274,6 +326,107 @@ export class SubmissionsService {
     });
     }); // end $transaction
 
+    if (logs.length > 0) {
+      this.publishRealtimeLogs(
+        submission.examId,
+        submission.id,
+        {
+          id: submission.student?.id,
+          fullName: submission.student?.fullName,
+          studentId: submission.student?.studentId,
+        },
+        logs,
+      );
+    }
+
+    return result;
+  }
+
+  async addLogs(submissionId: string, logs: Array<{ type: string; details?: any; ts?: number }>, studentId: string) {
+    const submission = await this.prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        student: {
+          select: {
+            id: true,
+            fullName: true,
+            studentId: true,
+          },
+        },
+      },
+    });
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    if (submission.studentId !== studentId) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    // Validate logs payload (reuse same limits as submitExam)
+    const entries = logs || [];
+    if (entries.length > 1000) {
+      throw new BadRequestException('Too many log entries');
+    }
+    let totalLogChars = 0;
+    for (const l of entries) {
+      const detailsStr = l.details ? String(l.details) : '';
+      totalLogChars += detailsStr.length;
+      if (detailsStr.length > 2000) {
+        throw new BadRequestException('Log entry too large');
+      }
+    }
+    if (totalLogChars > 200000) {
+      throw new BadRequestException('Proctoring logs payload too large');
+    }
+
+    // Persist proctoring aggregates and integrity logs
+    const result = await this.prisma.$transaction(async (tx) => {
+      const tabSwitchCount = entries.filter((x) => String(x.type).toLowerCase() === 'tab_switch').length;
+      const mouseAnomalies = entries.filter((x) => String(x.type).toLowerCase() === 'mouse_anomaly').length;
+
+      const proctoringSession = await tx.proctoringSession.upsert({
+        where: { submissionId },
+        create: {
+          submissionId,
+          tabSwitchCount,
+          mouseAnomalies,
+        },
+        update: {
+          tabSwitchCount: { increment: tabSwitchCount },
+          mouseAnomalies: { increment: mouseAnomalies },
+        },
+      });
+
+      const proctoringId = proctoringSession.id;
+      const createLogs = entries.map((l) => ({
+        proctoringId,
+        eventType: String(l.type).slice(0, 100),
+        details: l.details ? String(l.details).slice(0, 2000) : undefined,
+        timestamp: l.ts ? new Date(l.ts) : new Date(),
+      }));
+
+      if (createLogs.length > 0) {
+        await tx.integrityLog.createMany({ data: createLogs });
+      }
+
+      return { success: true };
+    });
+
+    if (entries.length > 0) {
+      this.publishRealtimeLogs(
+        submission.examId,
+        submission.id,
+        {
+          id: submission.student?.id,
+          fullName: submission.student?.fullName,
+          studentId: submission.student?.studentId,
+        },
+        entries,
+      );
+    }
+
+    return result;
     try {
       await this.notificationsService.create({
         recipientId: studentId,
@@ -620,6 +773,7 @@ export class SubmissionsService {
     const suspiciousTypes = new Set([
       'tab_switch',
       'mouse_anomaly',
+      'mouse_idle',
       'copy',
       'paste',
       'fullscreen_exit',

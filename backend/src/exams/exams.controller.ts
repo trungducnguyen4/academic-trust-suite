@@ -11,7 +11,10 @@ import {
   Request,
 } from '@nestjs/common';
 import { ExamsService } from './exams.service';
-import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto } from './dto/exam.dto';
+import { MailerService } from '../mailer/mailer.service';
+import { EnrollmentsService } from '../enrollments/enrollments.service';
+import { IsArray, IsEmail, IsOptional } from 'class-validator';
+import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto, ShareExamDto } from './dto/exam.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -23,13 +26,77 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 @Controller('exams')
 @UseGuards(JwtAuthGuard)
 export class ExamsController {
-  constructor(private readonly examsService: ExamsService) {}
+  constructor(
+    private readonly examsService: ExamsService,
+    private readonly mailerService: MailerService,
+    private readonly enrollmentsService: EnrollmentsService,
+  ) {}
+
+  @Post(':id/share')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  async shareExam(@Param('id') id: string, @Body() body: ShareExamDto | any, @Request() req) {
+    let emails: string[] = (body?.emails && Array.isArray(body.emails)) ? body.emails : (body?.email ? [body.email] : []);
+    const sendToCourse = !!body?.sendToCourse;
+
+    // Resolve exam to include title and course
+    const exam = await this.examsService.findOne(id);
+    const frontend = process.env.FRONTEND_URL || 'http://localhost:8080';
+    const link = `${frontend}/student/exam-ready?examId=${id}`;
+    const subject = `Invitation to exam: ${exam?.title || 'Exam'}`;
+    const html = `<p>You have been invited to join the exam <strong>${exam?.title || 'Exam'}</strong>.</p>
+      <p>Click to join: <a href="${link}">${link}</a></p>`;
+
+    // If sendToCourse, fetch enrolled students for the exam's course
+    if (sendToCourse) {
+      const courseId = exam?.course?.id || (exam as any)?.courseId;
+      if (courseId) {
+        const enrollments = await this.enrollmentsService.findByCourse(courseId);
+        const studentEmails = (enrollments || [])
+          .map((enr: any) => enr?.student?.email)
+          .filter((e: any) => !!e);
+        emails = Array.from(new Set([...(emails || []), ...studentEmails]));
+      }
+    }
+
+    if (!emails || emails.length === 0) {
+      return { success: false, message: 'No recipient provided' };
+    }
+
+    await this.mailerService.sendExamLink(emails, subject, html);
+    return { success: true };
+  }
 
   @Post()
   @UseGuards(RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  create(@Body() createExamDto: CreateExamDto, @Request() req) {
-    return this.examsService.create(createExamDto, req.user.id);
+  async create(@Body() createExamDto: CreateExamDto, @Request() req) {
+    const created = await this.examsService.create(createExamDto, req.user.id);
+
+    // After creating exam, attempt to notify enrolled students with join link
+    try {
+      const courseId = created?.course?.id || (created as any)?.courseId;
+      if (courseId) {
+        const enrollments = await this.enrollmentsService.findByCourse(courseId);
+        const studentEmails = (enrollments || [])
+          .map((enr: any) => enr?.student?.email)
+          .filter(Boolean) as string[];
+        const emails = Array.from(new Set(studentEmails));
+        if (emails.length > 0) {
+          const frontend = process.env.FRONTEND_URL || 'http://localhost:8080';
+          const link = `${frontend}/student/exam-ready?examId=${created.id}`;
+          const subject = `Invitation to exam: ${created?.title || 'Exam'}`;
+          const html = `<p>You have been invited to join the exam <strong>${created?.title || 'Exam'}</strong>.</p>
+            <p>Click to join: <a href="${link}">${link}</a></p>`;
+          await this.mailerService.sendExamLink(emails, subject, html);
+        }
+      }
+    } catch (err) {
+      // Do not block exam creation if email fails — just log and continue
+      console.error('Failed to send auto-notification emails for exam creation', err);
+    }
+
+    return created;
   }
 
   @Get()

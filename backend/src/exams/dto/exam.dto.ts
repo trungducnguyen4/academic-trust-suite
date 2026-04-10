@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsOptional, IsObject, IsInt, IsDateString, IsArray, Min } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsObject, IsInt, IsDateString, IsArray, Min, IsBoolean, IsEmail } from 'class-validator';
 
 export class CreateExamDto {
   @IsString()
@@ -99,4 +99,13 @@ export class UpdateExamQuestionDto {
   @IsInt()
   @Min(1)
   points?: number;
+}
+
+export class ShareExamDto {
+  @IsArray()
+  @IsEmail({}, { each: true })
+  emails: string[];
+  @IsOptional()
+  @IsBoolean()
+  sendToCourse?: boolean;
 }

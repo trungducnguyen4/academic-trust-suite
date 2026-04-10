@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { toast } from 'sonner';
+import { Share2, QrCode } from 'lucide-react';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -46,6 +52,11 @@ export default function ExamPreview() {
   const navigate = useNavigate();
   const [exam, setExam] = useState<ExamData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showShareDialog, setShowShareDialog] = useState(false);
+  const [shareEmails, setShareEmails] = useState('');
+  const [isSharing, setIsSharing] = useState(false);
+  const [sendToCourse, setSendToCourse] = useState(false);
+  const [showQRDialog, setShowQRDialog] = useState(false);
 
   useEffect(() => {
     const loadExam = async () => {
@@ -80,6 +91,32 @@ export default function ExamPreview() {
       isEnded: now > end.getTime(),
     };
   }, [exam]);
+
+  const handleShare = async () => {
+    if (!exam) return;
+    const raw = (shareEmails || '').trim();
+    if (!raw) {
+      toast.error('Please enter recipient email(s)');
+      return;
+    }
+    const emails = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    if (!emails.length) {
+      toast.error('Please enter valid email address(es)');
+      return;
+    }
+    try {
+      setIsSharing(true);
+      await api.shareExam(exam.id, emails, sendToCourse);
+      toast.success('Exam link sent');
+      setShowShareDialog(false);
+      setShareEmails('');
+      setSendToCourse(false);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to send exam link');
+    } finally {
+      setIsSharing(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -118,19 +155,85 @@ export default function ExamPreview() {
             </p>
           </div>
 
-          {timeline.isEnded ? (
-            <Button asChild>
-              <Link to={`/lecturer/exam/${exam.id}/results`}>
-                <BarChart3 className="h-4 w-4 mr-2" />
-                View Results
-              </Link>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowShareDialog(true)}>
+              <Share2 className="h-4 w-4 mr-1" />
+              Share
             </Button>
-          ) : (
-            <Button variant="outline" asChild>
-              <Link to="/lecturer/question-bank">Open Question Bank</Link>
+            <Button variant="ghost" size="sm" onClick={() => setShowQRDialog(true)}>
+              <QrCode className="h-4 w-4 mr-1" />
+              Show QR
             </Button>
-          )}
+            {timeline.isEnded ? (
+              <Button asChild>
+                <Link to={`/lecturer/exam/${exam.id}/results`}>
+                  <BarChart3 className="h-4 w-4 mr-2" />
+                  View Results
+                </Link>
+              </Button>
+            ) : (
+              <Button variant="outline" asChild>
+                <Link to="/lecturer/question-bank">Open Question Bank</Link>
+              </Button>
+            )}
+          </div>
         </div>
+
+        {/* Share dialog */}
+        <Dialog open={showShareDialog} onOpenChange={(open) => setShowShareDialog(open)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Share Exam Link</DialogTitle>
+              <DialogDescription>Enter recipient email addresses (comma separated)</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4">
+              <Label htmlFor="share-emails">Emails</Label>
+              <Input
+                id="share-emails"
+                placeholder="teacher@example.com, parent@example.com"
+                value={shareEmails}
+                onChange={(e) => setShareEmails(e.target.value)}
+              />
+            </div>
+            <div className="mt-3 flex items-start gap-2">
+              <Checkbox checked={sendToCourse} onCheckedChange={(v: any) => setSendToCourse(!!v)} />
+              <div>
+                <p className="text-sm font-medium">Send to all students enrolled in this course</p>
+                <p className="text-xs text-muted-foreground">Adds all enrolled students as recipients in addition to addresses above.</p>
+              </div>
+            </div>
+            <DialogFooter className="mt-4">
+              <div className="flex gap-2 justify-end w-full">
+                <Button variant="ghost" onClick={() => setShowShareDialog(false)}>Cancel</Button>
+                <Button onClick={handleShare} disabled={isSharing}>{isSharing ? 'Sending...' : 'Send'}</Button>
+              </div>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* QR dialog */}
+        <Dialog open={showQRDialog} onOpenChange={(open) => setShowQRDialog(open)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Exam QR</DialogTitle>
+              <DialogDescription>Show this QR on your monitor for students to scan</DialogDescription>
+            </DialogHeader>
+            <div className="mt-4 text-center">
+              <img
+                alt="Exam QR"
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=720x720&data=${encodeURIComponent(`${typeof window !== 'undefined' ? window.location.origin : ''}/student/exam-ready?examId=${exam?.id}`)}`}
+                style={{ width: 560, height: 560 }}
+              />
+              <div className="mt-4">
+                <Button asChild>
+                  <Link to={`/lecturer/exam/${exam?.id}/qr`}>
+                    Open Full Screen
+                  </Link>
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         <Card>
           <CardHeader>

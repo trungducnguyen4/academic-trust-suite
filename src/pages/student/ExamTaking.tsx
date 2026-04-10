@@ -258,6 +258,7 @@ function isAnswered(q: Question, answers: AnswerMap): boolean {
 }
 
 const EXAM_DURATION = 90 * 60;
+const MOUSE_IDLE_THRESHOLD_MS = 45000;
 
 const typeBadgeColor: Record<QType, string> = {
   'single-choice': 'bg-blue-100 text-blue-700',
@@ -300,12 +301,16 @@ export default function ExamTaking() {
   const [timeLeft, setTimeLeft]     = useState(EXAM_DURATION);
   const [tabSwitches, setTabSwitches] = useState(0);
   const [showTabWarning, setShowTabWarning] = useState(false);
+  const [fullscreenExits, setFullscreenExits] = useState(0);
+  const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const logRef   = useRef<{ type: string; ts: number; detail?: string }[]>([]);
+  const lastMouseActivityRef = useRef<number>(Date.now());
+  const mouseIdleLoggedRef = useRef<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
@@ -371,11 +376,37 @@ export default function ExamTaking() {
     logRef.current.push({ type, ts: Date.now(), detail });
   }, []);
 
-  // Fullscreen
+  // Fullscreen: enter on mount, watch for exits
   useEffect(() => {
     document.documentElement.requestFullscreen?.().catch(() => {});
     log('exam_start');
-    return () => { if (document.fullscreenElement) document.exitFullscreen().catch(() => {}); };
+
+    const onFullscreenChange = () => {
+      if (!document.fullscreenElement) {
+        setFullscreenExits((n) => n + 1);
+        setShowFullscreenWarning(true);
+        log('fullscreen_exit', 'User exited fullscreen');
+
+        // send immediate log to server (fire-and-forget)
+        try {
+          const submissionId = localStorage.getItem('currentSubmissionId');
+          if (submissionId) {
+            api.sendExamLogs(submissionId, [{ type: 'fullscreen_exit', details: 'User exited fullscreen', ts: Date.now() }])
+              .catch((e) => console.error('sendExamLogs failed', e));
+          }
+        } catch (e) {
+          console.error('Failed to send fullscreen log', e);
+        }
+
+        setTimeout(() => setShowFullscreenWarning(false), 5000);
+      }
+    };
+
+    document.addEventListener('fullscreenchange', onFullscreenChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFullscreenChange);
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+    };
   }, [log]);
 
   // Timer with auto-submit
@@ -461,6 +492,52 @@ export default function ExamTaking() {
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
+  }, [log]);
+
+  // Mouse idle tracking (silent for student): logs when no activity for a threshold period.
+  useEffect(() => {
+    const markActivity = () => {
+      lastMouseActivityRef.current = Date.now();
+      mouseIdleLoggedRef.current = false;
+    };
+
+    const onActivityEvents: Array<keyof DocumentEventMap> = [
+      'mousemove',
+      'mousedown',
+      'wheel',
+      'keydown',
+      'touchstart',
+    ];
+
+    onActivityEvents.forEach((evt) => document.addEventListener(evt, markActivity, { passive: true }));
+
+    const idleCheckId = window.setInterval(() => {
+      const now = Date.now();
+      const idleMs = now - lastMouseActivityRef.current;
+      if (idleMs < MOUSE_IDLE_THRESHOLD_MS) return;
+      if (mouseIdleLoggedRef.current) return;
+
+      mouseIdleLoggedRef.current = true;
+      const idleSeconds = Math.floor(idleMs / 1000);
+      const detail = `No mouse activity for ${idleSeconds}s`;
+
+      log('mouse_idle', detail);
+
+      try {
+        const submissionId = localStorage.getItem('currentSubmissionId');
+        if (submissionId) {
+          api.sendExamLogs(submissionId, [{ type: 'mouse_idle', details: detail, ts: now }])
+            .catch((e) => console.error('sendExamLogs mouse_idle failed', e));
+        }
+      } catch (e) {
+        console.error('Failed to send mouse idle log', e);
+      }
+    }, 5000);
+
+    return () => {
+      onActivityEvents.forEach((evt) => document.removeEventListener(evt, markActivity));
+      window.clearInterval(idleCheckId);
+    };
   }, [log]);
 
   const formatTime = (s: number) => {
@@ -553,6 +630,34 @@ export default function ExamTaking() {
             <p className="text-muted-foreground mb-1">This incident has been recorded.</p>
             <p className="text-muted-foreground text-sm mb-5">Total violations: <strong>{tabSwitches}</strong></p>
             <Button onClick={() => setShowTabWarning(false)}>Return to Exam</Button>
+          </div>
+        </div>
+      )}
+
+      {/* Fullscreen exit overlay */}
+      {showFullscreenWarning && (
+        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center">
+          <div className="bg-card rounded-xl p-8 max-w-sm text-center border shadow-xl">
+            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Fullscreen Exited!</h2>
+            <p className="text-muted-foreground mb-1">This incident has been recorded and reported to your instructor.</p>
+            <p className="text-muted-foreground text-sm mb-5">Total violations: <strong>{fullscreenExits}</strong></p>
+            <Button
+              onClick={async () => {
+                try {
+                  if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+                    await document.documentElement.requestFullscreen();
+                    log('fullscreen_resume', 'User returned to fullscreen via warning dialog');
+                  }
+                } catch (e) {
+                  console.error('Failed to re-enter fullscreen', e);
+                } finally {
+                  setShowFullscreenWarning(false);
+                }
+              }}
+            >
+              Return to Exam
+            </Button>
           </div>
         </div>
       )}
