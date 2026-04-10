@@ -121,6 +121,7 @@ export default function Profile() {
       return;
     }
 
+  const handleDeleteProfile = async () => {
     if (!deletePassword) {
       toast.error('Please enter your current password to delete profile');
       return;
@@ -322,6 +323,19 @@ export default function Profile() {
                     Delete Profile
                   </Button>
                 </form>
+                  <ConfirmActionDialog
+                    title="Delete profile"
+                    description="This will delete your profile and sign you out. Continue?"
+                    confirmText="Delete profile"
+                    destructive
+                    onConfirm={handleDeleteProfile}
+                  >
+                    <Button type="button" variant="destructive" disabled={isDeletingProfile}>
+                      {isDeletingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      Delete Profile
+                    </Button>
+                  </ConfirmActionDialog>
+                </div>
               </CardContent>
             </Card>
           </div>

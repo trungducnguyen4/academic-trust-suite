@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -460,7 +461,7 @@ export default function ExamTaking() {
       } catch {}
     } catch (err) {
       console.error('Failed to submit to server:', err);
-      alert('Submit failed. Please try again.');
+      toast.error('Submit failed. Please try again.');
       setIsSubmitting(false);
       return;
     }

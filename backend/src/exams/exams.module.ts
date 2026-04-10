@@ -7,6 +7,10 @@ import { NotificationsModule } from '../notifications/notifications.module';
 
 @Module({
   imports: [MailerModule, EnrollmentsModule, NotificationsModule],
+import { NotificationsModule } from '../notifications/notifications.module';
+
+@Module({
+  imports: [NotificationsModule],
   controllers: [ExamsController],
   providers: [ExamsService],
   exports: [ExamsService],

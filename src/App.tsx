@@ -134,6 +134,14 @@ const App = () => {
               <Route path="/lecturer/exam/:id/preview" element={<ExamPreview />} />
               <Route path="/lecturer/exam/:id/qr" element={<ExamQR />} />
               <Route path="/lecturer/exam/:id/results" element={<ExamResultsList />} />
+              <Route
+                path="/lecturer/exam/:id/preview"
+                element={<ExamPreview />}
+              />
+              <Route
+                path="/lecturer/exam/:id/results"
+                element={<ExamResultsList />}
+              />
 
               <Route
                 path="/lecturer/question-bank"
