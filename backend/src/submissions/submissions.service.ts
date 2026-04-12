@@ -10,6 +10,7 @@ export class SubmissionsService {
   constructor(
     private prisma: PrismaService,
     private submissionsEvents: SubmissionsEventsService,
+    private readonly notificationsService: NotificationsService,
   ) {}
 
   private getRealtimeSeverity(eventType: string): 'low' | 'medium' | 'high' {
@@ -52,10 +53,8 @@ export class SubmissionsService {
       });
     }
   }
-    private notificationsService: NotificationsService,
-  ) {}
 
-  async startExam(startExamDto: StartExamDto, studentId: string) {
+  async startExam(startExamDto: StartExamDto, studentId: string): Promise<void> {
     const exam = await this.prisma.exam.findUnique({
       where: { id: startExamDto.examId },
       include: {
@@ -164,7 +163,11 @@ export class SubmissionsService {
     return startedSubmission;
   }
 
-  async submitExam(submissionId: string, submitExamDto: SubmitExamDto, studentId: string) {
+  async submitExam(
+    submissionId: string,
+    submitExamDto: SubmitExamDto,
+    studentId: string
+  ): Promise<void> {
     const submission = await this.prisma.examSubmission.findUnique({
       where: { id: submissionId },
       include: {
@@ -220,7 +223,6 @@ export class SubmissionsService {
 
     // Use transaction to ensure atomicity of answer creation + submission update + logs
     const result = await this.prisma.$transaction(async (tx) => {
-    const updatedSubmission = await this.prisma.$transaction(async (tx) => {
       // Create submission answers
       let totalScore = 0;
       const autoGradedTypes = ['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE'];
@@ -304,26 +306,26 @@ export class SubmissionsService {
           score: totalScore,
         },
         include: {
-        exam: {
-          select: {
-            id: true,
-            title: true,
-            totalPoints: true,
+          exam: {
+            select: {
+              id: true,
+              title: true,
+              totalPoints: true,
+            },
           },
-        },
-        answers: {
-          include: {
-            question: {
-              select: {
-                id: true,
-                type: true,
-                content: true,
+          answers: {
+            include: {
+              question: {
+                select: {
+                  id: true,
+                  type: true,
+                  content: true,
+                },
               },
             },
           },
         },
-      },
-    });
+      });
     }); // end $transaction
 
     if (logs.length > 0) {
@@ -342,7 +344,11 @@ export class SubmissionsService {
     return result;
   }
 
-  async addLogs(submissionId: string, logs: Array<{ type: string; details?: any; ts?: number }>, studentId: string) {
+  async addLogs(
+    submissionId: string,
+    logs: Array<{ type: string; details?: any; ts?: number }>, 
+    studentId: string
+  ): Promise<void> {
     const submission = await this.prisma.examSubmission.findUnique({
       where: { id: submissionId },
       include: {
@@ -432,14 +438,14 @@ export class SubmissionsService {
         recipientId: studentId,
         kind: 'SUBMISSION_RECEIVED',
         title: 'Submission received',
-        message: `Your submission for ${updatedSubmission.exam.title} has been received.`,
+        message: `Your submission for ${submission.exam.title} has been received.`,
         link: '/student/results',
         priority: 'normal',
         metadata: {
-          submissionId: updatedSubmission.id,
-          examId: updatedSubmission.exam.id,
-          status: updatedSubmission.status,
-          score: updatedSubmission.score,
+          submissionId: submission.id,
+          examId: submission.exam.id,
+          status: submission.status,
+          score: submission.score,
         },
       });
 
@@ -517,7 +523,7 @@ export class SubmissionsService {
       // Notification failures must not block submission flow.
     }
 
-    return updatedSubmission;
+    return submission;
   }
 
   private compareAnswers(submitted: any, correct: any): boolean {
@@ -548,79 +554,47 @@ export class SubmissionsService {
     });
   }
 
-  async finalizeGrading(submissionId: string) {
-    // Use transaction to ensure score calculation and status update are atomic
-    const gradedSubmission = await this.prisma.$transaction(async (tx) => {
-      const submission = await tx.examSubmission.findUnique({
-        where: { id: submissionId },
-        include: {
-          answers: true,
-        },
-      });
-
-      if (!submission) {
-        throw new NotFoundException('Submission not found');
-      }
-
-      const totalScore = submission.answers.reduce(
-        (sum, a) => sum + (a.pointsAwarded || 0),
-        0,
-      );
-
-      return tx.examSubmission.update({
-        where: { id: submissionId },
-        data: {
-          status: 'GRADED',
-          score: totalScore,
-          gradedAt: new Date(),
-        },
-      });
+  async finalizeSubmission(submissionId: string): Promise<void> {
+    const submission = await this.prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+      include: { exam: true },
     });
 
-    try {
-      const result = await this.prisma.examSubmission.findUnique({
-        where: { id: submissionId },
-        select: {
-          studentId: true,
-          score: true,
-          exam: {
-            select: {
-              id: true,
-              title: true,
-              totalPoints: true,
-              creatorId: true,
-            },
-          },
-        },
-      });
-
-      if (result) {
-        await this.notificationsService.createMany([
-          {
-            recipientId: result.studentId,
-            kind: 'SUBMISSION_GRADED',
-            title: 'Grade available',
-            message: `Your score for ${result.exam.title} is ${result.score ?? 0}/${result.exam.totalPoints ?? 0}.`,
-            link: '/student/results',
-            priority: 'high',
-            metadata: { submissionId, examId: result.exam.id, score: result.score },
-          },
-          {
-            recipientId: result.exam.creatorId,
-            kind: 'GRADING_COMPLETED',
-            title: 'Grading completed',
-            message: `Grading is finalized for ${result.exam.title}.`,
-            link: `/lecturer/exam/${result.exam.id}/results`,
-            priority: 'normal',
-            metadata: { submissionId, examId: result.exam.id },
-          },
-        ]);
-      }
-    } catch {
-      // Notification failures must not block finalization.
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
     }
 
-    return gradedSubmission;
+    await this.prisma.examSubmission.update({
+      where: { id: submissionId },
+      data: { status: 'FINALIZED' },
+    });
+
+    this.notificationsService.notify({
+      recipientId: submission.studentId,
+      kind: 'submission-finalized',
+      title: 'Submission Finalized',
+      message: `Your submission for ${submission.exam.title} has been received.`,
+      metadata: {
+        examId: submission.exam.id,
+        status: 'FINALIZED',
+        score: submission.score,
+      },
+    });
+  }
+
+  async finalizeGrading(submissionId: string): Promise<void> {
+    const submission = await this.prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    await this.prisma.examSubmission.update({
+      where: { id: submissionId },
+      data: { status: 'FINALIZED' },
+    });
   }
 
   async findByExam(examId: string, pagination?: PaginationDto) {

@@ -580,3 +580,5 @@ export function DashboardLayout({
     </TooltipProvider>
   );
 }
+
+export { FileText };

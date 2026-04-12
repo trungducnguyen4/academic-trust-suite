@@ -136,6 +136,7 @@ export class NotificationsService {
         this.prisma.notification.count({ where }),
       ]);
     } catch (error) {
+      console.error("Error in findMyNotifications:", error);
       if (!this.isNotificationTableMissing(error)) {
         throw error;
       }
@@ -153,7 +154,7 @@ export class NotificationsService {
         },
       });
     } catch (error) {
-      if (this.isNotificationTableMissing(error)) return 0;
+      console.error("Error in getUnreadCount:", error);
       throw error;
     }
   }
@@ -239,5 +240,10 @@ export class NotificationsService {
     }
 
     return { message: "Notification deleted successfully" };
+  }
+
+  // Added a notify method to simplify notification creation
+  async notify(input: CreateNotificationInput): Promise<void> {
+    await this.create(input);
   }
 }

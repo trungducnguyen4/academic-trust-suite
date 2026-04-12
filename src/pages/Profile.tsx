@@ -113,14 +113,6 @@ export default function Profile() {
     setConfirmPassword('');
   };
 
-  const handleDeleteProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    if (isStudent) {
-      toast.error('Profile deletion is temporarily disabled for students');
-      return;
-    }
-
   const handleDeleteProfile = async () => {
     if (!deletePassword) {
       toast.error('Please enter your current password to delete profile');
@@ -306,7 +298,7 @@ export default function Profile() {
                   <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
                     This action cannot be undone. Your account will be archived and you will be signed out.
                   </div>
-                  <div className="grid gap-2">
+                  <form className="grid gap-2" onSubmit={handleDeleteProfile}>
                     <Label htmlFor="delete-password">Current Password</Label>
                     <Input
                       id="delete-password"
@@ -317,12 +309,11 @@ export default function Profile() {
                       disabled={isStudent}
                       required
                     />
-                  </div>
-                  <Button type="submit" variant="destructive" disabled={isDeletingProfile || isStudent}>
-                    {isDeletingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
-                    Delete Profile
-                  </Button>
-                </form>
+                    <Button type="submit" variant="destructive" disabled={isDeletingProfile || isStudent}>
+                      {isDeletingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Trash2 className="mr-2 h-4 w-4" />}
+                      Delete Profile
+                    </Button>
+                  </form>
                   <ConfirmActionDialog
                     title="Delete profile"
                     description="This will delete your profile and sign you out. Continue?"

@@ -51,7 +51,7 @@ export class ExamsController {
     if (sendToCourse) {
       const courseId = exam?.course?.id || (exam as any)?.courseId;
       if (courseId) {
-        const enrollments = await this.enrollmentsService.findByCourse(courseId);
+        const enrollments = await this.enrollmentsService.findByCourse(courseId, req.user);
         const studentEmails = (enrollments || [])
           .map((enr: any) => enr?.student?.email)
           .filter((e: any) => !!e);
@@ -77,7 +77,7 @@ export class ExamsController {
     try {
       const courseId = created?.course?.id || (created as any)?.courseId;
       if (courseId) {
-        const enrollments = await this.enrollmentsService.findByCourse(courseId);
+        const enrollments = await this.enrollmentsService.findByCourse(courseId, req.user);
         const studentEmails = (enrollments || [])
           .map((enr: any) => enr?.student?.email)
           .filter(Boolean) as string[];

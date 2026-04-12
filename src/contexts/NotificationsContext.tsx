@@ -23,6 +23,7 @@ interface NotificationsContextValue {
   notifications: NotificationItem[];
   unreadCount: number;
   loading: boolean;
+  error: string | null;
   refresh: () => Promise<void>;
   markAsRead: (id: string) => Promise<void>;
   markAllAsRead: () => Promise<void>;
@@ -42,6 +43,7 @@ export function NotificationsProvider({
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   const refresh = async () => {
     if (!isAuthenticated || !user) {
@@ -51,6 +53,7 @@ export function NotificationsProvider({
     }
 
     setLoading(true);
+    setError(null);
     try {
       const [notificationResponse, unreadResponse] = await Promise.all([
         api.getMyNotifications({ limit: 8 }),
@@ -59,6 +62,9 @@ export function NotificationsProvider({
 
       setNotifications(unwrapPaginatedData<NotificationItem>(notificationResponse));
       setUnreadCount(unreadResponse?.count ?? 0);
+    } catch (error) {
+      console.error("Error refreshing notifications:", error);
+      setError("Failed to load notifications. Please try again later.");
     } finally {
       setLoading(false);
     }
@@ -90,18 +96,17 @@ export function NotificationsProvider({
     await refresh();
   };
 
-  const value = useMemo(
-    () => ({
-      notifications,
-      unreadCount,
-      loading,
-      refresh,
-      markAsRead,
-      markAllAsRead,
-      removeNotification,
-    }),
-    [notifications, unreadCount, loading],
-  );
+  // Ensure `setError` is included in the context value
+  const value = {
+    notifications,
+    unreadCount,
+    loading,
+    error,
+    refresh,
+    markAsRead,
+    markAllAsRead,
+    removeNotification,
+  };
 
   return (
     <NotificationsContext.Provider value={value}>
