@@ -480,14 +480,34 @@ export default function ExamTaking() {
     return () => clearInterval(id);
   }, [doSubmit]);
 
-  // Tab switch detection
+  // Tab switch detection with server logging
   useEffect(() => {
     const onVis = () => {
       if (document.hidden) {
-        setTabSwitches((n) => n + 1);
-        setShowTabWarning(true);
-        log('tab_switch');
-        setTimeout(() => setShowTabWarning(false), 5000);
+        setTabSwitches((n) => {
+          const newCount = n + 1;
+          setShowTabWarning(true);
+          log('tab_switch', `Tab switched ${newCount} times`);
+
+          // Send log to server
+          try {
+            const submissionId = localStorage.getItem('currentSubmissionId');
+            if (submissionId) {
+              api.sendExamLogs(submissionId, [
+                {
+                  type: 'tab_switch',
+                  details: `Tab switched ${newCount} times`,
+                  ts: Date.now(),
+                },
+              ]).catch((e) => console.error('sendExamLogs failed', e));
+            }
+          } catch (e) {
+            console.error('Failed to send tab switch log', e);
+          }
+
+          setTimeout(() => setShowTabWarning(false), 5000);
+          return newCount;
+        });
       }
     };
     document.addEventListener('visibilitychange', onVis);
@@ -889,7 +909,7 @@ function MultiChoiceRenderer({
             className={`cursor-pointer w-full flex items-center gap-3 border rounded-lg px-4 py-3 transition-all
               ${isSel
                 ? 'border-primary bg-primary/10'
-                : 'border-border bg-card hover:border-primary/30 hover:bg-secondary/30'}`}
+                : 'border-border bg-card hover:bg-secondary/30'}`}
           >
             <Checkbox
               checked={isSel}
