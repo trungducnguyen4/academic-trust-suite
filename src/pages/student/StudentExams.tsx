@@ -1,11 +1,17 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Calendar, Loader2 } from 'lucide-react';
-import api from '@/lib/api';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Calendar, Loader2 } from "lucide-react";
+import api from "@/lib/api";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export default function StudentExams() {
   const [exams, setExams] = useState<any[]>([]);
@@ -16,25 +22,39 @@ export default function StudentExams() {
     const fetch = async () => {
       try {
         setLoading(true);
-        const [available, mySubs] = await Promise.all([api.getAvailableExams(), api.getMySubmissions()]);
+        const [available, mySubs] = await Promise.all([
+          api.getAvailableExams(),
+          api.getMySubmissions(),
+        ]);
         const examsList = available || [];
         const submissions = mySubs || [];
         const submittedExamIds = new Set<string>(
           submissions
-            .filter((s: any) => ['SUBMITTED', 'GRADED', 'FLAGGED', 'FINALIZED'].includes(String(s.status || '').toUpperCase()))
-            .map((s: any) => s.examId ?? s.exam?.id)
+            .filter((s: any) =>
+              ["SUBMITTED", "GRADED", "FLAGGED", "FINALIZED"].includes(
+                String(s.status || "").toUpperCase(),
+              ),
+            )
+            .map((s: any) => s.examId ?? s.exam?.id),
         );
         if (mounted) {
-          setExams(examsList.map((e: any) => ({ ...e, submitted: submittedExamIds.has(e.id) })));
+          setExams(
+            examsList.map((e: any) => ({
+              ...e,
+              submitted: submittedExamIds.has(e.id),
+            })),
+          );
         }
       } catch (err) {
-        console.error('Failed to load exams', err);
+        console.error("Failed to load exams", err);
       } finally {
         if (mounted) setLoading(false);
       }
     };
     fetch();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   return (
@@ -44,7 +64,9 @@ export default function StudentExams() {
 
         <div>
           <h1 className="text-2xl font-bold text-foreground">Exams</h1>
-          <p className="text-muted-foreground mt-1">Available examinations for you</p>
+          <p className="text-muted-foreground mt-1">
+            Available examinations for you
+          </p>
         </div>
 
         <Card>
@@ -64,26 +86,41 @@ export default function StudentExams() {
                     <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
                       <Calendar className="h-6 w-6 text-muted-foreground" />
                     </div>
-                    <p className="text-muted-foreground font-medium">No available exams</p>
+                    <p className="text-muted-foreground font-medium">
+                      No available exams
+                    </p>
                   </div>
                 ) : (
                   exams.map((exam: any) => (
-                    <div key={exam.id} className="flex items-center justify-between rounded-xl border border-border/50 p-4">
+                    <div
+                      key={exam.id}
+                      className="flex items-center justify-between rounded-xl border border-border/50 p-4"
+                    >
                       <div>
-                        <h4 className="font-semibold text-foreground">{exam.title}</h4>
-                        <p className="text-sm text-muted-foreground">{exam.course?.code ?? exam.course}</p>
+                        <h4 className="font-semibold text-foreground">
+                          {exam.title}
+                        </h4>
+                        <p className="text-sm text-muted-foreground">
+                          {exam.course?.code ?? exam.course}
+                        </p>
                         {exam.startTime && (
-                          <p className="text-xs text-muted-foreground">{new Date(exam.startTime).toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(exam.startTime).toLocaleString()}
+                          </p>
                         )}
                       </div>
                       <div className="flex items-center gap-2">
                         {!exam.submitted && (
                           <Button asChild size="sm">
-                            <Link to={`/student/exam-ready?examId=${exam.id}`}>Start</Link>
+                            <Link to={`/student/exam-ready?examId=${exam.id}`}>
+                              Start
+                            </Link>
                           </Button>
                         )}
                         <Button asChild variant="outline" size="sm">
-                          <Link to={`/student/grading?examId=${exam.id}`}>Result</Link>
+                          <Link to={`/student/grading?examId=${exam.id}`}>
+                            Result
+                          </Link>
                         </Button>
                       </div>
                     </div>

@@ -1,10 +1,16 @@
-import { useState } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { Input } from '@/components/ui/input';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { useState } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
   TableBody,
@@ -12,7 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Shield,
   AlertTriangle,
@@ -25,9 +31,9 @@ import {
   TrendingUp,
   Users,
   FileText,
-} from 'lucide-react';
-import { IntegrityCaseDetail } from '@/components/admin/IntegrityCaseDetail';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "lucide-react";
+import { IntegrityCaseDetail } from "@/components/admin/IntegrityCaseDetail";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export interface FlaggedSubmission {
   id: string;
@@ -36,8 +42,8 @@ export interface FlaggedSubmission {
   examId: string;
   examTitle: string;
   submittedAt: string;
-  confidence: 'High' | 'Medium' | 'Low';
-  status: 'pending' | 'reviewed' | 'dismissed' | 'confirmed';
+  confidence: "High" | "Medium" | "Low";
+  status: "pending" | "reviewed" | "dismissed" | "confirmed";
   reasons: IntegrityReason[];
   similarityScore?: number;
   timeAnomaly?: boolean;
@@ -45,7 +51,7 @@ export interface FlaggedSubmission {
 }
 
 export interface IntegrityReason {
-  type: 'similarity' | 'timing' | 'pattern' | 'behavior';
+  type: "similarity" | "timing" | "pattern" | "behavior";
   description: string;
   weight: number;
   evidence?: string;
@@ -54,130 +60,134 @@ export interface IntegrityReason {
 // Mock data for flagged submissions
 const mockFlaggedSubmissions: FlaggedSubmission[] = [
   {
-    id: 'flag-001',
-    studentId: 'STU-2024-0892',
-    studentName: 'Alex Johnson',
-    examId: 'exam-ds-final',
-    examTitle: 'Data Structures Final',
-    submittedAt: '2024-01-15T14:32:00Z',
-    confidence: 'High',
-    status: 'pending',
+    id: "flag-001",
+    studentId: "STU-2024-0892",
+    studentName: "Alex Johnson",
+    examId: "exam-ds-final",
+    examTitle: "Data Structures Final",
+    submittedAt: "2024-01-15T14:32:00Z",
+    confidence: "High",
+    status: "pending",
     similarityScore: 87,
     timeAnomaly: true,
     reasons: [
       {
-        type: 'similarity',
-        description: 'Answer pattern similarity with STU-2024-1034',
+        type: "similarity",
+        description: "Answer pattern similarity with STU-2024-1034",
         weight: 0.45,
-        evidence: 'Questions 12-18 show 94% similarity in answer sequence and timing',
+        evidence:
+          "Questions 12-18 show 94% similarity in answer sequence and timing",
       },
       {
-        type: 'timing',
-        description: 'Abnormal response time pattern',
-        weight: 0.30,
-        evidence: 'Average response time dropped from 45s to 8s after question 10',
+        type: "timing",
+        description: "Abnormal response time pattern",
+        weight: 0.3,
+        evidence:
+          "Average response time dropped from 45s to 8s after question 10",
       },
       {
-        type: 'behavior',
-        description: 'Tab focus loss detected',
+        type: "behavior",
+        description: "Tab focus loss detected",
         weight: 0.25,
-        evidence: '12 instances of window blur events during exam',
+        evidence: "12 instances of window blur events during exam",
       },
     ],
-    patternMatch: ['STU-2024-1034'],
+    patternMatch: ["STU-2024-1034"],
   },
   {
-    id: 'flag-002',
-    studentId: 'STU-2024-1034',
-    studentName: 'Maria Garcia',
-    examId: 'exam-ds-final',
-    examTitle: 'Data Structures Final',
-    submittedAt: '2024-01-15T14:28:00Z',
-    confidence: 'High',
-    status: 'pending',
+    id: "flag-002",
+    studentId: "STU-2024-1034",
+    studentName: "Maria Garcia",
+    examId: "exam-ds-final",
+    examTitle: "Data Structures Final",
+    submittedAt: "2024-01-15T14:28:00Z",
+    confidence: "High",
+    status: "pending",
     similarityScore: 87,
     reasons: [
       {
-        type: 'similarity',
-        description: 'Answer pattern similarity with STU-2024-0892',
-        weight: 0.50,
-        evidence: 'Questions 12-18 show 94% similarity in answer sequence',
+        type: "similarity",
+        description: "Answer pattern similarity with STU-2024-0892",
+        weight: 0.5,
+        evidence: "Questions 12-18 show 94% similarity in answer sequence",
       },
       {
-        type: 'pattern',
-        description: 'Identical wrong answer pattern',
+        type: "pattern",
+        description: "Identical wrong answer pattern",
         weight: 0.35,
-        evidence: 'Same incorrect answers on questions 14, 16, 17',
+        evidence: "Same incorrect answers on questions 14, 16, 17",
       },
     ],
-    patternMatch: ['STU-2024-0892'],
+    patternMatch: ["STU-2024-0892"],
   },
   {
-    id: 'flag-003',
-    studentId: 'STU-2024-0567',
-    studentName: 'James Wilson',
-    examId: 'exam-algo-mid',
-    examTitle: 'Algorithms Midterm',
-    submittedAt: '2024-01-14T10:15:00Z',
-    confidence: 'Medium',
-    status: 'reviewed',
+    id: "flag-003",
+    studentId: "STU-2024-0567",
+    studentName: "James Wilson",
+    examId: "exam-algo-mid",
+    examTitle: "Algorithms Midterm",
+    submittedAt: "2024-01-14T10:15:00Z",
+    confidence: "Medium",
+    status: "reviewed",
     similarityScore: 62,
     timeAnomaly: true,
     reasons: [
       {
-        type: 'timing',
-        description: 'Rapid sequential correct answers',
-        weight: 0.60,
-        evidence: 'Questions 5-12 answered in under 3 seconds each with 100% accuracy',
+        type: "timing",
+        description: "Rapid sequential correct answers",
+        weight: 0.6,
+        evidence:
+          "Questions 5-12 answered in under 3 seconds each with 100% accuracy",
       },
       {
-        type: 'behavior',
-        description: 'Copy-paste event detected',
-        weight: 0.40,
-        evidence: '3 paste events detected in essay responses',
+        type: "behavior",
+        description: "Copy-paste event detected",
+        weight: 0.4,
+        evidence: "3 paste events detected in essay responses",
       },
     ],
   },
   {
-    id: 'flag-004',
-    studentId: 'STU-2024-0234',
-    studentName: 'Sarah Chen',
-    examId: 'exam-db-quiz',
-    examTitle: 'Database Systems Quiz',
-    submittedAt: '2024-01-13T16:45:00Z',
-    confidence: 'Low',
-    status: 'dismissed',
+    id: "flag-004",
+    studentId: "STU-2024-0234",
+    studentName: "Sarah Chen",
+    examId: "exam-db-quiz",
+    examTitle: "Database Systems Quiz",
+    submittedAt: "2024-01-13T16:45:00Z",
+    confidence: "Low",
+    status: "dismissed",
     reasons: [
       {
-        type: 'timing',
-        description: 'Unusual submission timing',
+        type: "timing",
+        description: "Unusual submission timing",
         weight: 1.0,
-        evidence: 'Submitted 2 minutes before deadline after 45 minutes of inactivity',
+        evidence:
+          "Submitted 2 minutes before deadline after 45 minutes of inactivity",
       },
     ],
   },
   {
-    id: 'flag-005',
-    studentId: 'STU-2024-0789',
-    studentName: 'Michael Brown',
-    examId: 'exam-os-final',
-    examTitle: 'Operating Systems Final',
-    submittedAt: '2024-01-12T11:20:00Z',
-    confidence: 'High',
-    status: 'confirmed',
+    id: "flag-005",
+    studentId: "STU-2024-0789",
+    studentName: "Michael Brown",
+    examId: "exam-os-final",
+    examTitle: "Operating Systems Final",
+    submittedAt: "2024-01-12T11:20:00Z",
+    confidence: "High",
+    status: "confirmed",
     similarityScore: 92,
     reasons: [
       {
-        type: 'similarity',
-        description: 'Near-identical essay response',
-        weight: 0.70,
-        evidence: 'Essay response shows 92% text similarity with online source',
+        type: "similarity",
+        description: "Near-identical essay response",
+        weight: 0.7,
+        evidence: "Essay response shows 92% text similarity with online source",
       },
       {
-        type: 'pattern',
-        description: 'External source match',
-        weight: 0.30,
-        evidence: 'Content matches published solution on external website',
+        type: "pattern",
+        description: "External source match",
+        weight: 0.3,
+        evidence: "Content matches published solution on external website",
       },
     ],
   },
@@ -191,59 +201,71 @@ const stats = {
 };
 
 export default function IntegrityOverview() {
-  const [searchQuery, setSearchQuery] = useState('');
-  const [selectedCase, setSelectedCase] = useState<FlaggedSubmission | null>(null);
-  const [activeTab, setActiveTab] = useState('all');
+  const [searchQuery, setSearchQuery] = useState("");
+  const [selectedCase, setSelectedCase] = useState<FlaggedSubmission | null>(
+    null,
+  );
+  const [activeTab, setActiveTab] = useState("all");
 
   const filteredSubmissions = mockFlaggedSubmissions.filter((submission) => {
     const matchesSearch =
-      submission.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      submission.studentName
+        .toLowerCase()
+        .includes(searchQuery.toLowerCase()) ||
       submission.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       submission.examTitle.toLowerCase().includes(searchQuery.toLowerCase());
 
-    if (activeTab === 'all') return matchesSearch;
-    if (activeTab === 'pending') return matchesSearch && submission.status === 'pending';
-    if (activeTab === 'reviewed') return matchesSearch && submission.status === 'reviewed';
-    if (activeTab === 'confirmed') return matchesSearch && submission.status === 'confirmed';
-    if (activeTab === 'dismissed') return matchesSearch && submission.status === 'dismissed';
+    if (activeTab === "all") return matchesSearch;
+    if (activeTab === "pending")
+      return matchesSearch && submission.status === "pending";
+    if (activeTab === "reviewed")
+      return matchesSearch && submission.status === "reviewed";
+    if (activeTab === "confirmed")
+      return matchesSearch && submission.status === "confirmed";
+    if (activeTab === "dismissed")
+      return matchesSearch && submission.status === "dismissed";
     return matchesSearch;
   });
 
-  const getConfidenceBadgeVariant = (confidence: string): 'destructive' | 'warning' | 'default' => {
+  const getConfidenceBadgeVariant = (
+    confidence: string,
+  ): "destructive" | "warning" | "default" => {
     switch (confidence) {
-      case 'High':
-        return 'destructive';
-      case 'Medium':
-        return 'warning';
-      case 'Low':
-        return 'default';
+      case "High":
+        return "destructive";
+      case "Medium":
+        return "warning";
+      case "Low":
+        return "default";
       default:
-        return 'default';
+        return "default";
     }
   };
 
-  const getStatusBadgeVariant = (status: string): 'warning' | 'info' | 'destructive' | 'default' => {
+  const getStatusBadgeVariant = (
+    status: string,
+  ): "warning" | "info" | "destructive" | "default" => {
     switch (status) {
-      case 'pending':
-        return 'warning';
-      case 'reviewed':
-        return 'info';
-      case 'confirmed':
-        return 'destructive';
-      case 'dismissed':
-        return 'default';
+      case "pending":
+        return "warning";
+      case "reviewed":
+        return "info";
+      case "confirmed":
+        return "destructive";
+      case "dismissed":
+        return "default";
       default:
-        return 'default';
+        return "default";
     }
   };
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return new Date(dateString).toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
@@ -293,8 +315,12 @@ export default function IntegrityOverview() {
                   <Clock className="h-5 w-5 text-info" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{stats.pendingReview}</p>
-                  <p className="text-sm text-muted-foreground">Pending Review</p>
+                  <p className="text-2xl font-semibold">
+                    {stats.pendingReview}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Pending Review
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -306,8 +332,12 @@ export default function IntegrityOverview() {
                   <AlertTriangle className="h-5 w-5 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{stats.highConfidence}</p>
-                  <p className="text-sm text-muted-foreground">High Confidence</p>
+                  <p className="text-2xl font-semibold">
+                    {stats.highConfidence}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    High Confidence
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -319,8 +349,12 @@ export default function IntegrityOverview() {
                   <XCircle className="h-5 w-5 text-destructive" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{stats.confirmedCases}</p>
-                  <p className="text-sm text-muted-foreground">Confirmed Cases</p>
+                  <p className="text-2xl font-semibold">
+                    {stats.confirmedCases}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    Confirmed Cases
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -365,78 +399,92 @@ export default function IntegrityOverview() {
 
               <TabsContent value={activeTab} className="mt-0">
                 <div className="overflow-x-auto">
-                <div className="rounded-md border">
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Student</TableHead>
-                        <TableHead>Exam</TableHead>
-                        <TableHead>Submitted</TableHead>
-                        <TableHead>Confidence</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead>Primary Reason</TableHead>
-                        <TableHead className="text-right">Action</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {filteredSubmissions.length === 0 ? (
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
                         <TableRow>
-                          <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                            No flagged submissions found
-                          </TableCell>
+                          <TableHead>Student</TableHead>
+                          <TableHead>Exam</TableHead>
+                          <TableHead>Submitted</TableHead>
+                          <TableHead>Confidence</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Primary Reason</TableHead>
+                          <TableHead className="text-right">Action</TableHead>
                         </TableRow>
-                      ) : (
-                        filteredSubmissions.map((submission) => (
-                          <TableRow key={submission.id}>
-                            <TableCell>
-                              <div>
-                                <p className="font-medium text-foreground">
-                                  {submission.studentName}
-                                </p>
-                                <p className="text-xs text-muted-foreground">
-                                  {submission.studentId}
-                                </p>
-                              </div>
-                            </TableCell>
-                            <TableCell>
-                              <p className="text-sm text-foreground">{submission.examTitle}</p>
-                            </TableCell>
-                            <TableCell>
-                              <p className="text-sm text-muted-foreground">
-                                {formatDate(submission.submittedAt)}
-                              </p>
-                            </TableCell>
-                            <TableCell>
-                              <StatusBadge variant={getConfidenceBadgeVariant(submission.confidence)}>
-                                {submission.confidence}
-                              </StatusBadge>
-                            </TableCell>
-                            <TableCell>
-                              <StatusBadge variant={getStatusBadgeVariant(submission.status)}>
-                                {submission.status.charAt(0).toUpperCase() + submission.status.slice(1)}
-                              </StatusBadge>
-                            </TableCell>
-                            <TableCell>
-                              <p className="text-sm text-muted-foreground max-w-xs truncate">
-                                {submission.reasons[0]?.description}
-                              </p>
-                            </TableCell>
-                            <TableCell className="text-right">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => setSelectedCase(submission)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                Review
-                              </Button>
+                      </TableHeader>
+                      <TableBody>
+                        {filteredSubmissions.length === 0 ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={7}
+                              className="text-center py-8 text-muted-foreground"
+                            >
+                              No flagged submissions found
                             </TableCell>
                           </TableRow>
-                        ))
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
+                        ) : (
+                          filteredSubmissions.map((submission) => (
+                            <TableRow key={submission.id}>
+                              <TableCell>
+                                <div>
+                                  <p className="font-medium text-foreground">
+                                    {submission.studentName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {submission.studentId}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell>
+                                <p className="text-sm text-foreground">
+                                  {submission.examTitle}
+                                </p>
+                              </TableCell>
+                              <TableCell>
+                                <p className="text-sm text-muted-foreground">
+                                  {formatDate(submission.submittedAt)}
+                                </p>
+                              </TableCell>
+                              <TableCell>
+                                <StatusBadge
+                                  variant={getConfidenceBadgeVariant(
+                                    submission.confidence,
+                                  )}
+                                >
+                                  {submission.confidence}
+                                </StatusBadge>
+                              </TableCell>
+                              <TableCell>
+                                <StatusBadge
+                                  variant={getStatusBadgeVariant(
+                                    submission.status,
+                                  )}
+                                >
+                                  {submission.status.charAt(0).toUpperCase() +
+                                    submission.status.slice(1)}
+                                </StatusBadge>
+                              </TableCell>
+                              <TableCell>
+                                <p className="text-sm text-muted-foreground max-w-xs truncate">
+                                  {submission.reasons[0]?.description}
+                                </p>
+                              </TableCell>
+                              <TableCell className="text-right">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setSelectedCase(submission)}
+                                >
+                                  <Eye className="h-4 w-4 mr-1" />
+                                  Review
+                                </Button>
+                              </TableCell>
+                            </TableRow>
+                          ))
+                        )}
+                      </TableBody>
+                    </Table>
+                  </div>
                 </div>
               </TabsContent>
             </Tabs>
@@ -448,7 +496,9 @@ export default function IntegrityOverview() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Detection Patterns</CardTitle>
-              <CardDescription>Common integrity violation types</CardDescription>
+              <CardDescription>
+                Common integrity violation types
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
@@ -458,7 +508,9 @@ export default function IntegrityOverview() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">Answer Similarity</p>
-                    <p className="text-xs text-muted-foreground">Similar patterns between students</p>
+                    <p className="text-xs text-muted-foreground">
+                      Similar patterns between students
+                    </p>
                   </div>
                 </div>
                 <span className="text-sm font-semibold">42%</span>
@@ -470,7 +522,9 @@ export default function IntegrityOverview() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">Timing Anomalies</p>
-                    <p className="text-xs text-muted-foreground">Abnormal response patterns</p>
+                    <p className="text-xs text-muted-foreground">
+                      Abnormal response patterns
+                    </p>
                   </div>
                 </div>
                 <span className="text-sm font-semibold">28%</span>
@@ -482,7 +536,9 @@ export default function IntegrityOverview() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">External Sources</p>
-                    <p className="text-xs text-muted-foreground">Content matching online materials</p>
+                    <p className="text-xs text-muted-foreground">
+                      Content matching online materials
+                    </p>
                   </div>
                 </div>
                 <span className="text-sm font-semibold">18%</span>
@@ -494,7 +550,9 @@ export default function IntegrityOverview() {
                   </div>
                   <div>
                     <p className="text-sm font-medium">Behavioral Signals</p>
-                    <p className="text-xs text-muted-foreground">Tab switching, copy-paste events</p>
+                    <p className="text-xs text-muted-foreground">
+                      Tab switching, copy-paste events
+                    </p>
                   </div>
                 </div>
                 <span className="text-sm font-semibold">12%</span>
@@ -505,16 +563,21 @@ export default function IntegrityOverview() {
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Review Guidelines</CardTitle>
-              <CardDescription>Best practices for integrity review</CardDescription>
+              <CardDescription>
+                Best practices for integrity review
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-success" />
-                  <p className="text-sm font-medium">Review all evidence before deciding</p>
+                  <p className="text-sm font-medium">
+                    Review all evidence before deciding
+                  </p>
                 </div>
                 <p className="text-xs text-muted-foreground pl-6">
-                  Consider the full context including exam conditions and student history
+                  Consider the full context including exam conditions and
+                  student history
                 </p>
               </div>
               <div className="rounded-lg border border-border p-3 space-y-2">
@@ -529,7 +592,9 @@ export default function IntegrityOverview() {
               <div className="rounded-lg border border-border p-3 space-y-2">
                 <div className="flex items-center gap-2">
                   <CheckCircle2 className="h-4 w-4 text-success" />
-                  <p className="text-sm font-medium">Escalate uncertain cases</p>
+                  <p className="text-sm font-medium">
+                    Escalate uncertain cases
+                  </p>
                 </div>
                 <p className="text-xs text-muted-foreground pl-6">
                   Involve academic board for high-stakes or ambiguous situations

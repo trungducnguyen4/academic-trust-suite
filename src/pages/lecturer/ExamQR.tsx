@@ -1,10 +1,10 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent } from '@/components/ui/card';
-import { Loader2 } from 'lucide-react';
-import api from '@/lib/api';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+import { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Card, CardContent } from "@/components/ui/card";
+import { Loader2 } from "lucide-react";
+import api from "@/lib/api";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export default function ExamQR() {
   const { id } = useParams();
@@ -19,16 +19,21 @@ export default function ExamQR() {
         const res = await api.getExam(id);
         if (mounted) setExam(res);
       } catch (err) {
-        console.error('Failed to load exam for QR', err);
+        console.error("Failed to load exam for QR", err);
       } finally {
         if (mounted) setLoading(false);
       }
     };
     load();
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [id]);
 
-  const link = typeof window !== 'undefined' && id ? `${window.location.origin}/student/exam-ready?examId=${id}` : '';
+  const link =
+    typeof window !== "undefined" && id
+      ? `${window.location.origin}/student/exam-ready?examId=${id}`
+      : "";
 
   return (
     <DashboardLayout>
@@ -43,7 +48,9 @@ export default function ExamQR() {
                 </div>
               ) : (
                 <div>
-                  <h2 className="text-xl font-semibold mb-4">{exam?.title || 'Exam QR'}</h2>
+                  <h2 className="text-xl font-semibold mb-4">
+                    {exam?.title || "Exam QR"}
+                  </h2>
                   <div className="mx-auto mb-4">
                     <img
                       alt="Exam QR"
@@ -51,7 +58,10 @@ export default function ExamQR() {
                       style={{ width: 640, height: 640 }}
                     />
                   </div>
-                  <p className="text-sm text-muted-foreground">Ask students to scan the QR code displayed on the monitor to join the exam.</p>
+                  <p className="text-sm text-muted-foreground">
+                    Ask students to scan the QR code displayed on the monitor to
+                    join the exam.
+                  </p>
                 </div>
               )}
             </CardContent>

@@ -38,7 +38,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface GeneratedQuestion {
   id: string;

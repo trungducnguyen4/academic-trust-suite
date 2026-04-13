@@ -48,7 +48,7 @@ import {
   Wand2,
 } from "lucide-react";
 import { toast } from "sonner";
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Option {
   id: string;
@@ -438,7 +438,9 @@ export default function QuestionEditor() {
       console.error("Failed to save question:", error);
       console.error("Question data that failed:", questionData);
       // Show user-friendly error message
-      toast.error("Failed to save question. Please check the console for details.");
+      toast.error(
+        "Failed to save question. Please check the console for details.",
+      );
     } finally {
       setSaving(false);
     }
@@ -501,7 +503,9 @@ export default function QuestionEditor() {
       setAiPrompt("");
     } catch (error: any) {
       console.error("AI generation failed:", error);
-      toast.error("AI generation failed: " + (error.message || "Unknown error"));
+      toast.error(
+        "AI generation failed: " + (error.message || "Unknown error"),
+      );
     } finally {
       setIsGenerating(false);
     }

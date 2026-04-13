@@ -1,20 +1,26 @@
-import { useState } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Slider } from '@/components/ui/slider';
-import { Switch } from '@/components/ui/switch';
-import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
+import { useState } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Slider } from "@/components/ui/slider";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Save,
   Settings2,
@@ -29,8 +35,8 @@ import {
   AlertTriangle,
   Loader2,
   CheckCircle2,
-} from 'lucide-react';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "lucide-react";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export default function AdvancedExamRuleConfig() {
   const [saving, setSaving] = useState(false);
@@ -49,7 +55,7 @@ export default function AdvancedExamRuleConfig() {
   // Shuffle Settings
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
   const [shuffleOptions, setShuffleOptions] = useState(true);
-  const [shuffleMode, setShuffleMode] = useState('random');
+  const [shuffleMode, setShuffleMode] = useState("random");
 
   // Security / Integrity
   const [fullscreenRequired, setFullscreenRequired] = useState(true);
@@ -57,7 +63,7 @@ export default function AdvancedExamRuleConfig() {
   const [maxTabSwitches, setMaxTabSwitches] = useState([3]);
   const [mouseTracking, setMouseTracking] = useState(true);
   const [ipRestriction, setIpRestriction] = useState(false);
-  const [allowedIpRange, setAllowedIpRange] = useState('192.168.1.0/24');
+  const [allowedIpRange, setAllowedIpRange] = useState("192.168.1.0/24");
 
   // Scoring
   const [immediateScoring, setImmediateScoring] = useState(true);
@@ -92,14 +98,23 @@ export default function AdvancedExamRuleConfig() {
 
         <div className="flex items-start justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground mb-1">Exam Rule Configuration</h1>
+            <h1 className="text-2xl font-semibold text-foreground mb-1">
+              Exam Rule Configuration
+            </h1>
             <p className="text-muted-foreground">
-              Configure difficulty distribution, shuffling, integrity, and scoring rules
+              Configure difficulty distribution, shuffling, integrity, and
+              scoring rules
             </p>
           </div>
           <Button onClick={handleSave} disabled={saving} className="gap-2">
-            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : saved ? <CheckCircle2 className="h-4 w-4" /> : <Save className="h-4 w-4" />}
-            {saved ? 'Saved!' : 'Save Configuration'}
+            {saving ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : saved ? (
+              <CheckCircle2 className="h-4 w-4" />
+            ) : (
+              <Save className="h-4 w-4" />
+            )}
+            {saved ? "Saved!" : "Save Configuration"}
           </Button>
         </div>
 
@@ -115,15 +130,33 @@ export default function AdvancedExamRuleConfig() {
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label>Duration (minutes)</Label>
-                  <Input type="number" min={10} max={300} value={duration} onChange={(e) => setDuration(Number(e.target.value))} />
+                  <Input
+                    type="number"
+                    min={10}
+                    max={300}
+                    value={duration}
+                    onChange={(e) => setDuration(Number(e.target.value))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Total Questions</Label>
-                  <Input type="number" min={1} max={200} value={totalQuestions} onChange={(e) => setTotalQuestions(Number(e.target.value))} />
+                  <Input
+                    type="number"
+                    min={1}
+                    max={200}
+                    value={totalQuestions}
+                    onChange={(e) => setTotalQuestions(Number(e.target.value))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Passing Score (%)</Label>
-                  <Input type="number" min={0} max={100} value={passingScore} onChange={(e) => setPassingScore(Number(e.target.value))} />
+                  <Input
+                    type="number"
+                    min={0}
+                    max={100}
+                    value={passingScore}
+                    onChange={(e) => setPassingScore(Number(e.target.value))}
+                  />
                 </div>
               </div>
             </CardContent>
@@ -135,7 +168,9 @@ export default function AdvancedExamRuleConfig() {
               <CardTitle className="text-base flex items-center gap-2">
                 <BarChart3 className="h-4 w-4" /> Difficulty Distribution
               </CardTitle>
-              <CardDescription>Allocate percentage of questions by difficulty level</CardDescription>
+              <CardDescription>
+                Allocate percentage of questions by difficulty level
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-4">
@@ -144,34 +179,64 @@ export default function AdvancedExamRuleConfig() {
                     <span className="text-green-600 font-medium">Easy</span>
                     <span>{easyRatio[0]}%</span>
                   </div>
-                  <Slider value={easyRatio} onValueChange={setEasyRatio} min={0} max={100} step={5} />
+                  <Slider
+                    value={easyRatio}
+                    onValueChange={setEasyRatio}
+                    min={0}
+                    max={100}
+                    step={5}
+                  />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-yellow-600 font-medium">Medium</span>
                     <span>{mediumRatio[0]}%</span>
                   </div>
-                  <Slider value={mediumRatio} onValueChange={setMediumRatio} min={0} max={100} step={5} />
+                  <Slider
+                    value={mediumRatio}
+                    onValueChange={setMediumRatio}
+                    min={0}
+                    max={100}
+                    step={5}
+                  />
                 </div>
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
                     <span className="text-red-600 font-medium">Hard</span>
                     <span>{hardRatio[0]}%</span>
                   </div>
-                  <Slider value={hardRatio} onValueChange={setHardRatio} min={0} max={100} step={5} />
+                  <Slider
+                    value={hardRatio}
+                    onValueChange={setHardRatio}
+                    min={0}
+                    max={100}
+                    step={5}
+                  />
                 </div>
               </div>
               <div className="flex items-center gap-2 p-3 rounded-lg bg-muted">
                 <div className="flex-1">
                   <div className="flex h-3 rounded-full overflow-hidden">
-                    <div className="bg-green-500" style={{ width: `${easyRatio[0]}%` }} />
-                    <div className="bg-yellow-500" style={{ width: `${mediumRatio[0]}%` }} />
-                    <div className="bg-red-500" style={{ width: `${hardRatio[0]}%` }} />
+                    <div
+                      className="bg-green-500"
+                      style={{ width: `${easyRatio[0]}%` }}
+                    />
+                    <div
+                      className="bg-yellow-500"
+                      style={{ width: `${mediumRatio[0]}%` }}
+                    />
+                    <div
+                      className="bg-red-500"
+                      style={{ width: `${hardRatio[0]}%` }}
+                    />
                   </div>
                 </div>
-                <span className={`text-xs font-medium ${easyRatio[0] + mediumRatio[0] + hardRatio[0] === 100 ? 'text-green-600' : 'text-red-600'}`}>
+                <span
+                  className={`text-xs font-medium ${easyRatio[0] + mediumRatio[0] + hardRatio[0] === 100 ? "text-green-600" : "text-red-600"}`}
+                >
                   Total: {easyRatio[0] + mediumRatio[0] + hardRatio[0]}%
-                  {easyRatio[0] + mediumRatio[0] + hardRatio[0] !== 100 && ' (must be 100%)'}
+                  {easyRatio[0] + mediumRatio[0] + hardRatio[0] !== 100 &&
+                    " (must be 100%)"}
                 </span>
               </div>
             </CardContent>
@@ -188,27 +253,43 @@ export default function AdvancedExamRuleConfig() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Shuffle Questions</Label>
-                  <p className="text-xs text-muted-foreground">Randomize question order for each student</p>
+                  <p className="text-xs text-muted-foreground">
+                    Randomize question order for each student
+                  </p>
                 </div>
-                <Switch checked={shuffleQuestions} onCheckedChange={setShuffleQuestions} />
+                <Switch
+                  checked={shuffleQuestions}
+                  onCheckedChange={setShuffleQuestions}
+                />
               </div>
               <Separator />
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Shuffle Answer Options</Label>
-                  <p className="text-xs text-muted-foreground">Randomize option order within each question</p>
+                  <p className="text-xs text-muted-foreground">
+                    Randomize option order within each question
+                  </p>
                 </div>
-                <Switch checked={shuffleOptions} onCheckedChange={setShuffleOptions} />
+                <Switch
+                  checked={shuffleOptions}
+                  onCheckedChange={setShuffleOptions}
+                />
               </div>
               <Separator />
               <div className="space-y-2">
                 <Label>Shuffle Mode</Label>
                 <Select value={shuffleMode} onValueChange={setShuffleMode}>
-                  <SelectTrigger className="w-[280px]"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="w-[280px]">
+                    <SelectValue />
+                  </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="random">Fully Random</SelectItem>
-                    <SelectItem value="by_topic">Group by Topic, Shuffle Within</SelectItem>
-                    <SelectItem value="by_difficulty">Order by Difficulty (easy → hard)</SelectItem>
+                    <SelectItem value="by_topic">
+                      Group by Topic, Shuffle Within
+                    </SelectItem>
+                    <SelectItem value="by_difficulty">
+                      Order by Difficulty (easy → hard)
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -221,23 +302,35 @@ export default function AdvancedExamRuleConfig() {
               <CardTitle className="text-base flex items-center gap-2">
                 <Shield className="h-4 w-4" /> Security & Integrity
               </CardTitle>
-              <CardDescription>Anti-cheating and proctoring measures</CardDescription>
+              <CardDescription>
+                Anti-cheating and proctoring measures
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Fullscreen Required</Label>
-                  <p className="text-xs text-muted-foreground">Force fullscreen mode during exam</p>
+                  <p className="text-xs text-muted-foreground">
+                    Force fullscreen mode during exam
+                  </p>
                 </div>
-                <Switch checked={fullscreenRequired} onCheckedChange={setFullscreenRequired} />
+                <Switch
+                  checked={fullscreenRequired}
+                  onCheckedChange={setFullscreenRequired}
+                />
               </div>
               <Separator />
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Tab Switch Detection</Label>
-                  <p className="text-xs text-muted-foreground">Detect and log when students switch tabs</p>
+                  <p className="text-xs text-muted-foreground">
+                    Detect and log when students switch tabs
+                  </p>
                 </div>
-                <Switch checked={tabSwitchDetection} onCheckedChange={setTabSwitchDetection} />
+                <Switch
+                  checked={tabSwitchDetection}
+                  onCheckedChange={setTabSwitchDetection}
+                />
               </div>
               {tabSwitchDetection && (
                 <div className="ml-4 space-y-2">
@@ -245,16 +338,27 @@ export default function AdvancedExamRuleConfig() {
                     <span>Max allowed tab switches before auto-flag</span>
                     <span className="font-medium">{maxTabSwitches[0]}</span>
                   </div>
-                  <Slider value={maxTabSwitches} onValueChange={setMaxTabSwitches} min={1} max={10} step={1} />
+                  <Slider
+                    value={maxTabSwitches}
+                    onValueChange={setMaxTabSwitches}
+                    min={1}
+                    max={10}
+                    step={1}
+                  />
                 </div>
               )}
               <Separator />
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Mouse Movement Tracking</Label>
-                  <p className="text-xs text-muted-foreground">Track cursor patterns for anomaly detection</p>
+                  <p className="text-xs text-muted-foreground">
+                    Track cursor patterns for anomaly detection
+                  </p>
                 </div>
-                <Switch checked={mouseTracking} onCheckedChange={setMouseTracking} />
+                <Switch
+                  checked={mouseTracking}
+                  onCheckedChange={setMouseTracking}
+                />
               </div>
               <Separator />
               <div className="flex items-center justify-between">
@@ -262,9 +366,14 @@ export default function AdvancedExamRuleConfig() {
                   <Label className="flex items-center gap-2">
                     <Globe className="h-4 w-4" /> IP Address Restriction
                   </Label>
-                  <p className="text-xs text-muted-foreground">Only allow exam from specific IP range</p>
+                  <p className="text-xs text-muted-foreground">
+                    Only allow exam from specific IP range
+                  </p>
                 </div>
-                <Switch checked={ipRestriction} onCheckedChange={setIpRestriction} />
+                <Switch
+                  checked={ipRestriction}
+                  onCheckedChange={setIpRestriction}
+                />
               </div>
               {ipRestriction && (
                 <div className="ml-4 space-y-2">
@@ -286,7 +395,9 @@ export default function AdvancedExamRuleConfig() {
               <CardTitle className="text-base flex items-center gap-2">
                 <AlertTriangle className="h-4 w-4" /> AI Integrity Thresholds
               </CardTitle>
-              <CardDescription>Configure automatic cheating detection parameters</CardDescription>
+              <CardDescription>
+                Configure automatic cheating detection parameters
+              </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="space-y-2">
@@ -294,17 +405,37 @@ export default function AdvancedExamRuleConfig() {
                   <span>Answer Similarity Threshold</span>
                   <span className="font-medium">{similarityThreshold[0]}%</span>
                 </div>
-                <Slider value={similarityThreshold} onValueChange={setSimilarityThreshold} min={50} max={100} step={5} />
-                <p className="text-xs text-muted-foreground">Flag when answers between students are more than {similarityThreshold[0]}% similar</p>
+                <Slider
+                  value={similarityThreshold}
+                  onValueChange={setSimilarityThreshold}
+                  min={50}
+                  max={100}
+                  step={5}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Flag when answers between students are more than{" "}
+                  {similarityThreshold[0]}% similar
+                </p>
               </div>
               <Separator />
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Timing Anomaly Threshold</span>
-                  <span className="font-medium">{timingAnomalyThreshold[0]} occurrences</span>
+                  <span className="font-medium">
+                    {timingAnomalyThreshold[0]} occurrences
+                  </span>
                 </div>
-                <Slider value={timingAnomalyThreshold} onValueChange={setTimingAnomalyThreshold} min={1} max={10} step={1} />
-                <p className="text-xs text-muted-foreground">Flag when student has more than {timingAnomalyThreshold[0]} timing anomalies</p>
+                <Slider
+                  value={timingAnomalyThreshold}
+                  onValueChange={setTimingAnomalyThreshold}
+                  min={1}
+                  max={10}
+                  step={1}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Flag when student has more than {timingAnomalyThreshold[0]}{" "}
+                  timing anomalies
+                </p>
               </div>
             </CardContent>
           </Card>
@@ -320,33 +451,56 @@ export default function AdvancedExamRuleConfig() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Immediate Scoring</Label>
-                  <p className="text-xs text-muted-foreground">Show score immediately after submission</p>
+                  <p className="text-xs text-muted-foreground">
+                    Show score immediately after submission
+                  </p>
                 </div>
-                <Switch checked={immediateScoring} onCheckedChange={setImmediateScoring} />
+                <Switch
+                  checked={immediateScoring}
+                  onCheckedChange={setImmediateScoring}
+                />
               </div>
               <Separator />
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Show Correct Answers</Label>
-                  <p className="text-xs text-muted-foreground">Reveal correct answers after submission</p>
+                  <p className="text-xs text-muted-foreground">
+                    Reveal correct answers after submission
+                  </p>
                 </div>
-                <Switch checked={showCorrectAnswer} onCheckedChange={setShowCorrectAnswer} />
+                <Switch
+                  checked={showCorrectAnswer}
+                  onCheckedChange={setShowCorrectAnswer}
+                />
               </div>
               <Separator />
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Negative Marking</Label>
-                  <p className="text-xs text-muted-foreground">Deduct marks for incorrect answers</p>
+                  <p className="text-xs text-muted-foreground">
+                    Deduct marks for incorrect answers
+                  </p>
                 </div>
-                <Switch checked={negativeMarking} onCheckedChange={setNegativeMarking} />
+                <Switch
+                  checked={negativeMarking}
+                  onCheckedChange={setNegativeMarking}
+                />
               </div>
               {negativeMarking && (
                 <div className="ml-4 space-y-2">
                   <div className="flex justify-between text-sm">
                     <span>Penalty per wrong answer</span>
-                    <span className="font-medium">{negativeMarkPercent[0]}% of question value</span>
+                    <span className="font-medium">
+                      {negativeMarkPercent[0]}% of question value
+                    </span>
                   </div>
-                  <Slider value={negativeMarkPercent} onValueChange={setNegativeMarkPercent} min={10} max={100} step={5} />
+                  <Slider
+                    value={negativeMarkPercent}
+                    onValueChange={setNegativeMarkPercent}
+                    min={10}
+                    max={100}
+                    step={5}
+                  />
                 </div>
               )}
             </CardContent>
@@ -363,24 +517,36 @@ export default function AdvancedExamRuleConfig() {
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Offline Mode</Label>
-                  <p className="text-xs text-muted-foreground">Allow exam to be taken without internet</p>
+                  <p className="text-xs text-muted-foreground">
+                    Allow exam to be taken without internet
+                  </p>
                 </div>
-                <Switch checked={offlineMode} onCheckedChange={setOfflineMode} />
+                <Switch
+                  checked={offlineMode}
+                  onCheckedChange={setOfflineMode}
+                />
               </div>
               {offlineMode && (
                 <div className="ml-4 flex items-center justify-between">
                   <div>
                     <Label>AES-256 Encryption</Label>
-                    <p className="text-xs text-muted-foreground">Encrypt offline exam package</p>
+                    <p className="text-xs text-muted-foreground">
+                      Encrypt offline exam package
+                    </p>
                   </div>
-                  <Switch checked={offlineEncryption} onCheckedChange={setOfflineEncryption} />
+                  <Switch
+                    checked={offlineEncryption}
+                    onCheckedChange={setOfflineEncryption}
+                  />
                 </div>
               )}
               <Separator />
               <div className="flex items-center justify-between">
                 <div>
                   <Label>Auto-Submit on Timeout</Label>
-                  <p className="text-xs text-muted-foreground">Automatically submit when time runs out</p>
+                  <p className="text-xs text-muted-foreground">
+                    Automatically submit when time runs out
+                  </p>
                 </div>
                 <Switch checked={autoSubmit} onCheckedChange={setAutoSubmit} />
               </div>
@@ -388,12 +554,16 @@ export default function AdvancedExamRuleConfig() {
                 <div className="ml-4 space-y-2">
                   <Label>Grace Period (minutes)</Label>
                   <Input
-                    type="number" min={0} max={30}
+                    type="number"
+                    min={0}
+                    max={30}
                     value={gracePeriod}
                     onChange={(e) => setGracePeriod(Number(e.target.value))}
                     className="w-24"
                   />
-                  <p className="text-xs text-muted-foreground">Extra minutes before auto-submit after timer ends</p>
+                  <p className="text-xs text-muted-foreground">
+                    Extra minutes before auto-submit after timer ends
+                  </p>
                 </div>
               )}
             </CardContent>

@@ -1,10 +1,16 @@
-import { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -12,7 +18,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Dialog,
   DialogContent,
@@ -20,14 +26,14 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
+} from "@/components/ui/dialog";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Plus,
   FileText,
@@ -42,26 +48,26 @@ import {
   CheckCircle2,
   Loader2,
   MoreHorizontal,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import api, { unwrapPaginatedData } from '@/lib/api';
-import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "@/components/ui/dropdown-menu";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import api, { unwrapPaginatedData } from "@/lib/api";
+import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Exam {
   id: string;
   title: string;
   description?: string;
   course: { id: string; code: string; name: string };
-  status: 'DRAFT' | 'PUBLISHED' | 'ONGOING' | 'COMPLETED' | 'ARCHIVED';
+  status: "DRAFT" | "PUBLISHED" | "ONGOING" | "COMPLETED" | "ARCHIVED";
   duration: number;
   totalPoints?: number;
   passingScore?: number;
@@ -74,26 +80,36 @@ interface Exam {
   };
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  DRAFT: { label: 'Draft', variant: 'default' },
-  PUBLISHED: { label: 'Published', variant: 'secondary' },
-  ONGOING: { label: 'Ongoing', variant: 'outline' },
-  COMPLETED: { label: 'Completed', variant: 'secondary' },
-  ARCHIVED: { label: 'Archived', variant: 'destructive' },
+const statusConfig: Record<
+  string,
+  {
+    label: string;
+    variant: "default" | "secondary" | "outline" | "destructive";
+  }
+> = {
+  DRAFT: { label: "Draft", variant: "default" },
+  PUBLISHED: { label: "Published", variant: "secondary" },
+  ONGOING: { label: "Ongoing", variant: "outline" },
+  COMPLETED: { label: "Completed", variant: "secondary" },
+  ARCHIVED: { label: "Archived", variant: "destructive" },
 };
 
 export default function ExamManagement() {
   const navigate = useNavigate();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
-  const [editForm, setEditForm] = useState({ title: '', description: '', passingScore: '' });
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    passingScore: "",
+  });
 
   useEffect(() => {
     fetchExams();
@@ -106,8 +122,8 @@ export default function ExamManagement() {
       const exams = unwrapPaginatedData(data);
       setExams(exams || []);
     } catch (error) {
-      console.error('Failed to fetch exams:', error);
-      toast.error('Failed to load exams');
+      console.error("Failed to fetch exams:", error);
+      toast.error("Failed to load exams");
     } finally {
       setLoading(false);
     }
@@ -118,13 +134,13 @@ export default function ExamManagement() {
     try {
       setIsDeleting(true);
       await api.deleteExam(selectedExam.id);
-      setExams(exams.filter(e => e.id !== selectedExam.id));
-      toast.success('Exam deleted successfully');
+      setExams(exams.filter((e) => e.id !== selectedExam.id));
+      toast.success("Exam deleted successfully");
       setShowDeleteDialog(false);
       setSelectedExam(null);
     } catch (error) {
-      console.error('Failed to delete exam:', error);
-      toast.error('Failed to delete exam');
+      console.error("Failed to delete exam:", error);
+      toast.error("Failed to delete exam");
     } finally {
       setIsDeleting(false);
     }
@@ -134,8 +150,8 @@ export default function ExamManagement() {
     setSelectedExam(exam);
     setEditForm({
       title: exam.title,
-      description: exam.description || '',
-      passingScore: exam.passingScore?.toString() || '',
+      description: exam.description || "",
+      passingScore: exam.passingScore?.toString() || "",
     });
     setShowEditDialog(true);
   };
@@ -152,41 +168,42 @@ export default function ExamManagement() {
         updateData.passingScore = parseInt(editForm.passingScore, 10);
       }
       await api.updateExam(selectedExam.id, updateData);
-      
+
       // Update local state
-      setExams(exams.map(e => 
-        e.id === selectedExam.id 
-          ? { ...e, ...updateData }
-          : e
-      ));
-      
-      toast.success('Exam updated successfully');
+      setExams(
+        exams.map((e) =>
+          e.id === selectedExam.id ? { ...e, ...updateData } : e,
+        ),
+      );
+
+      toast.success("Exam updated successfully");
       setShowEditDialog(false);
       setSelectedExam(null);
     } catch (error) {
-      console.error('Failed to update exam:', error);
-      toast.error('Failed to update exam');
+      console.error("Failed to update exam:", error);
+      toast.error("Failed to update exam");
     } finally {
       setIsUpdating(false);
     }
   };
 
-  const filteredExams = exams.filter(exam => {
-    const matchesSearch = 
+  const filteredExams = exams.filter((exam) => {
+    const matchesSearch =
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
       exam.course.code.toLowerCase().includes(search.toLowerCase()) ||
       exam.course.name.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'all' || exam.status === filterStatus;
-    
+
+    const matchesStatus =
+      filterStatus === "all" || exam.status === filterStatus;
+
     return matchesSearch && matchesStatus;
   });
 
   const stats = {
     total: exams.length,
-    published: exams.filter(e => e.status === 'PUBLISHED').length,
-    ongoing: exams.filter(e => e.status === 'ONGOING').length,
-    draft: exams.filter(e => e.status === 'DRAFT').length,
+    published: exams.filter((e) => e.status === "PUBLISHED").length,
+    ongoing: exams.filter((e) => e.status === "ONGOING").length,
+    draft: exams.filter((e) => e.status === "DRAFT").length,
   };
 
   if (loading) {
@@ -210,10 +227,17 @@ export default function ExamManagement() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-foreground">Exam Management</h1>
-            <p className="text-muted-foreground">Create, manage, and monitor your exams</p>
+            <h1 className="text-3xl font-semibold text-foreground">
+              Exam Management
+            </h1>
+            <p className="text-muted-foreground">
+              Create, manage, and monitor your exams
+            </p>
           </div>
-          <Button onClick={() => navigate('/lecturer/exams/create')} className="gap-2">
+          <Button
+            onClick={() => navigate("/lecturer/exams/create")}
+            className="gap-2"
+          >
             <Plus className="h-4 w-4" />
             Create Exam
           </Button>
@@ -281,7 +305,9 @@ export default function ExamManagement() {
             <div className="flex items-center justify-between">
               <div>
                 <CardTitle className="text-lg">Your Exams</CardTitle>
-                <CardDescription>Manage, edit, and monitor your exams</CardDescription>
+                <CardDescription>
+                  Manage, edit, and monitor your exams
+                </CardDescription>
               </div>
               <div className="flex items-center gap-3">
                 <div className="relative w-64">
@@ -314,13 +340,21 @@ export default function ExamManagement() {
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
                 <p className="text-muted-foreground font-medium">
-                  {exams.length === 0 ? 'No exams created yet' : 'No exams match your filters'}
+                  {exams.length === 0
+                    ? "No exams created yet"
+                    : "No exams match your filters"}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {exams.length === 0 ? 'Create your first exam to get started' : 'Try adjusting your search'}
+                  {exams.length === 0
+                    ? "Create your first exam to get started"
+                    : "Try adjusting your search"}
                 </p>
                 {exams.length === 0 && (
-                  <Button onClick={() => navigate('/lecturer/exams/create')} className="mt-4" size="sm">
+                  <Button
+                    onClick={() => navigate("/lecturer/exams/create")}
+                    className="mt-4"
+                    size="sm"
+                  >
                     <Plus className="mr-2 h-4 w-4" />
                     Create Exam
                   </Button>
@@ -343,30 +377,50 @@ export default function ExamManagement() {
                   </TableHeader>
                   <TableBody>
                     {filteredExams.map((exam) => {
-                      const createdAgo = formatDistanceToNow(new Date(exam.createdAt), { addSuffix: true });
+                      const createdAgo = formatDistanceToNow(
+                        new Date(exam.createdAt),
+                        { addSuffix: true },
+                      );
                       return (
                         <TableRow key={exam.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium">{exam.title}</TableCell>
+                          <TableCell className="font-medium">
+                            {exam.title}
+                          </TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              <div className="font-mono"> {exam.course.code}</div>
-                              <div className="text-xs text-muted-foreground">{exam.course.name}</div>
+                              <div className="font-mono">
+                                {" "}
+                                {exam.course.code}
+                              </div>
+                              <div className="text-xs text-muted-foreground">
+                                {exam.course.name}
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">{exam.duration} min</TableCell>
                           <TableCell className="text-center">
-                            <Badge variant="outline">{exam._count?.examQuestions || 0}</Badge>
+                            {exam.duration} min
                           </TableCell>
-                          <TableCell className="text-center text-sm">{exam._count?.submissions || 0}</TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline">
+                              {exam._count?.examQuestions || 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center text-sm">
+                            {exam._count?.submissions || 0}
+                          </TableCell>
                           <TableCell>
                             <Badge
-                              variant={statusConfig[exam.status]?.variant || 'default'}
+                              variant={
+                                statusConfig[exam.status]?.variant || "default"
+                              }
                               className="text-xs"
                             >
                               {statusConfig[exam.status]?.label || exam.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">{createdAgo}</TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {createdAgo}
+                          </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -376,31 +430,45 @@ export default function ExamManagement() {
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
-                                  onClick={() => navigate(`/lecturer/exam/${exam.id}/preview`)}
+                                  onClick={() =>
+                                    navigate(
+                                      `/lecturer/exam/${exam.id}/preview`,
+                                    )
+                                  }
                                   className="gap-2"
                                 >
                                   <Eye className="h-4 w-4" />
                                   Preview
                                 </DropdownMenuItem>
-                                {(exam.status === 'ONGOING' || exam.status === 'PUBLISHED') && (
+                                {(exam.status === "ONGOING" ||
+                                  exam.status === "PUBLISHED") && (
                                   <DropdownMenuItem
-                                    onClick={() => navigate(`/lecturer/exam/${exam.id}/monitor`)}
+                                    onClick={() =>
+                                      navigate(
+                                        `/lecturer/exam/${exam.id}/monitor`,
+                                      )
+                                    }
                                     className="gap-2"
                                   >
                                     <Clock className="h-4 w-4" />
                                     Monitor
                                   </DropdownMenuItem>
                                 )}
-                                {(exam.status === 'COMPLETED' || (exam._count?.submissions ?? 0) > 0) && (
+                                {(exam.status === "COMPLETED" ||
+                                  (exam._count?.submissions ?? 0) > 0) && (
                                   <DropdownMenuItem
-                                    onClick={() => navigate(`/lecturer/exam/${exam.id}/results`)}
+                                    onClick={() =>
+                                      navigate(
+                                        `/lecturer/exam/${exam.id}/results`,
+                                      )
+                                    }
                                     className="gap-2"
                                   >
                                     <BarChart3 className="h-4 w-4" />
                                     Results
                                   </DropdownMenuItem>
                                 )}
-                                {exam.status === 'DRAFT' && (
+                                {exam.status === "DRAFT" && (
                                   <>
                                     <DropdownMenuItem
                                       onClick={() => handleEditExam(exam)}
@@ -448,7 +516,9 @@ export default function ExamManagement() {
               <Input
                 id="title"
                 value={editForm.title}
-                onChange={(e) => setEditForm(prev => ({ ...prev, title: e.target.value }))}
+                onChange={(e) =>
+                  setEditForm((prev) => ({ ...prev, title: e.target.value }))
+                }
                 placeholder="Exam title"
               />
             </div>
@@ -457,7 +527,12 @@ export default function ExamManagement() {
               <Textarea
                 id="description"
                 value={editForm.description}
-                onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                onChange={(e) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    description: e.target.value,
+                  }))
+                }
                 placeholder="Exam description"
                 rows={3}
               />
@@ -470,15 +545,24 @@ export default function ExamManagement() {
                 min="0"
                 max="100"
                 value={editForm.passingScore}
-                onChange={(e) => setEditForm(prev => ({ ...prev, passingScore: e.target.value }))}
+                onChange={(e) =>
+                  setEditForm((prev) => ({
+                    ...prev,
+                    passingScore: e.target.value,
+                  }))
+                }
                 placeholder="Passing score (0-100)"
               />
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+            <Button variant="outline" onClick={() => setShowEditDialog(false)}>
+              Cancel
+            </Button>
             <Button onClick={handleSaveEdit} disabled={isUpdating}>
-              {isUpdating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              {isUpdating ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
               Save Changes
             </Button>
           </DialogFooter>
@@ -491,13 +575,25 @@ export default function ExamManagement() {
           <DialogHeader>
             <DialogTitle>Delete exam</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete "{selectedExam?.title}"? This action cannot be undone.
+              Are you sure you want to delete "{selectedExam?.title}"? This
+              action cannot be undone.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
-            <Button variant="destructive" onClick={handleDeleteExam} disabled={isDeleting}>
-              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+            <Button
+              variant="outline"
+              onClick={() => setShowDeleteDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleDeleteExam}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
               Delete
             </Button>
           </DialogFooter>

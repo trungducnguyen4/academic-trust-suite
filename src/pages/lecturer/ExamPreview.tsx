@@ -1,20 +1,40 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { format } from 'date-fns';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { toast } from 'sonner';
-import { Share2, QrCode } from 'lucide-react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { Loader2, Clock, BookOpen, PencilLine, ArrowLeft, BarChart3 } from 'lucide-react';
-import api from '@/lib/api';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { format } from "date-fns";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { toast } from "sonner";
+import { Share2, QrCode } from "lucide-react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import {
+  Loader2,
+  Clock,
+  BookOpen,
+  PencilLine,
+  ArrowLeft,
+  BarChart3,
+} from "lucide-react";
+import api from "@/lib/api";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 type ExamQuestion = {
   id: string;
@@ -40,12 +60,12 @@ type ExamData = {
 };
 
 function normalizeType(rawType?: string) {
-  if (!rawType) return 'Unknown';
+  if (!rawType) return "Unknown";
   return rawType
     .toLowerCase()
-    .split('_')
+    .split("_")
     .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
-    .join(' ');
+    .join(" ");
 }
 
 export default function ExamPreview() {
@@ -54,7 +74,7 @@ export default function ExamPreview() {
   const [exam, setExam] = useState<ExamData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showShareDialog, setShowShareDialog] = useState(false);
-  const [shareEmails, setShareEmails] = useState('');
+  const [shareEmails, setShareEmails] = useState("");
   const [isSharing, setIsSharing] = useState(false);
   const [sendToCourse, setSendToCourse] = useState(false);
   const [showQRDialog, setShowQRDialog] = useState(false);
@@ -67,7 +87,7 @@ export default function ExamPreview() {
         const res = await api.getExam(examId);
         setExam(res);
       } catch (error) {
-        console.error('Failed to load exam preview:', error);
+        console.error("Failed to load exam preview:", error);
       } finally {
         setLoading(false);
       }
@@ -78,7 +98,12 @@ export default function ExamPreview() {
 
   const timeline = useMemo(() => {
     if (!exam?.startTime) {
-      return { isScheduled: false, isEnded: false, start: null as Date | null, end: null as Date | null };
+      return {
+        isScheduled: false,
+        isEnded: false,
+        start: null as Date | null,
+        end: null as Date | null,
+      };
     }
 
     const now = Date.now();
@@ -95,25 +120,28 @@ export default function ExamPreview() {
 
   const handleShare = async () => {
     if (!exam) return;
-    const raw = (shareEmails || '').trim();
+    const raw = (shareEmails || "").trim();
     if (!raw) {
-      toast.error('Please enter recipient email(s)');
+      toast.error("Please enter recipient email(s)");
       return;
     }
-    const emails = raw.split(',').map((s) => s.trim()).filter(Boolean);
+    const emails = raw
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
     if (!emails.length) {
-      toast.error('Please enter valid email address(es)');
+      toast.error("Please enter valid email address(es)");
       return;
     }
     try {
       setIsSharing(true);
       await api.shareExam(exam.id, emails, sendToCourse);
-      toast.success('Exam link sent');
+      toast.success("Exam link sent");
       setShowShareDialog(false);
-      setShareEmails('');
+      setShareEmails("");
       setSendToCourse(false);
     } catch (err: any) {
-      toast.error(err?.message || 'Failed to send exam link');
+      toast.error(err?.message || "Failed to send exam link");
     } finally {
       setIsSharing(false);
     }
@@ -148,22 +176,36 @@ export default function ExamPreview() {
 
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
-            <Button variant="ghost" className="px-0" onClick={() => navigate('/lecturer/exams')}>
+            <Button
+              variant="ghost"
+              className="px-0"
+              onClick={() => navigate("/lecturer/exams")}
+            >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back to Exams
             </Button>
             <h1 className="text-2xl font-bold">{exam.title}</h1>
             <p className="text-sm text-muted-foreground mt-1">
-              {exam.course?.code ? `${exam.course.code} - ${exam.course?.name || ''}` : exam.course?.name || 'No course'}
+              {exam.course?.code
+                ? `${exam.course.code} - ${exam.course?.name || ""}`
+                : exam.course?.name || "No course"}
             </p>
           </div>
 
           <div className="flex items-center gap-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowShareDialog(true)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowShareDialog(true)}
+            >
               <Share2 className="h-4 w-4 mr-1" />
               Share
             </Button>
-            <Button variant="ghost" size="sm" onClick={() => setShowQRDialog(true)}>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowQRDialog(true)}
+            >
               <QrCode className="h-4 w-4 mr-1" />
               Show QR
             </Button>
@@ -183,11 +225,16 @@ export default function ExamPreview() {
         </div>
 
         {/* Share dialog */}
-        <Dialog open={showShareDialog} onOpenChange={(open) => setShowShareDialog(open)}>
+        <Dialog
+          open={showShareDialog}
+          onOpenChange={(open) => setShowShareDialog(open)}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Share Exam Link</DialogTitle>
-              <DialogDescription>Enter recipient email addresses (comma separated)</DialogDescription>
+              <DialogDescription>
+                Enter recipient email addresses (comma separated)
+              </DialogDescription>
             </DialogHeader>
             <div className="mt-4">
               <Label htmlFor="share-emails">Emails</Label>
@@ -199,32 +246,52 @@ export default function ExamPreview() {
               />
             </div>
             <div className="mt-3 flex items-start gap-2">
-              <Checkbox checked={sendToCourse} onCheckedChange={(v: any) => setSendToCourse(!!v)} />
+              <Checkbox
+                checked={sendToCourse}
+                onCheckedChange={(v: any) => setSendToCourse(!!v)}
+              />
               <div>
-                <p className="text-sm font-medium">Send to all students enrolled in this course</p>
-                <p className="text-xs text-muted-foreground">Adds all enrolled students as recipients in addition to addresses above.</p>
+                <p className="text-sm font-medium">
+                  Send to all students enrolled in this course
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Adds all enrolled students as recipients in addition to
+                  addresses above.
+                </p>
               </div>
             </div>
             <DialogFooter className="mt-4">
               <div className="flex gap-2 justify-end w-full">
-                <Button variant="ghost" onClick={() => setShowShareDialog(false)}>Cancel</Button>
-                <Button onClick={handleShare} disabled={isSharing}>{isSharing ? 'Sending...' : 'Send'}</Button>
+                <Button
+                  variant="ghost"
+                  onClick={() => setShowShareDialog(false)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleShare} disabled={isSharing}>
+                  {isSharing ? "Sending..." : "Send"}
+                </Button>
               </div>
             </DialogFooter>
           </DialogContent>
         </Dialog>
 
         {/* QR dialog */}
-        <Dialog open={showQRDialog} onOpenChange={(open) => setShowQRDialog(open)}>
+        <Dialog
+          open={showQRDialog}
+          onOpenChange={(open) => setShowQRDialog(open)}
+        >
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Exam QR</DialogTitle>
-              <DialogDescription>Show this QR on your monitor for students to scan</DialogDescription>
+              <DialogDescription>
+                Show this QR on your monitor for students to scan
+              </DialogDescription>
             </DialogHeader>
             <div className="mt-4 text-center">
               <img
                 alt="Exam QR"
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=720x720&data=${encodeURIComponent(`${typeof window !== 'undefined' ? window.location.origin : ''}/student/exam-ready?examId=${exam?.id}`)}`}
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=720x720&data=${encodeURIComponent(`${typeof window !== "undefined" ? window.location.origin : ""}/student/exam-ready?examId=${exam?.id}`)}`}
                 style={{ width: 560, height: 560 }}
               />
               <div className="mt-4">
@@ -241,21 +308,42 @@ export default function ExamPreview() {
         <Card>
           <CardHeader>
             <CardTitle>Exam Preview</CardTitle>
-            <CardDescription>Review questions before students start the exam.</CardDescription>
+            <CardDescription>
+              Review questions before students start the exam.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex items-center gap-3 flex-wrap text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1"><Clock className="h-4 w-4" /> {exam.duration} min</span>
-              <span className="inline-flex items-center gap-1"><BookOpen className="h-4 w-4" /> {exam.examQuestions?.length || 0} questions</span>
+              <span className="inline-flex items-center gap-1">
+                <Clock className="h-4 w-4" /> {exam.duration} min
+              </span>
+              <span className="inline-flex items-center gap-1">
+                <BookOpen className="h-4 w-4" />{" "}
+                {exam.examQuestions?.length || 0} questions
+              </span>
               {timeline.start && (
-                <Badge variant={timeline.isScheduled ? 'secondary' : timeline.isEnded ? 'destructive' : 'default'}>
-                  {timeline.isScheduled ? `Scheduled ${format(timeline.start, 'MMM d, HH:mm')}` : timeline.isEnded ? 'Exam Ended' : 'Exam Ongoing'}
+                <Badge
+                  variant={
+                    timeline.isScheduled
+                      ? "secondary"
+                      : timeline.isEnded
+                        ? "destructive"
+                        : "default"
+                  }
+                >
+                  {timeline.isScheduled
+                    ? `Scheduled ${format(timeline.start, "MMM d, HH:mm")}`
+                    : timeline.isEnded
+                      ? "Exam Ended"
+                      : "Exam Ongoing"}
                 </Badge>
               )}
             </div>
 
             {exam.description ? (
-              <p className="text-sm text-muted-foreground">{exam.description}</p>
+              <p className="text-sm text-muted-foreground">
+                {exam.description}
+              </p>
             ) : null}
           </CardContent>
         </Card>
@@ -264,12 +352,16 @@ export default function ExamPreview() {
           <CardHeader>
             <CardTitle>Questions</CardTitle>
             <CardDescription>
-              {timeline.isEnded ? 'Exam has ended. Editing is locked in this view.' : 'Preview and edit individual questions.'}
+              {timeline.isEnded
+                ? "Exam has ended. Editing is locked in this view."
+                : "Preview and edit individual questions."}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {!exam.examQuestions?.length ? (
-              <div className="py-8 text-center text-muted-foreground">No questions attached to this exam.</div>
+              <div className="py-8 text-center text-muted-foreground">
+                No questions attached to this exam.
+              </div>
             ) : (
               <div className="space-y-4">
                 {exam.examQuestions.map((eq, index) => (
@@ -277,19 +369,31 @@ export default function ExamPreview() {
                     <div className="flex items-center justify-between gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <Badge variant="outline">Q{index + 1}</Badge>
-                        <Badge variant="secondary">{normalizeType(eq.question?.type)}</Badge>
+                        <Badge variant="secondary">
+                          {normalizeType(eq.question?.type)}
+                        </Badge>
                       </div>
                       <div className="text-xs text-muted-foreground">
-                        Difficulty: {eq.question?.difficulty ?? '-'} | Points: {eq.question?.points ?? '-'}
+                        Difficulty: {eq.question?.difficulty ?? "-"} | Points:{" "}
+                        {eq.question?.points ?? "-"}
                       </div>
                     </div>
 
-                    <p className="text-sm whitespace-pre-wrap">{eq.question?.content || 'No content'}</p>
+                    <p className="text-sm whitespace-pre-wrap">
+                      {eq.question?.content || "No content"}
+                    </p>
                     <Separator />
 
                     <div className="flex justify-end">
-                      <Button size="sm" variant="outline" disabled={timeline.isEnded} asChild>
-                        <Link to={`/lecturer/question-editor?id=${eq.question.id}`}>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={timeline.isEnded}
+                        asChild
+                      >
+                        <Link
+                          to={`/lecturer/question-editor?id=${eq.question.id}`}
+                        >
                           <PencilLine className="h-4 w-4 mr-1" />
                           Edit Question
                         </Link>

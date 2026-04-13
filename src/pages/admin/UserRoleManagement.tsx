@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { useEffect, useMemo, useState } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -12,14 +18,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -28,8 +34,8 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-} from '@/components/ui/dialog';
-import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
+} from "@/components/ui/dialog";
+import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import {
   BadgeCheck,
   Crown,
@@ -41,14 +47,14 @@ import {
   Unlock,
   UserPlus,
   Users,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import { useAuth } from '@/contexts/AuthContext';
-import api, { unwrapPaginatedData } from '@/lib/api';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "lucide-react";
+import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
+import api, { unwrapPaginatedData } from "@/lib/api";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
-type BackendRole = 'STUDENT' | 'LECTURER' | 'ADMIN';
-type BackendStatus = 'active' | 'suspended' | 'pending';
+type BackendRole = "STUDENT" | "LECTURER" | "ADMIN";
+type BackendStatus = "active" | "suspended" | "pending";
 
 interface UserRow {
   id: string;
@@ -72,23 +78,23 @@ interface UserForm {
 }
 
 const EMPTY_CREATE_FORM: UserForm = {
-  fullName: '',
-  email: '',
-  password: '',
-  role: 'STUDENT',
-  department: '',
-  studentId: '',
-  status: 'active',
+  fullName: "",
+  email: "",
+  password: "",
+  role: "STUDENT",
+  department: "",
+  studentId: "",
+  status: "active",
 };
 
 const EMPTY_EDIT_FORM: UserForm = {
-  fullName: '',
-  email: '',
-  password: '',
-  role: 'STUDENT',
-  department: '',
-  studentId: '',
-  status: 'active',
+  fullName: "",
+  email: "",
+  password: "",
+  role: "STUDENT",
+  department: "",
+  studentId: "",
+  status: "active",
 };
 
 export default function UserRoleManagement() {
@@ -106,10 +112,12 @@ export default function UserRoleManagement() {
   const [createForm, setCreateForm] = useState<UserForm>(EMPTY_CREATE_FORM);
   const [editForm, setEditForm] = useState<UserForm>(EMPTY_EDIT_FORM);
 
-  const [search, setSearch] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [roleFilter, setRoleFilter] = useState<'all' | BackendRole>('all');
-  const [statusFilter, setStatusFilter] = useState<'all' | BackendStatus>('all');
+  const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [roleFilter, setRoleFilter] = useState<"all" | BackendRole>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | BackendStatus>(
+    "all",
+  );
 
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -130,8 +138,8 @@ export default function UserRoleManagement() {
       const response = await api.getUsers({
         page,
         limit: ITEMS_PER_PAGE,
-        role: roleFilter === 'all' ? undefined : roleFilter,
-        status: statusFilter === 'all' ? undefined : statusFilter,
+        role: roleFilter === "all" ? undefined : roleFilter,
+        status: statusFilter === "all" ? undefined : statusFilter,
         search: debouncedSearch || undefined,
       });
 
@@ -140,7 +148,7 @@ export default function UserRoleManagement() {
       setTotalPages(response?.totalPages ?? 1);
       setTotalUsers(response?.total ?? rows.length);
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to load users');
+      toast.error(error?.message || "Failed to load users");
     } finally {
       setLoading(false);
     }
@@ -156,18 +164,18 @@ export default function UserRoleManagement() {
     setEditForm({
       fullName: target.fullName,
       email: target.email,
-      password: '',
+      password: "",
       role: target.role,
-      department: target.department || '',
-      studentId: target.studentId || '',
-      status: target.status || 'active',
+      department: target.department || "",
+      studentId: target.studentId || "",
+      status: target.status || "active",
     });
     setShowEditDialog(true);
   };
 
   const handleCreateUser = async () => {
     if (!createForm.fullName || !createForm.email || !createForm.password) {
-      toast.error('Please fill full name, email, and password');
+      toast.error("Please fill full name, email, and password");
       return;
     }
 
@@ -180,15 +188,18 @@ export default function UserRoleManagement() {
         role: createForm.role,
         status: createForm.status,
         department: createForm.department.trim() || undefined,
-        studentId: createForm.role === 'STUDENT' ? (createForm.studentId.trim() || undefined) : undefined,
+        studentId:
+          createForm.role === "STUDENT"
+            ? createForm.studentId.trim() || undefined
+            : undefined,
       });
-      toast.success('User created successfully');
+      toast.success("User created successfully");
       setShowAddDialog(false);
       setCreateForm(EMPTY_CREATE_FORM);
       setPage(1);
       await fetchUsers();
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to create user');
+      toast.error(error?.message || "Failed to create user");
     } finally {
       setIsSubmitting(false);
     }
@@ -197,7 +208,7 @@ export default function UserRoleManagement() {
   const handleUpdateUser = async () => {
     if (!editingUser) return;
     if (!editForm.fullName || !editForm.email) {
-      toast.error('Please fill full name and email');
+      toast.error("Please fill full name and email");
       return;
     }
 
@@ -209,15 +220,18 @@ export default function UserRoleManagement() {
         role: editForm.role,
         status: editForm.status,
         department: editForm.department.trim() || undefined,
-        studentId: editForm.role === 'STUDENT' ? (editForm.studentId.trim() || undefined) : undefined,
+        studentId:
+          editForm.role === "STUDENT"
+            ? editForm.studentId.trim() || undefined
+            : undefined,
         password: editForm.password.trim() || undefined,
       });
-      toast.success('User updated successfully');
+      toast.success("User updated successfully");
       setShowEditDialog(false);
       setEditingUser(null);
       await fetchUsers();
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to update user');
+      toast.error(error?.message || "Failed to update user");
     } finally {
       setIsSubmitting(false);
     }
@@ -225,57 +239,67 @@ export default function UserRoleManagement() {
 
   const handleQuickRoleChange = async (target: UserRow, role: BackendRole) => {
     if (target.id === currentUser?.id) {
-      toast.error('Cannot change your own role');
+      toast.error("Cannot change your own role");
       return;
     }
     try {
       await api.updateUser(target.id, { role });
-      setUsers((prev) => prev.map((item) => (item.id === target.id ? { ...item, role } : item)));
-      toast.success('Role updated');
+      setUsers((prev) =>
+        prev.map((item) => (item.id === target.id ? { ...item, role } : item)),
+      );
+      toast.success("Role updated");
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to update role');
+      toast.error(error?.message || "Failed to update role");
     }
   };
 
   const handleToggleStatus = async (target: UserRow) => {
     if (target.id === currentUser?.id) {
-      toast.error('Cannot suspend your own account');
+      toast.error("Cannot suspend your own account");
       return;
     }
 
-    const nextStatus: BackendStatus = target.status === 'active' ? 'suspended' : 'active';
+    const nextStatus: BackendStatus =
+      target.status === "active" ? "suspended" : "active";
     try {
       await api.updateUser(target.id, { status: nextStatus });
-      setUsers((prev) => prev.map((item) => (item.id === target.id ? { ...item, status: nextStatus } : item)));
-      toast.success('Account status updated');
+      setUsers((prev) =>
+        prev.map((item) =>
+          item.id === target.id ? { ...item, status: nextStatus } : item,
+        ),
+      );
+      toast.success("Account status updated");
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to update status');
+      toast.error(error?.message || "Failed to update status");
     }
   };
 
   const handleDeleteUser = async (target: UserRow) => {
     if (target.id === currentUser?.id) {
-      toast.error('Cannot delete your own account');
+      toast.error("Cannot delete your own account");
       return;
     }
 
     try {
       setDeletingId(target.id);
       const response = await api.deleteUser(target.id);
-      toast.success(response?.message || 'User archived');
+      toast.success(response?.message || "User archived");
       await fetchUsers();
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to delete user');
+      toast.error(error?.message || "Failed to delete user");
     } finally {
       setDeletingId(null);
     }
   };
 
-  const pageStats = useMemo(() => ({
-    students: users.filter((item) => item.role === 'STUDENT').length,
-    lecturers: users.filter((item) => item.role === 'LECTURER').length,
-    admins: users.filter((item) => item.role === 'ADMIN').length,
-  }), [users]);
+  const pageStats = useMemo(
+    () => ({
+      students: users.filter((item) => item.role === "STUDENT").length,
+      lecturers: users.filter((item) => item.role === "LECTURER").length,
+      admins: users.filter((item) => item.role === "ADMIN").length,
+    }),
+    [users],
+  );
 
   if (loading) {
     return (
@@ -294,8 +318,13 @@ export default function UserRoleManagement() {
 
         <div className="flex items-start justify-between mb-6 gap-4">
           <div>
-            <h1 className="text-2xl font-semibold text-foreground mb-1">User & Role Management</h1>
-            <p className="text-muted-foreground">Admin CRUD for account lifecycle, role assignment, and access status</p>
+            <h1 className="text-2xl font-semibold text-foreground mb-1">
+              User & Role Management
+            </h1>
+            <p className="text-muted-foreground">
+              Admin CRUD for account lifecycle, role assignment, and access
+              status
+            </p>
           </div>
           <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
             <DialogTrigger asChild>
@@ -306,14 +335,21 @@ export default function UserRoleManagement() {
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Create User</DialogTitle>
-                <DialogDescription>Create a new user directly from admin console</DialogDescription>
+                <DialogDescription>
+                  Create a new user directly from admin console
+                </DialogDescription>
               </DialogHeader>
               <div className="space-y-4 py-2">
                 <div className="space-y-2">
                   <Label>Full Name</Label>
                   <Input
                     value={createForm.fullName}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, fullName: e.target.value }))}
+                    onChange={(e) =>
+                      setCreateForm((prev) => ({
+                        ...prev,
+                        fullName: e.target.value,
+                      }))
+                    }
                     placeholder="e.g. Nguyen Van A"
                   />
                 </div>
@@ -323,7 +359,12 @@ export default function UserRoleManagement() {
                     <Input
                       type="email"
                       value={createForm.email}
-                      onChange={(e) => setCreateForm((prev) => ({ ...prev, email: e.target.value }))}
+                      onChange={(e) =>
+                        setCreateForm((prev) => ({
+                          ...prev,
+                          email: e.target.value,
+                        }))
+                      }
                       placeholder="user@university.edu"
                     />
                   </div>
@@ -332,7 +373,12 @@ export default function UserRoleManagement() {
                     <Input
                       type="password"
                       value={createForm.password}
-                      onChange={(e) => setCreateForm((prev) => ({ ...prev, password: e.target.value }))}
+                      onChange={(e) =>
+                        setCreateForm((prev) => ({
+                          ...prev,
+                          password: e.target.value,
+                        }))
+                      }
                       placeholder="At least 6 characters"
                     />
                   </div>
@@ -340,8 +386,15 @@ export default function UserRoleManagement() {
                 <div className="grid grid-cols-2 gap-3">
                   <div className="space-y-2">
                     <Label>Role</Label>
-                    <Select value={createForm.role} onValueChange={(value: BackendRole) => setCreateForm((prev) => ({ ...prev, role: value }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select
+                      value={createForm.role}
+                      onValueChange={(value: BackendRole) =>
+                        setCreateForm((prev) => ({ ...prev, role: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="STUDENT">Student</SelectItem>
                         <SelectItem value="LECTURER">Lecturer</SelectItem>
@@ -351,8 +404,15 @@ export default function UserRoleManagement() {
                   </div>
                   <div className="space-y-2">
                     <Label>Status</Label>
-                    <Select value={createForm.status} onValueChange={(value: BackendStatus) => setCreateForm((prev) => ({ ...prev, status: value }))}>
-                      <SelectTrigger><SelectValue /></SelectTrigger>
+                    <Select
+                      value={createForm.status}
+                      onValueChange={(value: BackendStatus) =>
+                        setCreateForm((prev) => ({ ...prev, status: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="active">Active</SelectItem>
                         <SelectItem value="pending">Pending</SelectItem>
@@ -366,7 +426,12 @@ export default function UserRoleManagement() {
                     <Label>Department</Label>
                     <Input
                       value={createForm.department}
-                      onChange={(e) => setCreateForm((prev) => ({ ...prev, department: e.target.value }))}
+                      onChange={(e) =>
+                        setCreateForm((prev) => ({
+                          ...prev,
+                          department: e.target.value,
+                        }))
+                      }
                       placeholder="e.g. Computer Science"
                     />
                   </div>
@@ -374,17 +439,29 @@ export default function UserRoleManagement() {
                     <Label>Student ID</Label>
                     <Input
                       value={createForm.studentId}
-                      onChange={(e) => setCreateForm((prev) => ({ ...prev, studentId: e.target.value }))}
+                      onChange={(e) =>
+                        setCreateForm((prev) => ({
+                          ...prev,
+                          studentId: e.target.value,
+                        }))
+                      }
                       placeholder="Required for students"
-                      disabled={createForm.role !== 'STUDENT'}
+                      disabled={createForm.role !== "STUDENT"}
                     />
                   </div>
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setShowAddDialog(false)}>Cancel</Button>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowAddDialog(false)}
+                >
+                  Cancel
+                </Button>
                 <Button onClick={handleCreateUser} disabled={isSubmitting}>
-                  {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  {isSubmitting && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
                   Create
                 </Button>
               </DialogFooter>
@@ -414,7 +491,9 @@ export default function UserRoleManagement() {
                 </div>
                 <div>
                   <p className="text-2xl font-semibold">{pageStats.students}</p>
-                  <p className="text-xs text-muted-foreground">Students (current page)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Students (current page)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -426,8 +505,12 @@ export default function UserRoleManagement() {
                   <Users className="h-5 w-5 text-violet-600" />
                 </div>
                 <div>
-                  <p className="text-2xl font-semibold">{pageStats.lecturers}</p>
-                  <p className="text-xs text-muted-foreground">Lecturers (current page)</p>
+                  <p className="text-2xl font-semibold">
+                    {pageStats.lecturers}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Lecturers (current page)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -440,7 +523,9 @@ export default function UserRoleManagement() {
                 </div>
                 <div>
                   <p className="text-2xl font-semibold">{pageStats.admins}</p>
-                  <p className="text-xs text-muted-foreground">Admins (current page)</p>
+                  <p className="text-xs text-muted-foreground">
+                    Admins (current page)
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -459,8 +544,15 @@ export default function UserRoleManagement() {
                   className="pl-9"
                 />
               </div>
-              <Select value={roleFilter} onValueChange={(value: 'all' | BackendRole) => setRoleFilter(value)}>
-                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+              <Select
+                value={roleFilter}
+                onValueChange={(value: "all" | BackendRole) =>
+                  setRoleFilter(value)
+                }
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Roles</SelectItem>
                   <SelectItem value="STUDENT">Student</SelectItem>
@@ -468,8 +560,15 @@ export default function UserRoleManagement() {
                   <SelectItem value="ADMIN">Admin</SelectItem>
                 </SelectContent>
               </Select>
-              <Select value={statusFilter} onValueChange={(value: 'all' | BackendStatus) => setStatusFilter(value)}>
-                <SelectTrigger className="w-[160px]"><SelectValue /></SelectTrigger>
+              <Select
+                value={statusFilter}
+                onValueChange={(value: "all" | BackendStatus) =>
+                  setStatusFilter(value)
+                }
+              >
+                <SelectTrigger className="w-[160px]">
+                  <SelectValue />
+                </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Status</SelectItem>
                   <SelectItem value="active">Active</SelectItem>
@@ -484,7 +583,9 @@ export default function UserRoleManagement() {
         <Card>
           <CardHeader>
             <CardTitle>Users</CardTitle>
-            <CardDescription>Role/status changes are persisted directly to database</CardDescription>
+            <CardDescription>
+              Role/status changes are persisted directly to database
+            </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <div className="overflow-x-auto">
@@ -504,15 +605,25 @@ export default function UserRoleManagement() {
                 <TableBody>
                   {users.map((item) => (
                     <TableRow key={item.id}>
-                      <TableCell className="font-mono text-xs">{item.id.slice(0, 8)}</TableCell>
-                      <TableCell className="font-medium">{item.fullName}</TableCell>
-                      <TableCell className="text-sm text-muted-foreground">{item.email}</TableCell>
+                      <TableCell className="font-mono text-xs">
+                        {item.id.slice(0, 8)}
+                      </TableCell>
+                      <TableCell className="font-medium">
+                        {item.fullName}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {item.email}
+                      </TableCell>
                       <TableCell>
                         <Select
                           value={item.role}
-                          onValueChange={(value: BackendRole) => handleQuickRoleChange(item, value)}
+                          onValueChange={(value: BackendRole) =>
+                            handleQuickRoleChange(item, value)
+                          }
                         >
-                          <SelectTrigger className="h-8 w-[130px] text-xs"><SelectValue /></SelectTrigger>
+                          <SelectTrigger className="h-8 w-[130px] text-xs">
+                            <SelectValue />
+                          </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="STUDENT">Student</SelectItem>
                             <SelectItem value="LECTURER">Lecturer</SelectItem>
@@ -520,33 +631,48 @@ export default function UserRoleManagement() {
                           </SelectContent>
                         </Select>
                       </TableCell>
-                      <TableCell>{item.department || '-'}</TableCell>
+                      <TableCell>{item.department || "-"}</TableCell>
                       <TableCell>
                         <StatusBadge
                           variant={
-                            item.status === 'active'
-                              ? 'success'
-                              : item.status === 'suspended'
-                              ? 'destructive'
-                              : 'warning'
+                            item.status === "active"
+                              ? "success"
+                              : item.status === "suspended"
+                                ? "destructive"
+                                : "warning"
                           }
                         >
-                          {item.status || 'active'}
+                          {item.status || "active"}
                         </StatusBadge>
                       </TableCell>
-                      <TableCell>{new Date(item.createdAt).toLocaleDateString()}</TableCell>
+                      <TableCell>
+                        {new Date(item.createdAt).toLocaleDateString()}
+                      </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" onClick={() => openEditDialog(item)} title="Edit user">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => openEditDialog(item)}
+                            title="Edit user"
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
                             variant="ghost"
                             size="icon"
                             onClick={() => handleToggleStatus(item)}
-                            title={item.status === 'active' ? 'Suspend account' : 'Activate account'}
+                            title={
+                              item.status === "active"
+                                ? "Suspend account"
+                                : "Activate account"
+                            }
                           >
-                            {item.status === 'active' ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                            {item.status === "active" ? (
+                              <Lock className="h-4 w-4" />
+                            ) : (
+                              <Unlock className="h-4 w-4" />
+                            )}
                           </Button>
                           <ConfirmActionDialog
                             title="Archive user"
@@ -562,7 +688,11 @@ export default function UserRoleManagement() {
                               disabled={deletingId === item.id}
                               title="Archive user"
                             >
-                              {deletingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              {deletingId === item.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <Trash2 className="h-4 w-4" />
+                              )}
                             </Button>
                           </ConfirmActionDialog>
                         </div>
@@ -571,7 +701,12 @@ export default function UserRoleManagement() {
                   ))}
                   {users.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={8} className="text-center py-8 text-muted-foreground">No users found</TableCell>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        No users found
+                      </TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -596,7 +731,9 @@ export default function UserRoleManagement() {
                     variant="outline"
                     size="sm"
                     disabled={page >= totalPages}
-                    onClick={() => setPage((prev) => Math.min(totalPages, prev + 1))}
+                    onClick={() =>
+                      setPage((prev) => Math.min(totalPages, prev + 1))
+                    }
                   >
                     Next
                   </Button>
@@ -610,22 +747,45 @@ export default function UserRoleManagement() {
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Edit User</DialogTitle>
-              <DialogDescription>Update profile, role, and account status</DialogDescription>
+              <DialogDescription>
+                Update profile, role, and account status
+              </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-2">
               <div className="space-y-2">
                 <Label>Full Name</Label>
-                <Input value={editForm.fullName} onChange={(e) => setEditForm((prev) => ({ ...prev, fullName: e.target.value }))} />
+                <Input
+                  value={editForm.fullName}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      fullName: e.target.value,
+                    }))
+                  }
+                />
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input type="email" value={editForm.email} onChange={(e) => setEditForm((prev) => ({ ...prev, email: e.target.value }))} />
+                <Input
+                  type="email"
+                  value={editForm.email}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({ ...prev, email: e.target.value }))
+                  }
+                />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Role</Label>
-                  <Select value={editForm.role} onValueChange={(value: BackendRole) => setEditForm((prev) => ({ ...prev, role: value }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={editForm.role}
+                    onValueChange={(value: BackendRole) =>
+                      setEditForm((prev) => ({ ...prev, role: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="STUDENT">Student</SelectItem>
                       <SelectItem value="LECTURER">Lecturer</SelectItem>
@@ -635,8 +795,15 @@ export default function UserRoleManagement() {
                 </div>
                 <div className="space-y-2">
                   <Label>Status</Label>
-                  <Select value={editForm.status} onValueChange={(value: BackendStatus) => setEditForm((prev) => ({ ...prev, status: value }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Select
+                    value={editForm.status}
+                    onValueChange={(value: BackendStatus) =>
+                      setEditForm((prev) => ({ ...prev, status: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="active">Active</SelectItem>
                       <SelectItem value="pending">Pending</SelectItem>
@@ -648,14 +815,27 @@ export default function UserRoleManagement() {
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-2">
                   <Label>Department</Label>
-                  <Input value={editForm.department} onChange={(e) => setEditForm((prev) => ({ ...prev, department: e.target.value }))} />
+                  <Input
+                    value={editForm.department}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        department: e.target.value,
+                      }))
+                    }
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Student ID</Label>
                   <Input
                     value={editForm.studentId}
-                    onChange={(e) => setEditForm((prev) => ({ ...prev, studentId: e.target.value }))}
-                    disabled={editForm.role !== 'STUDENT'}
+                    onChange={(e) =>
+                      setEditForm((prev) => ({
+                        ...prev,
+                        studentId: e.target.value,
+                      }))
+                    }
+                    disabled={editForm.role !== "STUDENT"}
                   />
                 </div>
               </div>
@@ -665,14 +845,26 @@ export default function UserRoleManagement() {
                   type="password"
                   placeholder="Leave blank to keep current password"
                   value={editForm.password}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, password: e.target.value }))}
+                  onChange={(e) =>
+                    setEditForm((prev) => ({
+                      ...prev,
+                      password: e.target.value,
+                    }))
+                  }
                 />
               </div>
             </div>
             <DialogFooter>
-              <Button variant="outline" onClick={() => setShowEditDialog(false)}>Cancel</Button>
+              <Button
+                variant="outline"
+                onClick={() => setShowEditDialog(false)}
+              >
+                Cancel
+              </Button>
               <Button onClick={handleUpdateUser} disabled={isSubmitting}>
-                {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                {isSubmitting && (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                )}
                 Save Changes
               </Button>
             </DialogFooter>

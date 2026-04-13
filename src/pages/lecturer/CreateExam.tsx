@@ -474,7 +474,9 @@ export default function CreateExam() {
       );
     } catch (error: any) {
       console.error("AI generation failed:", error);
-      toast.error("AI generation failed: " + (error.message || "Unknown error"));
+      toast.error(
+        "AI generation failed: " + (error.message || "Unknown error"),
+      );
     } finally {
       setIsAiGenerating(false);
     }
@@ -939,11 +941,13 @@ export default function CreateExam() {
                       </p>
                     )}
 
-                    {form.course && !isLoadingBankTopics && bankTopics.length === 0 && (
-                      <p className="text-sm text-muted-foreground">
-                        No topics found for this course yet.
-                      </p>
-                    )}
+                    {form.course &&
+                      !isLoadingBankTopics &&
+                      bankTopics.length === 0 && (
+                        <p className="text-sm text-muted-foreground">
+                          No topics found for this course yet.
+                        </p>
+                      )}
 
                     {bankTopics.length > 0 && (
                       <div className="space-y-2">

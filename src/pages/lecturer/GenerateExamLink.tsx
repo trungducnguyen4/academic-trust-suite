@@ -1,18 +1,24 @@
-import { useEffect, useMemo, useState } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { StatusBadge } from '@/components/ui/status-badge';
+import { useEffect, useMemo, useState } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   Table,
   TableBody,
@@ -20,7 +26,7 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Link2,
   Copy,
@@ -31,10 +37,10 @@ import {
   Clock,
   Shield,
   Users,
-} from 'lucide-react';
-import { toast } from 'sonner';
-import api, { unwrapPaginatedData } from '@/lib/api';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "lucide-react";
+import { toast } from "sonner";
+import api, { unwrapPaginatedData } from "@/lib/api";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface ExamItem {
   id: string;
@@ -69,19 +75,19 @@ interface LinkUsage {
 
 export default function GenerateExamLink() {
   const [exams, setExams] = useState<ExamItem[]>([]);
-  const [selectedExamId, setSelectedExamId] = useState('');
+  const [selectedExamId, setSelectedExamId] = useState("");
   const [links, setLinks] = useState<ExamLinkItem[]>([]);
-  const [selectedLinkId, setSelectedLinkId] = useState('');
+  const [selectedLinkId, setSelectedLinkId] = useState("");
   const [usage, setUsage] = useState<LinkUsage[]>([]);
 
-  const [expiryDatetime, setExpiryDatetime] = useState('');
-  const [maxUses, setMaxUses] = useState('');
-  const [password, setPassword] = useState('');
+  const [expiryDatetime, setExpiryDatetime] = useState("");
+  const [maxUses, setMaxUses] = useState("");
+  const [password, setPassword] = useState("");
   const [restrictedToCourse, setRestrictedToCourse] = useState(false);
-  const [note, setNote] = useState('');
+  const [note, setNote] = useState("");
 
-  const [newlyCreatedUrl, setNewlyCreatedUrl] = useState('');
-  const [newlyCreatedQr, setNewlyCreatedQr] = useState('');
+  const [newlyCreatedUrl, setNewlyCreatedUrl] = useState("");
+  const [newlyCreatedQr, setNewlyCreatedQr] = useState("");
   const [copied, setCopied] = useState(false);
 
   const [loading, setLoading] = useState(true);
@@ -107,7 +113,7 @@ export default function GenerateExamLink() {
           setSelectedExamId(firstExamId);
         }
       } catch (error) {
-        console.error('Failed to load exams for link generation:', error);
+        console.error("Failed to load exams for link generation:", error);
       } finally {
         setLoading(false);
       }
@@ -127,7 +133,7 @@ export default function GenerateExamLink() {
         const res = await api.getExamLinks(selectedExamId);
         setLinks(res || []);
       } catch (error) {
-        console.error('Failed to load exam links:', error);
+        console.error("Failed to load exam links:", error);
       }
     };
 
@@ -146,7 +152,7 @@ export default function GenerateExamLink() {
         const res = await api.getExamLinkUsage(selectedLinkId);
         setUsage(res || []);
       } catch (error) {
-        console.error('Failed to load usage logs:', error);
+        console.error("Failed to load usage logs:", error);
       } finally {
         setLoadingUsage(false);
       }
@@ -164,22 +170,23 @@ export default function GenerateExamLink() {
         restrictedToCourse,
       };
 
-      if (expiryDatetime) payload.expiryDatetime = new Date(expiryDatetime).toISOString();
+      if (expiryDatetime)
+        payload.expiryDatetime = new Date(expiryDatetime).toISOString();
       if (maxUses) payload.maxUses = Number(maxUses);
       if (password.trim()) payload.password = password.trim();
       if (note.trim()) payload.note = note.trim();
 
       const created = await api.generateExamLink(selectedExamId, payload);
       setNewlyCreatedUrl(created.url);
-      setNewlyCreatedQr(created.qrDataUrl || '');
+      setNewlyCreatedQr(created.qrDataUrl || "");
 
       const updatedLinks = await api.getExamLinks(selectedExamId);
       setLinks(updatedLinks || []);
 
-      setPassword('');
-      setNote('');
+      setPassword("");
+      setNote("");
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to generate exam link');
+      toast.error(error?.message || "Failed to generate exam link");
     } finally {
       setCreating(false);
     }
@@ -202,7 +209,7 @@ export default function GenerateExamLink() {
         setUsage([]);
       }
     } catch (error: any) {
-      toast.error(error?.message || 'Failed to revoke link');
+      toast.error(error?.message || "Failed to revoke link");
     } finally {
       setRevokingId(null);
     }
@@ -224,9 +231,12 @@ export default function GenerateExamLink() {
         <BackToDashboardButton to="/lecturer" className="-ml-2" />
 
         <div>
-          <h1 className="text-2xl font-semibold">Generate Shareable Exam Link</h1>
+          <h1 className="text-2xl font-semibold">
+            Generate Shareable Exam Link
+          </h1>
           <p className="text-muted-foreground mt-1">
-            Create secure join links with expiry, max uses, optional password, and access tracking.
+            Create secure join links with expiry, max uses, optional password,
+            and access tracking.
           </p>
         </div>
 
@@ -240,14 +250,18 @@ export default function GenerateExamLink() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Exam</Label>
-                <Select value={selectedExamId} onValueChange={setSelectedExamId}>
+                <Select
+                  value={selectedExamId}
+                  onValueChange={setSelectedExamId}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select exam" />
                   </SelectTrigger>
                   <SelectContent>
                     {exams.map((exam) => (
                       <SelectItem key={exam.id} value={exam.id}>
-                        {exam.title} {exam.course?.code ? `(${exam.course.code})` : ''}
+                        {exam.title}{" "}
+                        {exam.course?.code ? `(${exam.course.code})` : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -256,7 +270,11 @@ export default function GenerateExamLink() {
 
               <div className="space-y-2">
                 <Label>Expiry Datetime (optional)</Label>
-                <Input type="datetime-local" value={expiryDatetime} onChange={(e) => setExpiryDatetime(e.target.value)} />
+                <Input
+                  type="datetime-local"
+                  value={expiryDatetime}
+                  onChange={(e) => setExpiryDatetime(e.target.value)}
+                />
               </div>
 
               <div className="space-y-2">
@@ -283,7 +301,12 @@ export default function GenerateExamLink() {
 
             <div className="space-y-2">
               <Label>Note (optional)</Label>
-              <Textarea value={note} onChange={(e) => setNote(e.target.value)} rows={2} placeholder="Internal note for this link" />
+              <Textarea
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+                rows={2}
+                placeholder="Internal note for this link"
+              />
             </div>
 
             <label className="flex items-center gap-2 text-sm">
@@ -298,16 +321,29 @@ export default function GenerateExamLink() {
             {selectedExam && (
               <div className="rounded-lg border p-3 text-sm text-muted-foreground">
                 <p>
-                  Exam window: {selectedExam.startTime ? new Date(selectedExam.startTime).toLocaleString() : 'Not set'}
-                  {' - '}
-                  {selectedExam.endTime ? new Date(selectedExam.endTime).toLocaleString() : 'Not set'}
+                  Exam window:{" "}
+                  {selectedExam.startTime
+                    ? new Date(selectedExam.startTime).toLocaleString()
+                    : "Not set"}
+                  {" - "}
+                  {selectedExam.endTime
+                    ? new Date(selectedExam.endTime).toLocaleString()
+                    : "Not set"}
                 </p>
-                <p>Status: {selectedExam.status || 'DRAFT'}</p>
+                <p>Status: {selectedExam.status || "DRAFT"}</p>
               </div>
             )}
 
-            <Button onClick={handleGenerate} disabled={creating || !selectedExamId} className="gap-2">
-              {creating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Link2 className="h-4 w-4" />}
+            <Button
+              onClick={handleGenerate}
+              disabled={creating || !selectedExamId}
+              className="gap-2"
+            >
+              {creating ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <Link2 className="h-4 w-4" />
+              )}
               Generate Link
             </Button>
 
@@ -315,16 +351,33 @@ export default function GenerateExamLink() {
               <div className="rounded-lg border p-4 space-y-3">
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-semibold">Latest generated URL</p>
-                  <Button variant="outline" size="sm" onClick={() => handleCopy(newlyCreatedUrl)} className="gap-1">
-                    {copied ? <CheckCircle2 className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-                    {copied ? 'Copied' : 'Copy'}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleCopy(newlyCreatedUrl)}
+                    className="gap-1"
+                  >
+                    {copied ? (
+                      <CheckCircle2 className="h-4 w-4" />
+                    ) : (
+                      <Copy className="h-4 w-4" />
+                    )}
+                    {copied ? "Copied" : "Copy"}
                   </Button>
                 </div>
-                <p className="text-sm break-all text-muted-foreground">{newlyCreatedUrl}</p>
+                <p className="text-sm break-all text-muted-foreground">
+                  {newlyCreatedUrl}
+                </p>
                 {newlyCreatedQr && (
                   <div className="inline-flex flex-col items-center gap-2">
-                    <img src={newlyCreatedQr} alt="QR" className="h-36 w-36 rounded border" />
-                    <p className="text-xs text-muted-foreground">Share QR for quick join</p>
+                    <img
+                      src={newlyCreatedQr}
+                      alt="QR"
+                      className="h-36 w-36 rounded border"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                      Share QR for quick join
+                    </p>
                   </div>
                 )}
               </div>
@@ -352,56 +405,98 @@ export default function GenerateExamLink() {
               <TableBody>
                 {links.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
+                    <TableCell
+                      colSpan={6}
+                      className="text-center py-10 text-muted-foreground"
+                    >
                       No links created for this exam yet.
                     </TableCell>
                   </TableRow>
-                ) : links.map((link) => {
-                  const isExpired = !!link.expiresAt && new Date(link.expiresAt).getTime() <= Date.now();
-                  const maxReached = link.maxUses != null && link.usedCount >= link.maxUses;
-                  const state = link.disabled ? 'disabled' : (isExpired || maxReached) ? 'expired' : 'active';
+                ) : (
+                  links.map((link) => {
+                    const isExpired =
+                      !!link.expiresAt &&
+                      new Date(link.expiresAt).getTime() <= Date.now();
+                    const maxReached =
+                      link.maxUses != null && link.usedCount >= link.maxUses;
+                    const state = link.disabled
+                      ? "disabled"
+                      : isExpired || maxReached
+                        ? "expired"
+                        : "active";
 
-                  return (
-                    <TableRow key={link.id}>
-                      <TableCell className="text-sm">{new Date(link.createdAt).toLocaleString()}</TableCell>
-                      <TableCell className="text-sm">{link.expiresAt ? new Date(link.expiresAt).toLocaleString() : 'No expiry'}</TableCell>
-                      <TableCell>
-                        <span className="font-medium">{link.usedCount}</span>
-                        <span className="text-muted-foreground">/{link.maxUses ?? '∞'}</span>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                          {link.hasPassword && <Shield className="h-3.5 w-3.5" />}
-                          {link.restrictedToCourse && <Users className="h-3.5 w-3.5" />}
-                          {link.expiresAt && <Clock className="h-3.5 w-3.5" />}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge variant={state === 'active' ? 'success' : state === 'disabled' ? 'destructive' : 'default'}>
-                          {state}
-                        </StatusBadge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="sm" onClick={() => setSelectedLinkId(link.id)}>
-                            Usage
-                          </Button>
-                          {!link.disabled && (
+                    return (
+                      <TableRow key={link.id}>
+                        <TableCell className="text-sm">
+                          {new Date(link.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell className="text-sm">
+                          {link.expiresAt
+                            ? new Date(link.expiresAt).toLocaleString()
+                            : "No expiry"}
+                        </TableCell>
+                        <TableCell>
+                          <span className="font-medium">{link.usedCount}</span>
+                          <span className="text-muted-foreground">
+                            /{link.maxUses ?? "∞"}
+                          </span>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                            {link.hasPassword && (
+                              <Shield className="h-3.5 w-3.5" />
+                            )}
+                            {link.restrictedToCourse && (
+                              <Users className="h-3.5 w-3.5" />
+                            )}
+                            {link.expiresAt && (
+                              <Clock className="h-3.5 w-3.5" />
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <StatusBadge
+                            variant={
+                              state === "active"
+                                ? "success"
+                                : state === "disabled"
+                                  ? "destructive"
+                                  : "default"
+                            }
+                          >
+                            {state}
+                          </StatusBadge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex justify-end gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-destructive"
-                              onClick={() => handleRevoke(link.id)}
-                              disabled={revokingId === link.id}
+                              onClick={() => setSelectedLinkId(link.id)}
                             >
-                              {revokingId === link.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                              Usage
                             </Button>
-                          )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
+                            {!link.disabled && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive"
+                                onClick={() => handleRevoke(link.id)}
+                                disabled={revokingId === link.id}
+                              >
+                                {revokingId === link.id ? (
+                                  <Loader2 className="h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Trash2 className="h-4 w-4" />
+                                )}
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
               </TableBody>
             </Table>
           </CardContent>
@@ -411,12 +506,16 @@ export default function GenerateExamLink() {
           <CardHeader>
             <CardTitle className="text-lg">Usage Audit</CardTitle>
             <CardDescription>
-              {selectedLinkId ? `Latest access logs for link ${selectedLinkId}` : 'Select a link to view usage history'}
+              {selectedLinkId
+                ? `Latest access logs for link ${selectedLinkId}`
+                : "Select a link to view usage history"}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {loadingUsage ? (
-              <div className="h-28 flex items-center justify-center"><Loader2 className="h-5 w-5 animate-spin" /></div>
+              <div className="h-28 flex items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin" />
+              </div>
             ) : (
               <Table>
                 <TableHeader>
@@ -430,18 +529,27 @@ export default function GenerateExamLink() {
                 <TableBody>
                   {usage.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      <TableCell
+                        colSpan={4}
+                        className="text-center py-8 text-muted-foreground"
+                      >
                         No usage records yet.
                       </TableCell>
                     </TableRow>
-                  ) : usage.map((item) => (
-                    <TableRow key={item.id}>
-                      <TableCell>{new Date(item.usedAt).toLocaleString()}</TableCell>
-                      <TableCell>{item.user?.fullName || item.user?.email || 'Unknown'}</TableCell>
-                      <TableCell>{item.user?.studentId || '-'}</TableCell>
-                      <TableCell>{item.ip || '-'}</TableCell>
-                    </TableRow>
-                  ))}
+                  ) : (
+                    usage.map((item) => (
+                      <TableRow key={item.id}>
+                        <TableCell>
+                          {new Date(item.usedAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {item.user?.fullName || item.user?.email || "Unknown"}
+                        </TableCell>
+                        <TableCell>{item.user?.studentId || "-"}</TableCell>
+                        <TableCell>{item.ip || "-"}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
                 </TableBody>
               </Table>
             )}

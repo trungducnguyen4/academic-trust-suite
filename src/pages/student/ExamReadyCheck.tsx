@@ -1,15 +1,21 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Separator } from '@/components/ui/separator';
-import { Progress } from '@/components/ui/progress';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import api from '@/lib/api';
-import { toast } from 'sonner';
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import api from "@/lib/api";
+import { toast } from "sonner";
 import {
   Camera,
   Mic,
@@ -28,11 +34,11 @@ import {
   Download,
   Package,
   LockKeyhole,
-} from 'lucide-react';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "lucide-react";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
-type CheckStatus = 'pending' | 'checking' | 'passed' | 'failed';
-type ExamStep = 'download' | 'system-check' | 'locked' | 'ready';
+type CheckStatus = "pending" | "checking" | "passed" | "failed";
+type ExamStep = "download" | "system-check" | "locked" | "ready";
 
 interface SystemCheck {
   id: string;
@@ -44,13 +50,13 @@ interface SystemCheck {
 
 // Mock exam info — in real app this would come from API/context
 const defaultExamInfo = {
-  title: 'Data Structures Final Exam',
-  course: 'CS201 — Faculty of Computer Science',
+  title: "Data Structures Final Exam",
+  course: "CS201 — Faculty of Computer Science",
   scheduledAt: new Date(),
   duration: 120,
   totalQuestions: 45,
-  sessionId: 'EXM-2026-DS-001',
-  packageSize: '2.4 MB',
+  sessionId: "EXM-2026-DS-001",
+  packageSize: "2.4 MB",
   // Simulate: lecturer has NOT unlocked the exam yet
   lecturerUnlocked: false,
 };
@@ -58,23 +64,31 @@ const defaultExamInfo = {
 export default function ExamReadyCheck() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const requiresDownload = searchParams.get('download') !== 'false';
-  const examId = searchParams.get('examId') || undefined;
+  const requiresDownload = searchParams.get("download") !== "false";
+  const examId = searchParams.get("examId") || undefined;
 
   // Build exam info from URL params (fallback to defaults)
   const examInfo = {
-    title: searchParams.get('title') ? decodeURIComponent(searchParams.get('title')!) : defaultExamInfo.title,
-    course: searchParams.get('course') ? decodeURIComponent(searchParams.get('course')!) : defaultExamInfo.course,
-    duration: searchParams.get('duration') ? Number(searchParams.get('duration')) : defaultExamInfo.duration,
+    title: searchParams.get("title")
+      ? decodeURIComponent(searchParams.get("title")!)
+      : defaultExamInfo.title,
+    course: searchParams.get("course")
+      ? decodeURIComponent(searchParams.get("course")!)
+      : defaultExamInfo.course,
+    duration: searchParams.get("duration")
+      ? Number(searchParams.get("duration"))
+      : defaultExamInfo.duration,
     totalQuestions: defaultExamInfo.totalQuestions,
-    sessionId: searchParams.get('examId') ? `EXM-2026-${searchParams.get('examId')}` : defaultExamInfo.sessionId,
+    sessionId: searchParams.get("examId")
+      ? `EXM-2026-${searchParams.get("examId")}`
+      : defaultExamInfo.sessionId,
     packageSize: defaultExamInfo.packageSize,
     lecturerUnlocked: defaultExamInfo.lecturerUnlocked,
   };
 
   // Step management — skip download step if not required
   const [currentStep, setCurrentStep] = useState<ExamStep>(
-    requiresDownload ? 'download' : 'system-check'
+    requiresDownload ? "download" : "system-check",
   );
 
   // Download state
@@ -85,18 +99,40 @@ export default function ExamReadyCheck() {
   // System check state
   const [agreed, setAgreed] = useState(false);
   const [checks, setChecks] = useState<SystemCheck[]>([
-    { id: 'camera', label: 'Camera', icon: <Camera className="h-4 w-4" />, status: 'pending' },
-    { id: 'microphone', label: 'Microphone', icon: <Mic className="h-4 w-4" />, status: 'pending' },
-    { id: 'internet', label: 'Internet Connection', icon: <Wifi className="h-4 w-4" />, status: 'pending' },
-    { id: 'browser', label: 'Fullscreen Support', icon: <Monitor className="h-4 w-4" />, status: 'pending' },
+    {
+      id: "camera",
+      label: "Camera",
+      icon: <Camera className="h-4 w-4" />,
+      status: "pending",
+    },
+    {
+      id: "microphone",
+      label: "Microphone",
+      icon: <Mic className="h-4 w-4" />,
+      status: "pending",
+    },
+    {
+      id: "internet",
+      label: "Internet Connection",
+      icon: <Wifi className="h-4 w-4" />,
+      status: "pending",
+    },
+    {
+      id: "browser",
+      label: "Fullscreen Support",
+      icon: <Monitor className="h-4 w-4" />,
+      status: "pending",
+    },
   ]);
   const [allChecksPassed, setAllChecksPassed] = useState(false);
   const [isRunningChecks, setIsRunningChecks] = useState(false);
 
   // Lock state — simulate lecturer unlock polling
   const [isUnlocked, setIsUnlocked] = useState(examInfo.lecturerUnlocked);
-  const [pollingDots, setPollingDots] = useState('');
-  const [blockedAttemptStatus, setBlockedAttemptStatus] = useState<string | null>(null);
+  const [pollingDots, setPollingDots] = useState("");
+  const [blockedAttemptStatus, setBlockedAttemptStatus] = useState<
+    string | null
+  >(null);
   const [checkingAttempt, setCheckingAttempt] = useState(false);
 
   useEffect(() => {
@@ -108,8 +144,8 @@ export default function ExamReadyCheck() {
         setCheckingAttempt(true);
         const existing = await api.getMyExamSubmission(examId);
         if (!mounted || !existing) return;
-        const status = String(existing.status || '').toUpperCase();
-        if (['SUBMITTED', 'GRADED', 'FLAGGED'].includes(status)) {
+        const status = String(existing.status || "").toUpperCase();
+        if (["SUBMITTED", "GRADED", "FLAGGED"].includes(status)) {
           setBlockedAttemptStatus(status);
         }
       } catch {
@@ -126,9 +162,9 @@ export default function ExamReadyCheck() {
 
   // Polling animation for locked screen
   useEffect(() => {
-    if (currentStep !== 'locked') return;
+    if (currentStep !== "locked") return;
     const interval = setInterval(() => {
-      setPollingDots((d) => (d.length >= 3 ? '' : d + '.'));
+      setPollingDots((d) => (d.length >= 3 ? "" : d + "."));
     }, 600);
     return () => clearInterval(interval);
   }, [currentStep]);
@@ -148,50 +184,71 @@ export default function ExamReadyCheck() {
   };
 
   const handleProceedToChecks = () => {
-    setCurrentStep('system-check');
+    setCurrentStep("system-check");
     runSystemChecks();
   };
 
   // --- System check logic ---
-  const updateCheck = useCallback((id: string, status: CheckStatus, detail?: string) => {
-    setChecks((prev) =>
-      prev.map((c) => (c.id === id ? { ...c, status, detail } : c))
-    );
-  }, []);
+  const updateCheck = useCallback(
+    (id: string, status: CheckStatus, detail?: string) => {
+      setChecks((prev) =>
+        prev.map((c) => (c.id === id ? { ...c, status, detail } : c)),
+      );
+    },
+    [],
+  );
 
   const runSystemChecks = useCallback(async () => {
     setIsRunningChecks(true);
-    setChecks((prev) => prev.map((c) => ({ ...c, status: 'checking' as CheckStatus, detail: undefined })));
+    setChecks((prev) =>
+      prev.map((c) => ({
+        ...c,
+        status: "checking" as CheckStatus,
+        detail: undefined,
+      })),
+    );
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       stream.getTracks().forEach((t) => t.stop());
-      updateCheck('camera', 'passed', 'Camera accessible');
+      updateCheck("camera", "passed", "Camera accessible");
     } catch {
-      updateCheck('camera', 'failed', 'Camera access denied. Please allow camera permission.');
+      updateCheck(
+        "camera",
+        "failed",
+        "Camera access denied. Please allow camera permission.",
+      );
     }
     await new Promise((r) => setTimeout(r, 400));
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       stream.getTracks().forEach((t) => t.stop());
-      updateCheck('microphone', 'passed', 'Microphone accessible');
+      updateCheck("microphone", "passed", "Microphone accessible");
     } catch {
-      updateCheck('microphone', 'failed', 'Microphone access denied. Please allow microphone permission.');
+      updateCheck(
+        "microphone",
+        "failed",
+        "Microphone access denied. Please allow microphone permission.",
+      );
     }
     await new Promise((r) => setTimeout(r, 400));
 
     if (navigator.onLine) {
-      updateCheck('internet', 'passed', 'Connection stable');
+      updateCheck("internet", "passed", "Connection stable");
     } else {
-      updateCheck('internet', 'failed', 'No internet connection detected');
+      updateCheck("internet", "failed", "No internet connection detected");
     }
     await new Promise((r) => setTimeout(r, 400));
 
     if (document.documentElement.requestFullscreen) {
-      updateCheck('browser', 'passed', 'Fullscreen supported');
+      updateCheck("browser", "passed", "Fullscreen supported");
     } else {
-      updateCheck('browser', 'failed', 'Your browser does not support fullscreen mode');
+      updateCheck(
+        "browser",
+        "failed",
+        "Your browser does not support fullscreen mode",
+      );
     }
 
     setIsRunningChecks(false);
@@ -202,42 +259,48 @@ export default function ExamReadyCheck() {
     if (!requiresDownload) {
       runSystemChecks();
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    setAllChecksPassed(checks.every((c) => c.status === 'passed'));
+    setAllChecksPassed(checks.every((c) => c.status === "passed"));
   }, [checks]);
 
-  const passedCount = checks.filter((c) => c.status === 'passed').length;
-  const failedCount = checks.filter((c) => c.status === 'failed').length;
+  const passedCount = checks.filter((c) => c.status === "passed").length;
+  const failedCount = checks.filter((c) => c.status === "failed").length;
 
   const handleProceedAfterChecks = () => {
     // Exams without download are open — go straight to ready
     // Exams with download are locked until lecturer unlocks
     if (!requiresDownload || isUnlocked) {
-      setCurrentStep('ready');
+      setCurrentStep("ready");
     } else {
-      setCurrentStep('locked');
+      setCurrentStep("locked");
     }
   };
 
   // --- Start exam ---
   const handleStartExam = async () => {
     if (blockedAttemptStatus) {
-      toast.error(`You already have a ${blockedAttemptStatus.toLowerCase()} attempt for this exam.`);
+      toast.error(
+        `You already have a ${blockedAttemptStatus.toLowerCase()} attempt for this exam.`,
+      );
       return;
     }
 
     try {
       document.documentElement.requestFullscreen?.();
-    } catch { /* continue */ }
+    } catch {
+      /* continue */
+    }
 
     // Prefer real examId from URL params when available
     const realExamId = examId;
 
     if (!realExamId) {
-      toast.error('Missing exam id. Please re-open the exam from your dashboard.');
+      toast.error(
+        "Missing exam id. Please re-open the exam from your dashboard.",
+      );
       return;
     }
 
@@ -245,16 +308,16 @@ export default function ExamReadyCheck() {
     try {
       const res = await api.startExam(realExamId);
       if (!res?.id) {
-        toast.error('Could not start exam submission. Please try again.');
+        toast.error("Could not start exam submission. Please try again.");
         return;
       }
       try {
-        localStorage.setItem('currentSubmissionId', res.id);
-        localStorage.setItem('currentSubmissionExamId', realExamId);
+        localStorage.setItem("currentSubmissionId", res.id);
+        localStorage.setItem("currentSubmissionExamId", realExamId);
       } catch {}
     } catch (err: any) {
-      console.error('Failed to start submission on server:', err);
-      toast.error(err?.message || 'Failed to start exam. Please try again.');
+      console.error("Failed to start submission on server:", err);
+      toast.error(err?.message || "Failed to start exam. Please try again.");
       return;
     }
 
@@ -266,14 +329,14 @@ export default function ExamReadyCheck() {
   // Step indicator — hide download/locked steps when not required
   const steps = requiresDownload
     ? [
-        { key: 'download', label: 'Download', number: 1 },
-        { key: 'system-check', label: 'System Check', number: 2 },
-        { key: 'locked', label: 'Waiting', number: 3 },
-        { key: 'ready', label: 'Start', number: 4 },
+        { key: "download", label: "Download", number: 1 },
+        { key: "system-check", label: "System Check", number: 2 },
+        { key: "locked", label: "Waiting", number: 3 },
+        { key: "ready", label: "Start", number: 4 },
       ]
     : [
-        { key: 'system-check', label: 'System Check', number: 1 },
-        { key: 'ready', label: 'Start', number: 2 },
+        { key: "system-check", label: "System Check", number: 1 },
+        { key: "ready", label: "Start", number: 2 },
       ];
 
   const currentStepIndex = steps.findIndex((s) => s.key === currentStep);
@@ -303,7 +366,9 @@ export default function ExamReadyCheck() {
               </div>
               <div>
                 <FileText className="h-5 w-5 mx-auto text-primary mb-1" />
-                <p className="text-lg font-semibold">{examInfo.totalQuestions}</p>
+                <p className="text-lg font-semibold">
+                  {examInfo.totalQuestions}
+                </p>
                 <p className="text-xs text-muted-foreground">Questions</p>
               </div>
               <div>
@@ -325,28 +390,38 @@ export default function ExamReadyCheck() {
           {steps.map((step, i) => (
             <div key={step.key} className="flex items-center">
               <div className="flex flex-col items-center">
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
-                  i < currentStepIndex
-                    ? 'bg-primary text-primary-foreground border-primary'
-                    : i === currentStepIndex
-                    ? 'bg-primary/10 text-primary border-primary'
-                    : 'bg-muted text-muted-foreground border-border'
-                }`}>
-                  {i < currentStepIndex ? <CheckCircle2 className="h-4 w-4" /> : step.number}
+                <div
+                  className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium border-2 transition-colors ${
+                    i < currentStepIndex
+                      ? "bg-primary text-primary-foreground border-primary"
+                      : i === currentStepIndex
+                        ? "bg-primary/10 text-primary border-primary"
+                        : "bg-muted text-muted-foreground border-border"
+                  }`}
+                >
+                  {i < currentStepIndex ? (
+                    <CheckCircle2 className="h-4 w-4" />
+                  ) : (
+                    step.number
+                  )}
                 </div>
-                <span className={`text-xs mt-1 ${i <= currentStepIndex ? 'text-primary font-medium' : 'text-muted-foreground'}`}>
+                <span
+                  className={`text-xs mt-1 ${i <= currentStepIndex ? "text-primary font-medium" : "text-muted-foreground"}`}
+                >
                   {step.label}
                 </span>
               </div>
               {i < steps.length - 1 && (
-                <div className={`w-16 h-0.5 mx-1 mb-4 ${i < currentStepIndex ? 'bg-primary' : 'bg-border'}`} />
+                <div
+                  className={`w-16 h-0.5 mx-1 mb-4 ${i < currentStepIndex ? "bg-primary" : "bg-border"}`}
+                />
               )}
             </div>
           ))}
         </div>
 
         {/* ==================== STEP 1: DOWNLOAD ==================== */}
-        {currentStep === 'download' && (
+        {currentStep === "download" && (
           <Card className="mb-4">
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -354,7 +429,8 @@ export default function ExamReadyCheck() {
                 Download Exam Package
               </CardTitle>
               <CardDescription>
-                You must download the encrypted exam package before proceeding. This ensures you can take the exam even with unstable internet.
+                You must download the encrypted exam package before proceeding.
+                This ensures you can take the exam even with unstable internet.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -366,7 +442,8 @@ export default function ExamReadyCheck() {
                 <div className="flex-1">
                   <p className="font-medium">{examInfo.title}</p>
                   <p className="text-sm text-muted-foreground">
-                    {examInfo.totalQuestions} questions · {examInfo.packageSize} · AES-256 encrypted
+                    {examInfo.totalQuestions} questions · {examInfo.packageSize}{" "}
+                    · AES-256 encrypted
                   </p>
                 </div>
                 {isDownloaded ? (
@@ -380,12 +457,15 @@ export default function ExamReadyCheck() {
               {isDownloading && (
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Downloading & encrypting...</span>
+                    <span className="text-muted-foreground">
+                      Downloading & encrypting...
+                    </span>
                     <span className="font-medium">{downloadProgress}%</span>
                   </div>
                   <Progress value={downloadProgress} className="h-2" />
                   <p className="text-xs text-muted-foreground">
-                    Package is encrypted locally. Content is not viewable until the lecturer unlocks the exam.
+                    Package is encrypted locally. Content is not viewable until
+                    the lecturer unlocks the exam.
                   </p>
                 </div>
               )}
@@ -395,7 +475,9 @@ export default function ExamReadyCheck() {
                 <Alert className="border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20">
                   <CheckCircle2 className="h-4 w-4 text-green-600" />
                   <AlertDescription className="text-green-800 dark:text-green-300">
-                    Exam package downloaded successfully and stored locally. The package is encrypted and cannot be opened until the lecturer unlocks the exam session.
+                    Exam package downloaded successfully and stored locally. The
+                    package is encrypted and cannot be opened until the lecturer
+                    unlocks the exam session.
                   </AlertDescription>
                 </Alert>
               )}
@@ -421,7 +503,10 @@ export default function ExamReadyCheck() {
                     )}
                   </Button>
                 ) : (
-                  <Button onClick={handleProceedToChecks} className="flex-1 gap-2">
+                  <Button
+                    onClick={handleProceedToChecks}
+                    className="flex-1 gap-2"
+                  >
                     <ArrowRight className="h-4 w-4" />
                     Continue to System Check
                   </Button>
@@ -432,27 +517,37 @@ export default function ExamReadyCheck() {
         )}
 
         {/* ==================== STEP 2: SYSTEM CHECK ==================== */}
-        {currentStep === 'system-check' && (
+        {currentStep === "system-check" && (
           <>
             <Card className="mb-4">
               <CardHeader>
                 <div className="flex items-center justify-between">
                   <div>
-                    <CardTitle className="text-lg">System Readiness Check</CardTitle>
+                    <CardTitle className="text-lg">
+                      System Readiness Check
+                    </CardTitle>
                     <CardDescription>
-                      Your system must pass all checks before you can start the exam
+                      Your system must pass all checks before you can start the
+                      exam
                     </CardDescription>
                   </div>
                   <Button
-                    variant="outline" size="sm" className="gap-2"
+                    variant="outline"
+                    size="sm"
+                    className="gap-2"
                     onClick={runSystemChecks}
                     disabled={isRunningChecks}
                   >
-                    <RefreshCw className={`h-4 w-4 ${isRunningChecks ? 'animate-spin' : ''}`} />
+                    <RefreshCw
+                      className={`h-4 w-4 ${isRunningChecks ? "animate-spin" : ""}`}
+                    />
                     Recheck
                   </Button>
                 </div>
-                <Progress value={(passedCount / checks.length) * 100} className="mt-3 h-2" />
+                <Progress
+                  value={(passedCount / checks.length) * 100}
+                  className="mt-3 h-2"
+                />
                 <p className="text-xs text-muted-foreground mt-1">
                   {passedCount}/{checks.length} checks passed
                   {failedCount > 0 && ` · ${failedCount} failed`}
@@ -464,27 +559,37 @@ export default function ExamReadyCheck() {
                     <div
                       key={check.id}
                       className={`flex items-center gap-3 rounded-lg border px-4 py-3 transition-colors ${
-                        check.status === 'passed'
-                          ? 'border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20'
-                          : check.status === 'failed'
-                          ? 'border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20'
-                          : check.status === 'checking'
-                          ? 'border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20'
-                          : 'border-border bg-card'
+                        check.status === "passed"
+                          ? "border-green-200 bg-green-50/50 dark:border-green-900 dark:bg-green-950/20"
+                          : check.status === "failed"
+                            ? "border-red-200 bg-red-50/50 dark:border-red-900 dark:bg-red-950/20"
+                            : check.status === "checking"
+                              ? "border-blue-200 bg-blue-50/50 dark:border-blue-900 dark:bg-blue-950/20"
+                              : "border-border bg-card"
                       }`}
                     >
                       <div className="shrink-0">{check.icon}</div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{check.label}</p>
                         {check.detail && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{check.detail}</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {check.detail}
+                          </p>
                         )}
                       </div>
                       <div className="shrink-0">
-                        {check.status === 'checking' && <Loader2 className="h-5 w-5 animate-spin text-blue-500" />}
-                        {check.status === 'passed' && <CheckCircle2 className="h-5 w-5 text-green-600" />}
-                        {check.status === 'failed' && <XCircle className="h-5 w-5 text-red-500" />}
-                        {check.status === 'pending' && <div className="h-5 w-5 rounded-full border-2 border-border" />}
+                        {check.status === "checking" && (
+                          <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
+                        )}
+                        {check.status === "passed" && (
+                          <CheckCircle2 className="h-5 w-5 text-green-600" />
+                        )}
+                        {check.status === "failed" && (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                        {check.status === "pending" && (
+                          <div className="h-5 w-5 rounded-full border-2 border-border" />
+                        )}
                       </div>
                     </div>
                   ))}
@@ -504,19 +609,31 @@ export default function ExamReadyCheck() {
                 <div className="bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4 text-sm space-y-2">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p>You must be alone in a quiet room with no unauthorized materials.</p>
+                    <p>
+                      You must be alone in a quiet room with no unauthorized
+                      materials.
+                    </p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p>The use of AI assistants, external search engines, or messaging apps is strictly prohibited.</p>
+                    <p>
+                      The use of AI assistants, external search engines, or
+                      messaging apps is strictly prohibited.
+                    </p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p>Your screen, webcam, and microphone will be monitored for the duration of the exam.</p>
+                    <p>
+                      Your screen, webcam, and microphone will be monitored for
+                      the duration of the exam.
+                    </p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
-                    <p>Any detected irregularities will be flagged for secondary review by the department board.</p>
+                    <p>
+                      Any detected irregularities will be flagged for secondary
+                      review by the department board.
+                    </p>
                   </div>
                 </div>
 
@@ -529,8 +646,13 @@ export default function ExamReadyCheck() {
                     onCheckedChange={(v) => setAgreed(v === true)}
                     className="mt-0.5"
                   />
-                  <label htmlFor="agree" className="text-sm leading-relaxed cursor-pointer">
-                    I understand and agree to the exam rules and proctoring conditions. I confirm that I will complete this exam independently.
+                  <label
+                    htmlFor="agree"
+                    className="text-sm leading-relaxed cursor-pointer"
+                  >
+                    I understand and agree to the exam rules and proctoring
+                    conditions. I confirm that I will complete this exam
+                    independently.
                   </label>
                 </div>
               </CardContent>
@@ -561,7 +683,15 @@ export default function ExamReadyCheck() {
                   </>
                 )}
               </Button>
-              <Button variant="outline" onClick={() => requiresDownload ? setCurrentStep('download') : navigate('/student')} className="h-11">
+              <Button
+                variant="outline"
+                onClick={() =>
+                  requiresDownload
+                    ? setCurrentStep("download")
+                    : navigate("/student")
+                }
+                className="h-11"
+              >
                 Back
               </Button>
             </div>
@@ -569,7 +699,7 @@ export default function ExamReadyCheck() {
         )}
 
         {/* ==================== STEP 3: LOCKED — WAITING FOR LECTURER ==================== */}
-        {currentStep === 'locked' && (
+        {currentStep === "locked" && (
           <Card className="mb-4">
             <CardContent className="pt-8 pb-8">
               <div className="text-center space-y-6">
@@ -586,7 +716,10 @@ export default function ExamReadyCheck() {
                     Exam Not Yet Unlocked
                   </h2>
                   <p className="text-muted-foreground max-w-md mx-auto">
-                    The exam package has been downloaded and your system is ready. However, the <strong>lecturer has not unlocked the exam session</strong> yet.
+                    The exam package has been downloaded and your system is
+                    ready. However, the{" "}
+                    <strong>lecturer has not unlocked the exam session</strong>{" "}
+                    yet.
                   </p>
                 </div>
 
@@ -612,9 +745,12 @@ export default function ExamReadyCheck() {
                   </div>
                   <Separator />
                   <div className="flex items-center justify-between text-sm">
-                    <span className="text-muted-foreground">Lecturer Unlock</span>
+                    <span className="text-muted-foreground">
+                      Lecturer Unlock
+                    </span>
                     <span className="flex items-center gap-1 text-amber-600 font-medium">
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting{pollingDots}
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" /> Waiting
+                      {pollingDots}
                     </span>
                   </div>
                 </div>
@@ -622,12 +758,15 @@ export default function ExamReadyCheck() {
                 <Alert className="border-amber-200 bg-amber-50/50 dark:border-amber-900 dark:bg-amber-950/20 max-w-md mx-auto text-left">
                   <AlertTriangle className="h-4 w-4 text-amber-600" />
                   <AlertDescription className="text-amber-800 dark:text-amber-300 text-sm">
-                    Please stay on this page. The exam will automatically become available once your lecturer activates the session. Do not close or refresh this page.
+                    Please stay on this page. The exam will automatically become
+                    available once your lecturer activates the session. Do not
+                    close or refresh this page.
                   </AlertDescription>
                 </Alert>
 
                 <p className="text-xs text-muted-foreground">
-                  Checking server every 10 seconds · Session ID: {examInfo.sessionId}
+                  Checking server every 10 seconds · Session ID:{" "}
+                  {examInfo.sessionId}
                 </p>
               </div>
             </CardContent>
@@ -635,7 +774,7 @@ export default function ExamReadyCheck() {
         )}
 
         {/* ==================== STEP 4: READY TO START ==================== */}
-        {currentStep === 'ready' && (
+        {currentStep === "ready" && (
           <>
             <Card className="mb-4">
               <CardContent className="pt-6 pb-6">
@@ -644,16 +783,21 @@ export default function ExamReadyCheck() {
                     <CheckCircle2 className="h-8 w-8 text-green-600" />
                   </div>
                   <div>
-                    <h2 className="text-xl font-semibold text-foreground mb-1">Ready to Start!</h2>
+                    <h2 className="text-xl font-semibold text-foreground mb-1">
+                      Ready to Start!
+                    </h2>
                     <p className="text-muted-foreground">
                       The exam has been unlocked. You may begin now.
                     </p>
                     {checkingAttempt && (
-                      <p className="text-xs text-muted-foreground mt-2">Checking attempt status...</p>
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Checking attempt status...
+                      </p>
                     )}
                     {blockedAttemptStatus && (
                       <p className="text-sm text-amber-700 mt-2">
-                        You already have a {blockedAttemptStatus.toLowerCase()} attempt for this exam.
+                        You already have a {blockedAttemptStatus.toLowerCase()}{" "}
+                        attempt for this exam.
                       </p>
                     )}
                   </div>
@@ -667,7 +811,13 @@ export default function ExamReadyCheck() {
                   className="flex-1 h-12 gap-2 text-base"
                   size="lg"
                   variant="outline"
-                  onClick={() => examId ? navigate(`/student/grading?examId=${encodeURIComponent(examId)}`) : navigate('/student')}
+                  onClick={() =>
+                    examId
+                      ? navigate(
+                          `/student/grading?examId=${encodeURIComponent(examId)}`,
+                        )
+                      : navigate("/student")
+                  }
                 >
                   View Submission Status
                 </Button>

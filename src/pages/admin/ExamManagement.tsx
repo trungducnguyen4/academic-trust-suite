@@ -1,9 +1,15 @@
-import { useState, useEffect } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
+import { useState, useEffect } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  CardDescription,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
 import {
   Table,
   TableBody,
@@ -11,14 +17,14 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
+} from "@/components/ui/table";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from "@/components/ui/select";
 import {
   FileText,
   Users,
@@ -31,13 +37,13 @@ import {
   CheckCircle2,
   Loader2,
   MoreHorizontal,
-} from 'lucide-react';
+} from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu';
+} from "@/components/ui/dropdown-menu";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -47,11 +53,11 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import api, { unwrapPaginatedData } from '@/lib/api';
-import { toast } from 'sonner';
-import { formatDistanceToNow } from 'date-fns';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "@/components/ui/alert-dialog";
+import api, { unwrapPaginatedData } from "@/lib/api";
+import { toast } from "sonner";
+import { formatDistanceToNow } from "date-fns";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Exam {
   id: string;
@@ -59,7 +65,7 @@ interface Exam {
   description?: string;
   course: { id: string; code: string; name: string };
   creator: { id: string; fullName: string };
-  status: 'DRAFT' | 'PUBLISHED' | 'ONGOING' | 'COMPLETED' | 'ARCHIVED';
+  status: "DRAFT" | "PUBLISHED" | "ONGOING" | "COMPLETED" | "ARCHIVED";
   duration: number;
   totalPoints?: number;
   passingScore?: number;
@@ -72,20 +78,26 @@ interface Exam {
   };
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
-  DRAFT: { label: 'Draft', variant: 'default' },
-  PUBLISHED: { label: 'Published', variant: 'secondary' },
-  ONGOING: { label: 'Ongoing', variant: 'outline' },
-  COMPLETED: { label: 'Completed', variant: 'secondary' },
-  ARCHIVED: { label: 'Archived', variant: 'destructive' },
+const statusConfig: Record<
+  string,
+  {
+    label: string;
+    variant: "default" | "secondary" | "outline" | "destructive";
+  }
+> = {
+  DRAFT: { label: "Draft", variant: "default" },
+  PUBLISHED: { label: "Published", variant: "secondary" },
+  ONGOING: { label: "Ongoing", variant: "outline" },
+  COMPLETED: { label: "Completed", variant: "secondary" },
+  ARCHIVED: { label: "Archived", variant: "destructive" },
 };
 
 export default function AdminExamManagement() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('all');
-  const [filterCourse, setFilterCourse] = useState<string>('all');
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [filterCourse, setFilterCourse] = useState<string>("all");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -107,8 +119,8 @@ export default function AdminExamManagement() {
       setExams(exams || []);
       setCourses(courses || []);
     } catch (error) {
-      console.error('Failed to fetch data:', error);
-      toast.error('Failed to load exams');
+      console.error("Failed to fetch data:", error);
+      toast.error("Failed to load exams");
     } finally {
       setLoading(false);
     }
@@ -119,36 +131,41 @@ export default function AdminExamManagement() {
     try {
       setIsDeleting(true);
       await api.deleteExam(selectedExam.id);
-      setExams(exams.filter(e => e.id !== selectedExam.id));
-      toast.success('Exam deleted successfully');
+      setExams(exams.filter((e) => e.id !== selectedExam.id));
+      toast.success("Exam deleted successfully");
       setShowDeleteDialog(false);
       setSelectedExam(null);
     } catch (error) {
-      console.error('Failed to delete exam:', error);
-      toast.error('Failed to delete exam');
+      console.error("Failed to delete exam:", error);
+      toast.error("Failed to delete exam");
     } finally {
       setIsDeleting(false);
     }
   };
 
-  const filteredExams = exams.filter(exam => {
-    const matchesSearch = 
+  const filteredExams = exams.filter((exam) => {
+    const matchesSearch =
       exam.title.toLowerCase().includes(search.toLowerCase()) ||
       exam.course.code.toLowerCase().includes(search.toLowerCase()) ||
       exam.course.name.toLowerCase().includes(search.toLowerCase()) ||
       exam.creator.fullName.toLowerCase().includes(search.toLowerCase());
-    
-    const matchesStatus = filterStatus === 'all' || exam.status === filterStatus;
-    const matchesCourse = filterCourse === 'all' || exam.course.id === filterCourse;
-    
+
+    const matchesStatus =
+      filterStatus === "all" || exam.status === filterStatus;
+    const matchesCourse =
+      filterCourse === "all" || exam.course.id === filterCourse;
+
     return matchesSearch && matchesStatus && matchesCourse;
   });
 
   const stats = {
     total: exams.length,
-    published: exams.filter(e => e.status === 'PUBLISHED').length,
-    ongoing: exams.filter(e => e.status === 'ONGOING').length,
-    submissions: exams.reduce((sum, e) => sum + (e._count?.submissions || 0), 0),
+    published: exams.filter((e) => e.status === "PUBLISHED").length,
+    ongoing: exams.filter((e) => e.status === "ONGOING").length,
+    submissions: exams.reduce(
+      (sum, e) => sum + (e._count?.submissions || 0),
+      0,
+    ),
   };
 
   if (loading) {
@@ -172,8 +189,12 @@ export default function AdminExamManagement() {
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-semibold text-foreground">Exam Management</h1>
-            <p className="text-muted-foreground">Monitor and manage all exams across the platform</p>
+            <h1 className="text-3xl font-semibold text-foreground">
+              Exam Management
+            </h1>
+            <p className="text-muted-foreground">
+              Monitor and manage all exams across the platform
+            </p>
           </div>
         </div>
 
@@ -226,7 +247,9 @@ export default function AdminExamManagement() {
                 </div>
                 <div>
                   <p className="text-2xl font-semibold">{stats.submissions}</p>
-                  <p className="text-xs text-muted-foreground">Total Submissions</p>
+                  <p className="text-xs text-muted-foreground">
+                    Total Submissions
+                  </p>
                 </div>
               </div>
             </CardContent>
@@ -238,7 +261,9 @@ export default function AdminExamManagement() {
           <CardHeader>
             <div>
               <CardTitle className="text-lg">All Exams</CardTitle>
-              <CardDescription>Manage exams from all lecturers and courses</CardDescription>
+              <CardDescription>
+                Manage exams from all lecturers and courses
+              </CardDescription>
             </div>
             <div className="flex items-center gap-3 mt-4">
               <div className="relative flex-1">
@@ -283,10 +308,14 @@ export default function AdminExamManagement() {
               <div className="text-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
                 <p className="text-muted-foreground font-medium">
-                  {exams.length === 0 ? 'No exams created yet' : 'No exams match your filters'}
+                  {exams.length === 0
+                    ? "No exams created yet"
+                    : "No exams match your filters"}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
-                  {exams.length === 0 ? 'Exams will appear here once lecturers create them' : 'Try adjusting your filters'}
+                  {exams.length === 0
+                    ? "Exams will appear here once lecturers create them"
+                    : "Try adjusting your filters"}
                 </p>
               </div>
             ) : (
@@ -307,31 +336,52 @@ export default function AdminExamManagement() {
                   </TableHeader>
                   <TableBody>
                     {filteredExams.map((exam) => {
-                      const createdAgo = formatDistanceToNow(new Date(exam.createdAt), { addSuffix: true });
+                      const createdAgo = formatDistanceToNow(
+                        new Date(exam.createdAt),
+                        { addSuffix: true },
+                      );
                       return (
                         <TableRow key={exam.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium max-w-xs truncate">{exam.title}</TableCell>
+                          <TableCell className="font-medium max-w-xs truncate">
+                            {exam.title}
+                          </TableCell>
                           <TableCell>
                             <div className="text-sm">
-                              <div className="font-mono">{exam.course.code}</div>
-                              <div className="text-xs text-muted-foreground truncate">{exam.course.name}</div>
+                              <div className="font-mono">
+                                {exam.course.code}
+                              </div>
+                              <div className="text-xs text-muted-foreground truncate">
+                                {exam.course.name}
+                              </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-sm">{exam.creator.fullName}</TableCell>
-                          <TableCell className="text-center">{exam.duration} min</TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline">{exam._count?.examQuestions || 0}</Badge>
+                          <TableCell className="text-sm">
+                            {exam.creator.fullName}
                           </TableCell>
-                          <TableCell className="text-center text-sm font-medium">{exam._count?.submissions || 0}</TableCell>
+                          <TableCell className="text-center">
+                            {exam.duration} min
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <Badge variant="outline">
+                              {exam._count?.examQuestions || 0}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-center text-sm font-medium">
+                            {exam._count?.submissions || 0}
+                          </TableCell>
                           <TableCell>
                             <Badge
-                              variant={statusConfig[exam.status]?.variant || 'default'}
+                              variant={
+                                statusConfig[exam.status]?.variant || "default"
+                              }
                               className="text-xs"
                             >
                               {statusConfig[exam.status]?.label || exam.status}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">{createdAgo}</TableCell>
+                          <TableCell className="text-right text-xs text-muted-foreground">
+                            {createdAgo}
+                          </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
@@ -344,13 +394,15 @@ export default function AdminExamManagement() {
                                   <Eye className="h-4 w-4" />
                                   Preview
                                 </DropdownMenuItem>
-                                {(exam.status === 'ONGOING' || exam.status === 'PUBLISHED') && (
+                                {(exam.status === "ONGOING" ||
+                                  exam.status === "PUBLISHED") && (
                                   <DropdownMenuItem className="gap-2 text-xs">
                                     <Clock className="h-4 w-4" />
                                     Monitor
                                   </DropdownMenuItem>
                                 )}
-                                {(exam.status === 'COMPLETED' || (exam._count?.submissions ?? 0) > 0) && (
+                                {(exam.status === "COMPLETED" ||
+                                  (exam._count?.submissions ?? 0) > 0) && (
                                   <DropdownMenuItem className="gap-2 text-xs">
                                     <BarChart3 className="h-4 w-4" />
                                     Results
@@ -386,13 +438,18 @@ export default function AdminExamManagement() {
           <AlertDialogHeader>
             <AlertDialogTitle>Delete exam</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to delete "{selectedExam?.title}"? This action cannot be undone.
+              Are you sure you want to delete "{selectedExam?.title}"? This
+              action cannot be undone.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteExam} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
-              {isDeleting ? 'Deleting...' : 'Delete'}
+            <AlertDialogAction
+              onClick={handleDeleteExam}
+              className="bg-destructive hover:bg-destructive/90"
+              disabled={isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

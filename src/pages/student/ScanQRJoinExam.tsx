@@ -1,11 +1,17 @@
-import { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { useState, useEffect, useCallback } from "react";
+import { useNavigate } from "react-router-dom";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
   QrCode,
   Camera,
@@ -15,17 +21,17 @@ import {
   ArrowLeft,
   KeyRound,
   CheckCircle2,
-} from 'lucide-react';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+} from "lucide-react";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export default function ScanQRJoinExam() {
   const navigate = useNavigate();
   const [scanning, setScanning] = useState(false);
   const [hasCamera, setHasCamera] = useState<boolean | null>(null);
-  const [scannedCode, setScannedCode] = useState('');
-  const [manualCode, setManualCode] = useState('');
+  const [scannedCode, setScannedCode] = useState("");
+  const [manualCode, setManualCode] = useState("");
   const [isValidating, setIsValidating] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [validated, setValidated] = useState(false);
 
   // Simulate camera permission check
@@ -44,26 +50,35 @@ export default function ScanQRJoinExam() {
 
   const startScanning = useCallback(() => {
     setScanning(true);
-    setError('');
+    setError("");
 
     // Try to use native BarcodeDetector if available
     const runCameraScan = async () => {
       try {
         if ((window as any).BarcodeDetector) {
-          const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
-          const video = document.createElement('video');
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: "environment" },
+          });
+          const video = document.createElement("video");
           video.playsInline = true;
           video.srcObject = stream;
           await video.play();
 
-          const detector = new (window as any).BarcodeDetector({ formats: ['qr_code'] });
+          const detector = new (window as any).BarcodeDetector({
+            formats: ["qr_code"],
+          });
 
           let stopped = false;
 
           const stopAll = () => {
             stopped = true;
-            try { stream.getTracks().forEach((t) => t.stop()); } catch (e) {}
-            try { video.pause(); video.srcObject = null; } catch (e) {}
+            try {
+              stream.getTracks().forEach((t) => t.stop());
+            } catch (e) {}
+            try {
+              video.pause();
+              video.srcObject = null;
+            } catch (e) {}
             setScanning(false);
           };
 
@@ -73,7 +88,9 @@ export default function ScanQRJoinExam() {
               const bitmap = await createImageBitmap(video);
               const codes = await detector.detect(bitmap);
               if (codes && codes.length) {
-                setScannedCode(codes[0].rawValue || codes[0].rawValue?.toString() || '');
+                setScannedCode(
+                  codes[0].rawValue || codes[0].rawValue?.toString() || "",
+                );
                 stopAll();
                 return;
               }
@@ -87,12 +104,12 @@ export default function ScanQRJoinExam() {
           return;
         }
       } catch (err) {
-        console.warn('Camera scan failed, falling back to simulated scan', err);
+        console.warn("Camera scan failed, falling back to simulated scan", err);
       }
 
       // Fallback: simulated scan
       setTimeout(() => {
-        setScannedCode('EX-2026-CS301-MID');
+        setScannedCode("EX-2026-CS301-MID");
         setScanning(false);
       }, 2500);
     };
@@ -101,12 +118,12 @@ export default function ScanQRJoinExam() {
   }, []);
 
   const handleValidateCode = async (code: string) => {
-    setError('');
+    setError("");
     setIsValidating(true);
     await new Promise((r) => setTimeout(r, 1000));
 
     if (!code.trim()) {
-      setError('Invalid code. Please try again.');
+      setError("Invalid code. Please try again.");
       setIsValidating(false);
       return;
     }
@@ -134,13 +151,15 @@ export default function ScanQRJoinExam() {
           variant="ghost"
           size="sm"
           className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/student/join-exam')}
+          onClick={() => navigate("/student/join-exam")}
         >
           <ArrowLeft className="h-4 w-4" />
           Back to Join Exam
         </Button>
 
-        <h1 className="text-2xl font-semibold text-foreground mb-1">Scan QR Code</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-1">
+          Scan QR Code
+        </h1>
         <p className="text-muted-foreground mb-6">
           Point your camera at the exam QR code to join automatically
         </p>
@@ -171,14 +190,19 @@ export default function ScanQRJoinExam() {
                   {hasCamera === null ? (
                     <div className="text-center">
                       <Loader2 className="h-8 w-8 animate-spin text-muted-foreground mx-auto mb-2" />
-                      <p className="text-sm text-muted-foreground">Checking camera...</p>
+                      <p className="text-sm text-muted-foreground">
+                        Checking camera...
+                      </p>
                     </div>
                   ) : hasCamera === false ? (
                     <div className="text-center p-6">
                       <Camera className="h-10 w-10 text-muted-foreground mx-auto mb-3 opacity-50" />
-                      <p className="text-sm font-medium text-foreground mb-1">Camera not available</p>
+                      <p className="text-sm font-medium text-foreground mb-1">
+                        Camera not available
+                      </p>
                       <p className="text-xs text-muted-foreground">
-                        Please allow camera access or enter the code manually below
+                        Please allow camera access or enter the code manually
+                        below
                       </p>
                     </div>
                   ) : scanning ? (
@@ -190,12 +214,16 @@ export default function ScanQRJoinExam() {
                           <div className="h-0.5 bg-primary/50 w-full animate-bounce" />
                         </div>
                       </div>
-                      <p className="text-sm text-muted-foreground">Scanning...</p>
+                      <p className="text-sm text-muted-foreground">
+                        Scanning...
+                      </p>
                     </div>
                   ) : scannedCode ? (
                     <div className="text-center p-6">
                       <CheckCircle2 className="h-12 w-12 text-primary mx-auto mb-3" />
-                      <p className="text-sm font-medium text-foreground mb-1">QR Code Detected!</p>
+                      <p className="text-sm font-medium text-foreground mb-1">
+                        QR Code Detected!
+                      </p>
                       <p className="text-xs font-mono text-muted-foreground bg-secondary rounded px-3 py-1.5 mt-2">
                         {scannedCode}
                       </p>
@@ -222,7 +250,7 @@ export default function ScanQRJoinExam() {
                       ) : (
                         <Camera className="h-4 w-4" />
                       )}
-                      {scanning ? 'Scanning...' : 'Start Scanning'}
+                      {scanning ? "Scanning..." : "Start Scanning"}
                     </Button>
                   ) : (
                     <>
@@ -230,8 +258,8 @@ export default function ScanQRJoinExam() {
                         variant="outline"
                         className="flex-1 gap-2"
                         onClick={() => {
-                          setScannedCode('');
-                          setError('');
+                          setScannedCode("");
+                          setError("");
                         }}
                       >
                         <RefreshCw className="h-4 w-4" />
@@ -278,8 +306,16 @@ export default function ScanQRJoinExam() {
                       required
                     />
                   </div>
-                  <Button type="submit" variant="outline" disabled={isValidating}>
-                    {isValidating ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Submit'}
+                  <Button
+                    type="submit"
+                    variant="outline"
+                    disabled={isValidating}
+                  >
+                    {isValidating ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Submit"
+                    )}
                   </Button>
                 </form>
               </CardContent>

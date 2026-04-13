@@ -1,14 +1,20 @@
-import { useState } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import { Separator } from '@/components/ui/separator';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+import { useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Separator } from "@/components/ui/separator";
+import { StatusBadge } from "@/components/ui/status-badge";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import {
   Link2,
   QrCode,
@@ -20,21 +26,21 @@ import {
   CheckCircle2,
   ArrowRight,
   Mail,
-} from 'lucide-react';
+} from "lucide-react";
 
-type JoinStep = 'enter-code' | 'verify-email' | 'confirmed';
+type JoinStep = "enter-code" | "verify-email" | "confirmed";
 
 export default function JoinExam() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const initialCode = searchParams.get('code') || '';
+  const initialCode = searchParams.get("code") || "";
 
   const [examCode, setExamCode] = useState(initialCode);
-  const [email, setEmail] = useState('');
-  const [otp, setOtp] = useState('');
-  const [step, setStep] = useState<JoinStep>('enter-code');
+  const [email, setEmail] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<JoinStep>("enter-code");
   const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
 
   // Mock exam info returned after code validation
   const [examInfo, setExamInfo] = useState<{
@@ -48,33 +54,33 @@ export default function JoinExam() {
 
   const handleValidateCode = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
 
     // Simulate API call to validate exam code
     await new Promise((r) => setTimeout(r, 1200));
 
     if (!examCode.trim()) {
-      setError('Please enter an exam code or link.');
+      setError("Please enter an exam code or link.");
       setIsLoading(false);
       return;
     }
 
     // Mock: simulate valid code
     setExamInfo({
-      title: 'Advanced Algorithms — Midterm Exam',
-      course: 'CS301',
-      instructor: 'Dr. Nguyen Van A',
-      scheduledAt: '2026-02-25T09:00:00',
+      title: "Advanced Algorithms — Midterm Exam",
+      course: "CS301",
+      instructor: "Dr. Nguyen Van A",
+      scheduledAt: "2026-02-25T09:00:00",
       duration: 120,
       totalQuestions: 45,
     });
-    setStep('verify-email');
+    setStep("verify-email");
     setIsLoading(false);
   };
 
   const handleSendOtp = async () => {
-    setError('');
+    setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 800));
     // Mock: OTP sent
@@ -83,22 +89,22 @@ export default function JoinExam() {
 
   const handleVerifyEmail = async (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
     setIsLoading(true);
     await new Promise((r) => setTimeout(r, 1000));
 
-    if (otp !== '123456') {
-      setError('Invalid OTP. Please check your email and try again.');
+    if (otp !== "123456") {
+      setError("Invalid OTP. Please check your email and try again.");
       setIsLoading(false);
       return;
     }
 
-    setStep('confirmed');
+    setStep("confirmed");
     setIsLoading(false);
   };
 
   const handleProceed = () => {
-    navigate('/student/exam-ready');
+    navigate("/student/exam-ready");
   };
 
   return (
@@ -106,7 +112,9 @@ export default function JoinExam() {
       <div className="max-w-2xl mx-auto">
         <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
 
-        <h1 className="text-2xl font-semibold text-foreground mb-1">Join Exam</h1>
+        <h1 className="text-2xl font-semibold text-foreground mb-1">
+          Join Exam
+        </h1>
         <p className="text-muted-foreground mb-6">
           Enter your exam code or invitation link to join an examination session
         </p>
@@ -114,29 +122,36 @@ export default function JoinExam() {
         {/* Step indicators */}
         <div className="flex items-center gap-3 mb-8">
           {[
-            { key: 'enter-code', label: 'Enter Code', num: 1 },
-            { key: 'verify-email', label: 'Verify Email', num: 2 },
-            { key: 'confirmed', label: 'Confirmed', num: 3 },
+            { key: "enter-code", label: "Enter Code", num: 1 },
+            { key: "verify-email", label: "Verify Email", num: 2 },
+            { key: "confirmed", label: "Confirmed", num: 3 },
           ].map((s, idx) => {
             const isActive = s.key === step;
             const isDone =
-              (s.key === 'enter-code' && (step === 'verify-email' || step === 'confirmed')) ||
-              (s.key === 'verify-email' && step === 'confirmed');
+              (s.key === "enter-code" &&
+                (step === "verify-email" || step === "confirmed")) ||
+              (s.key === "verify-email" && step === "confirmed");
             return (
               <div key={s.key} className="flex items-center gap-2">
-                {idx > 0 && <div className={`h-px w-8 ${isDone || isActive ? 'bg-primary' : 'bg-border'}`} />}
+                {idx > 0 && (
+                  <div
+                    className={`h-px w-8 ${isDone || isActive ? "bg-primary" : "bg-border"}`}
+                  />
+                )}
                 <div
                   className={`flex items-center justify-center h-8 w-8 rounded-full text-sm font-medium ${
                     isDone
-                      ? 'bg-primary text-primary-foreground'
+                      ? "bg-primary text-primary-foreground"
                       : isActive
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-muted-foreground'
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-secondary text-muted-foreground"
                   }`}
                 >
                   {isDone ? <CheckCircle2 className="h-4 w-4" /> : s.num}
                 </div>
-                <span className={`text-sm ${isActive || isDone ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
+                <span
+                  className={`text-sm ${isActive || isDone ? "text-foreground font-medium" : "text-muted-foreground"}`}
+                >
                   {s.label}
                 </span>
               </div>
@@ -152,7 +167,7 @@ export default function JoinExam() {
         )}
 
         {/* Step 1: Enter Exam Code */}
-        {step === 'enter-code' && (
+        {step === "enter-code" && (
           <Card>
             <CardHeader>
               <CardTitle className="text-lg flex items-center gap-2">
@@ -160,7 +175,8 @@ export default function JoinExam() {
                 Enter Exam Code
               </CardTitle>
               <CardDescription>
-                Paste your exam invitation link or enter the exam code provided by your instructor
+                Paste your exam invitation link or enter the exam code provided
+                by your instructor
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -189,10 +205,12 @@ export default function JoinExam() {
               <Separator className="my-6" />
 
               <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-3">Or scan a QR code</p>
+                <p className="text-sm text-muted-foreground mb-3">
+                  Or scan a QR code
+                </p>
                 <Button
                   variant="outline"
-                  onClick={() => navigate('/student/scan-qr')}
+                  onClick={() => navigate("/student/scan-qr")}
                   className="gap-2"
                 >
                   <QrCode className="h-4 w-4" />
@@ -204,7 +222,7 @@ export default function JoinExam() {
         )}
 
         {/* Step 2: Verify Email Enrollment */}
-        {step === 'verify-email' && examInfo && (
+        {step === "verify-email" && examInfo && (
           <div className="space-y-4">
             {/* Exam Info Preview */}
             <Card>
@@ -230,17 +248,22 @@ export default function JoinExam() {
                   </div>
                   <div>
                     <p className="text-muted-foreground">Scheduled</p>
-                    <p className="font-medium">{new Date(examInfo.scheduledAt).toLocaleString()}</p>
+                    <p className="font-medium">
+                      {new Date(examInfo.scheduledAt).toLocaleString()}
+                    </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Duration</p>
                     <p className="font-medium flex items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" /> {examInfo.duration} minutes
+                      <Clock className="h-3.5 w-3.5" /> {examInfo.duration}{" "}
+                      minutes
                     </p>
                   </div>
                   <div>
                     <p className="text-muted-foreground">Questions</p>
-                    <p className="font-medium">{examInfo.totalQuestions} items</p>
+                    <p className="font-medium">
+                      {examInfo.totalQuestions} items
+                    </p>
                   </div>
                 </div>
               </CardContent>
@@ -254,7 +277,8 @@ export default function JoinExam() {
                   Verify Your Enrollment
                 </CardTitle>
                 <CardDescription>
-                  Enter your university email to verify you are enrolled in this exam
+                  Enter your university email to verify you are enrolled in this
+                  exam
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -271,7 +295,12 @@ export default function JoinExam() {
                         required
                         className="flex-1"
                       />
-                      <Button type="button" variant="outline" onClick={handleSendOtp} disabled={isLoading || !email}>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleSendOtp}
+                        disabled={isLoading || !email}
+                      >
                         Send OTP
                       </Button>
                     </div>
@@ -306,7 +335,7 @@ export default function JoinExam() {
         )}
 
         {/* Step 3: Confirmed */}
-        {step === 'confirmed' && examInfo && (
+        {step === "confirmed" && examInfo && (
           <Card>
             <CardContent className="pt-8 pb-8 text-center">
               <div className="flex justify-center mb-4">
@@ -314,16 +343,23 @@ export default function JoinExam() {
                   <CheckCircle2 className="h-8 w-8 text-primary" />
                 </div>
               </div>
-              <h2 className="text-xl font-semibold mb-2">Enrollment Confirmed!</h2>
+              <h2 className="text-xl font-semibold mb-2">
+                Enrollment Confirmed!
+              </h2>
               <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                You have been successfully enrolled in <strong>{examInfo.title}</strong>.
-                The exam is scheduled for{' '}
-                <strong>{new Date(examInfo.scheduledAt).toLocaleString()}</strong>.
+                You have been successfully enrolled in{" "}
+                <strong>{examInfo.title}</strong>. The exam is scheduled for{" "}
+                <strong>
+                  {new Date(examInfo.scheduledAt).toLocaleString()}
+                </strong>
+                .
               </p>
               <div className="flex items-center justify-center gap-3 mb-6">
                 <StatusBadge variant="success">Enrolled</StatusBadge>
                 <StatusBadge variant="info">{examInfo.course}</StatusBadge>
-                <StatusBadge variant="default">{examInfo.duration} min</StatusBadge>
+                <StatusBadge variant="default">
+                  {examInfo.duration} min
+                </StatusBadge>
               </div>
               <Button onClick={handleProceed} size="lg" className="gap-2">
                 Proceed to Exam Ready Check

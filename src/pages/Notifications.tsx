@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import api, { unwrapPaginatedData } from "@/lib/api";
-import { useAuth } from '@/contexts/AuthContext';
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NotificationRow {
   id: string;
@@ -33,7 +33,11 @@ export default function NotificationsPage() {
   const [loading, setLoading] = useState(true);
 
   const dashboardPath =
-    user?.role === 'ADMIN' ? '/admin' : user?.role === 'LECTURER' ? '/lecturer' : '/student';
+    user?.role === "ADMIN"
+      ? "/admin"
+      : user?.role === "LECTURER"
+        ? "/lecturer"
+        : "/student";
 
   const loadNotifications = async () => {
     setLoading(true);
