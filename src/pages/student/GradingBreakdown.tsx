@@ -53,6 +53,50 @@ function toDisplayText(value: any): string {
   return String(value);
 }
 
+type SeverityLevel = 'none' | 'low' | 'medium' | 'high';
+
+const severityOrder: Record<SeverityLevel, number> = {
+  none: 0,
+  low: 1,
+  medium: 2,
+  high: 3,
+};
+
+const severityLabels: Record<SeverityLevel, string> = {
+  none: 'No issues',
+  low: 'Low',
+  medium: 'Medium',
+  high: 'High',
+};
+
+const severityVariant: Record<SeverityLevel, 'success' | 'info' | 'warning' | 'destructive'> = {
+  none: 'success',
+  low: 'info',
+  medium: 'warning',
+  high: 'destructive',
+};
+
+const severityCardClass: Record<SeverityLevel, string> = {
+  none: 'border-success/30 bg-success/5',
+  low: 'border-info/30 bg-info/5',
+  medium: 'border-warning/30 bg-warning/5',
+  high: 'border-destructive/30 bg-destructive/5',
+};
+
+const severityTextClass: Record<SeverityLevel, string> = {
+  none: 'text-success',
+  low: 'text-info',
+  medium: 'text-warning',
+  high: 'text-destructive',
+};
+
+const getSeverity = (count: number, thresholds: { medium: number; high: number }): SeverityLevel => {
+  if (count <= 0) return 'none';
+  if (count >= thresholds.high) return 'high';
+  if (count >= thresholds.medium) return 'medium';
+  return 'low';
+};
+
 // Mock grading data
 interface GradedQuestion {
   id: number;
@@ -157,6 +201,19 @@ export default function GradingBreakdown() {
     return history;
   })();
 
+  const proctoring = submission?.proctoring;
+  const tabSwitchCount = Number(proctoring?.tabSwitchCount ?? 0);
+  const mouseAnomalies = Number(proctoring?.mouseAnomalies ?? 0);
+  const logsCount = Number(proctoring?.logsCount ?? proctoring?.logs?.length ?? 0);
+
+  const tabSeverity = getSeverity(tabSwitchCount, { medium: 3, high: 5 });
+  const mouseSeverity = getSeverity(mouseAnomalies, { medium: 4, high: 8 });
+  const logSeverity = getSeverity(logsCount, { medium: 5, high: 10 });
+  const overallSeverity = [tabSeverity, mouseSeverity, logSeverity].reduce(
+    (acc, level) => (severityOrder[level] > severityOrder[acc] ? level : acc),
+    'none' as SeverityLevel,
+  );
+
   if (!examId) {
     return (
       <DashboardLayout>
@@ -233,21 +290,44 @@ export default function GradingBreakdown() {
               <CardDescription>Summary of integrity events recorded during the exam</CardDescription>
             </CardHeader>
             <CardContent>
+              <div className="flex flex-wrap items-center gap-2 mb-4">
+                <StatusBadge variant={severityVariant[overallSeverity]}>
+                  Severity: {severityLabels[overallSeverity]}
+                </StatusBadge>
+                <span className="text-xs text-muted-foreground">
+                  Based on tab switches, mouse anomalies, and recorded events.
+                </span>
+              </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="p-4 rounded-lg border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Tab Switches</p>
-                  <p className="text-lg font-semibold">{submission.proctoring.tabSwitchCount ?? 0}</p>
+                <div className={`p-4 rounded-lg border text-center ${severityCardClass[tabSeverity]}`}>
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <p className="text-xs text-muted-foreground">Tab Switches</p>
+                    <StatusBadge variant={severityVariant[tabSeverity]}>{severityLabels[tabSeverity]}</StatusBadge>
+                  </div>
+                  <p className={`text-lg font-semibold ${severityTextClass[tabSeverity]}`}>
+                    {tabSwitchCount}
+                  </p>
                 </div>
-                <div className="p-4 rounded-lg border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Mouse Anomalies</p>
-                  <p className="text-lg font-semibold">{submission.proctoring.mouseAnomalies ?? 0}</p>
+                <div className={`p-4 rounded-lg border text-center ${severityCardClass[mouseSeverity]}`}>
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <p className="text-xs text-muted-foreground">Mouse Anomalies</p>
+                    <StatusBadge variant={severityVariant[mouseSeverity]}>{severityLabels[mouseSeverity]}</StatusBadge>
+                  </div>
+                  <p className={`text-lg font-semibold ${severityTextClass[mouseSeverity]}`}>
+                    {mouseAnomalies}
+                  </p>
                 </div>
-                <div className="p-4 rounded-lg border bg-card text-center">
-                  <p className="text-xs text-muted-foreground">Recorded Events</p>
-                  <p className="text-lg font-semibold">{submission.proctoring.logs?.length ?? 0}</p>
+                <div className={`p-4 rounded-lg border text-center ${severityCardClass[logSeverity]}`}>
+                  <div className="flex items-center justify-center gap-2 mb-1">
+                    <p className="text-xs text-muted-foreground">Recorded Events</p>
+                    <StatusBadge variant={severityVariant[logSeverity]}>{severityLabels[logSeverity]}</StatusBadge>
+                  </div>
+                  <p className={`text-lg font-semibold ${severityTextClass[logSeverity]}`}>
+                    {logsCount}
+                  </p>
                 </div>
               </div>
-              {submission.proctoring.logs && submission.proctoring.logs.length > 0 && (
+              {logsCount > 0 && (
                 <p className="text-sm text-muted-foreground mt-3">Some events were recorded during your exam and are available to your instructor for review.</p>
               )}
             </CardContent>

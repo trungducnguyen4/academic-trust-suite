@@ -15,8 +15,17 @@ export default function StudentExams() {
     const fetch = async () => {
       try {
         setLoading(true);
-        const data = await api.getAvailableExams();
-        if (mounted) setExams(data || []);
+        const [available, mySubs] = await Promise.all([api.getAvailableExams(), api.getMySubmissions()]);
+        const examsList = available || [];
+        const submissions = mySubs || [];
+        const submittedExamIds = new Set<string>(
+          submissions
+            .filter((s: any) => ['SUBMITTED', 'GRADED', 'FLAGGED', 'FINALIZED'].includes(String(s.status || '').toUpperCase()))
+            .map((s: any) => s.examId ?? s.exam?.id)
+        );
+        if (mounted) {
+          setExams(examsList.map((e: any) => ({ ...e, submitted: submittedExamIds.has(e.id) })));
+        }
       } catch (err) {
         console.error('Failed to load exams', err);
       } finally {
@@ -65,9 +74,11 @@ export default function StudentExams() {
                         )}
                       </div>
                       <div className="flex items-center gap-2">
-                        <Button asChild size="sm">
-                          <Link to={`/student/exam-ready?examId=${exam.id}`}>Start</Link>
-                        </Button>
+                        {!exam.submitted && (
+                          <Button asChild size="sm">
+                            <Link to={`/student/exam-ready?examId=${exam.id}`}>Start</Link>
+                          </Button>
+                        )}
                         <Button asChild variant="outline" size="sm">
                           <Link to={`/student/grading?examId=${exam.id}`}>Result</Link>
                         </Button>

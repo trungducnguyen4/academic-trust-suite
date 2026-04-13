@@ -160,29 +160,44 @@ export default function Login() {
             <p className="text-xs text-muted-foreground font-medium text-center mb-3 uppercase tracking-wider">
               Demo Accounts
             </p>
-            <div className="space-y-2">
-              {[
-                { role: 'Student', email: 'student@examtrust.edu' },
-                { role: 'Lecturer', email: 'lecturer@examtrust.edu' },
-                { role: 'Admin', email: 'admin@examtrust.edu' },
-              ].map((demo) => (
+            <ul className="text-sm space-y-2">
+              <li>
                 <button
-                  key={demo.role}
                   type="button"
-                  onClick={() => { setEmail(demo.email); setPassword('123456'); }}
-                  className="flex items-center justify-between w-full px-3 py-2 rounded-lg bg-secondary/50 hover:bg-secondary border border-transparent hover:border-border transition-all text-sm group shadow-sm"
+                  onClick={() => {
+                    setEmail('admin@tdhuhu.edu.vn');
+                    setPassword('123123123Az!');
+                  }}
+                  className="text-primary hover:underline"
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs font-semibold text-muted-foreground">{demo.role}</span>
-                    <code className="text-muted-foreground group-hover:text-foreground transition-colors text-xs">{demo.email}</code>
-                  </div>
-                  <ArrowRight className="h-3 w-3 text-muted-foreground/50 group-hover:text-primary transition-colors" />
+                  <strong>Admin:</strong> admin@tdhuhu.edu.vn / 123123123Az!
                 </button>
-              ))}
-              <p className="text-center text-xs text-muted-foreground pt-1">
-                Password: <code className="bg-secondary px-1.5 py-0.5 rounded text-xs">123456</code>
-              </p>
-            </div>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('lecturer01@tdhuhu.edu.vn');
+                    setPassword('123123123Az!');
+                  }}
+                  className="text-primary hover:underline"
+                >
+                  <strong>Lecturer:</strong> lecturer01@tdhuhu.edu.vn / 123123123Az!
+                </button>
+              </li>
+              <li>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setEmail('522h0001@tdhuhu.edu.vn');
+                    setPassword('123123123Az!');
+                  }}
+                  className="text-primary hover:underline"
+                >
+                  <strong>Student:</strong> 522h0001@tdhuhu.edu.vn / 123123123Az!
+                </button>
+              </li>
+            </ul>
           </div>
         </div>
       </div>
