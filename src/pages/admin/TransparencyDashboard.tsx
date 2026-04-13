@@ -1,11 +1,14 @@
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Separator } from "@/components/ui/separator";
+// import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 export default function TransparencyDashboard() {
   return (
     <DashboardLayout>
       <div className="space-y-8">
+        {/* <BackToDashboardButton to="/admin" className="-ml-2" /> */}
+
         <Card>
           <CardHeader>
             <CardTitle>System Transparency Dashboard</CardTitle>

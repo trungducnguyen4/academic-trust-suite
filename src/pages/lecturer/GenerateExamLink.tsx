@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -23,7 +22,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  ArrowLeft,
   Link2,
   Copy,
   CheckCircle2,
@@ -36,6 +34,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { unwrapPaginatedData } from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface ExamItem {
   id: string;
@@ -69,8 +68,6 @@ interface LinkUsage {
 }
 
 export default function GenerateExamLink() {
-  const navigate = useNavigate();
-
   const [exams, setExams] = useState<ExamItem[]>([]);
   const [selectedExamId, setSelectedExamId] = useState('');
   const [links, setLinks] = useState<ExamLinkItem[]>([]);
@@ -224,14 +221,7 @@ export default function GenerateExamLink() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="gap-2 text-muted-foreground"
-          onClick={() => navigate('/lecturer')}
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/lecturer" className="-ml-2" />
 
         <div>
           <h1 className="text-2xl font-semibold">Generate Shareable Exam Link</h1>

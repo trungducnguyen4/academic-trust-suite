@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { StatusBadge } from '@/components/ui/status-badge';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import {
   Link2,
   QrCode,
@@ -103,6 +104,8 @@ export default function JoinExam() {
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto">
+        <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
+
         <h1 className="text-2xl font-semibold text-foreground mb-1">Join Exam</h1>
         <p className="text-muted-foreground mb-6">
           Enter your exam code or invitation link to join an examination session

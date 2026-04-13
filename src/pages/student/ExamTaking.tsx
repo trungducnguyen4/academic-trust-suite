@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import { Separator } from '@/components/ui/separator';
 import { Progress } from '@/components/ui/progress';
 import { StatusBadge } from '@/components/ui/status-badge';
@@ -555,7 +556,7 @@ export default function ExamTaking() {
         <div>
           <p className="text-lg font-semibold">No questions found for this exam.</p>
           <p className="text-sm text-muted-foreground mt-1">Please contact your instructor or try again later.</p>
-          <Button className="mt-4" onClick={() => navigate('/student')}>Back to Dashboard</Button>
+          <BackToDashboardButton to="/student" variant="default" size="default" className="mt-4" />
         </div>
       </div>
     );

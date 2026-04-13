@@ -16,7 +16,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  ArrowLeft,
   CheckCircle2,
   XCircle,
   Cpu,
@@ -25,6 +24,7 @@ import {
   History,
   MessageSquare,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 function toDisplayText(value: any): string {
   if (value == null) return '';
@@ -221,7 +221,7 @@ export default function GradingBreakdown() {
           <h2 className="text-lg font-medium">No exam selected</h2>
           <p className="text-sm text-muted-foreground mt-2">Open an evaluated exam from your dashboard to view grading details.</p>
           <div className="mt-6">
-            <Button onClick={() => navigate('/student')}>Back to Dashboard</Button>
+            <BackToDashboardButton to="/student" variant="default" size="default" />
           </div>
         </div>
       </DashboardLayout>
@@ -231,15 +231,7 @@ export default function GradingBreakdown() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/student')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
 
         <h1 className="text-2xl font-semibold text-foreground mb-1">Grading Breakdown</h1>
         <p className="text-muted-foreground mb-6">

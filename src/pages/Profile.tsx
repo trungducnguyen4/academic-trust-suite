@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -137,9 +138,14 @@ export default function Profile() {
     user.role === 'LECTURER' ? 'Lecturer' :
     'Administrator';
 
+  const dashboardPath =
+    user.role === 'ADMIN' ? '/admin' : user.role === 'LECTURER' ? '/lecturer' : '/student';
+
   return (
     <DashboardLayout>
       <div className="w-full max-w-6xl">
+        <BackToDashboardButton to={dashboardPath} className="mb-4 -ml-2" />
+
         <h1 className="text-2xl font-semibold text-foreground mb-1">Profile</h1>
         <p className="text-muted-foreground mb-6">Manage your account settings</p>
 

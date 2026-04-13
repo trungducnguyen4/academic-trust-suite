@@ -1,5 +1,4 @@
 import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -32,7 +31,8 @@ import {
 } from '@/components/ui/dialog';
 import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
 import {
-  ArrowLeft,
+  BadgeCheck,
+  Crown,
   Loader2,
   Lock,
   Pencil,
@@ -45,6 +45,7 @@ import {
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import api, { unwrapPaginatedData } from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 type BackendRole = 'STUDENT' | 'LECTURER' | 'ADMIN';
 type BackendStatus = 'active' | 'suspended' | 'pending';
@@ -91,7 +92,6 @@ const EMPTY_EDIT_FORM: UserForm = {
 };
 
 export default function UserRoleManagement() {
-  const navigate = useNavigate();
   const { user: currentUser } = useAuth();
 
   const [users, setUsers] = useState<UserRow[]>([]);
@@ -290,14 +290,7 @@ export default function UserRoleManagement() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/admin')}
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/admin" className="mb-4 -ml-2" />
 
         <div className="flex items-start justify-between mb-6 gap-4">
           <div>
@@ -415,20 +408,41 @@ export default function UserRoleManagement() {
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-2xl font-semibold">{pageStats.students}</p>
-              <p className="text-xs text-muted-foreground">Students (current page)</p>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-sky-500/10 flex items-center justify-center">
+                  <BadgeCheck className="h-5 w-5 text-sky-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{pageStats.students}</p>
+                  <p className="text-xs text-muted-foreground">Students (current page)</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-2xl font-semibold">{pageStats.lecturers}</p>
-              <p className="text-xs text-muted-foreground">Lecturers (current page)</p>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{pageStats.lecturers}</p>
+                  <p className="text-xs text-muted-foreground">Lecturers (current page)</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
           <Card>
             <CardContent className="pt-4 pb-4">
-              <p className="text-2xl font-semibold">{pageStats.admins}</p>
-              <p className="text-xs text-muted-foreground">Admins (current page)</p>
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                  <Crown className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{pageStats.admins}</p>
+                  <p className="text-xs text-muted-foreground">Admins (current page)</p>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

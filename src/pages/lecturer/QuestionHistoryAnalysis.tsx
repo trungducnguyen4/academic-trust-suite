@@ -39,6 +39,7 @@ import {
   RefreshCw,
   ArrowRight,
 } from 'lucide-react';
+// import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import { Line, Bar } from 'react-chartjs-2';
 import {
   Chart as ChartJS,
@@ -199,6 +200,8 @@ export default function QuestionHistoryAnalysis() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
+        <BackToDashboardButton to={basePath} className="mb-2 -ml-2" />
+
         <Button
           variant="ghost" size="sm"
           className="mb-4 gap-2 text-muted-foreground"

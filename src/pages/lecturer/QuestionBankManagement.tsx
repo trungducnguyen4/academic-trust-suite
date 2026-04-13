@@ -48,6 +48,7 @@ import {
 } from 'lucide-react';
 import api from '@/lib/api';
 import { unwrapPaginatedData } from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface Question {
   id: string;
@@ -231,13 +232,7 @@ export default function QuestionBankManagement() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
-        <Button
-          variant="ghost" size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate(basePath)}
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-        </Button>
+        <BackToDashboardButton to={basePath} className="mb-4 -ml-2" />
 
         {/* COURSE SELECTION VIEW */}
         {!selectedCourse ? (

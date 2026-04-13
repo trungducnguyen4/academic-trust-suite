@@ -16,6 +16,7 @@ import {
   KeyRound,
   CheckCircle2,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 export default function ScanQRJoinExam() {
   const navigate = useNavigate();
@@ -127,6 +128,8 @@ export default function ScanQRJoinExam() {
   return (
     <DashboardLayout>
       <div className="max-w-lg mx-auto">
+        <BackToDashboardButton to="/student" className="mb-2 -ml-2" />
+
         <Button
           variant="ghost"
           size="sm"

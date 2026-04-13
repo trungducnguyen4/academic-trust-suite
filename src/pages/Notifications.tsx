@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import api, { unwrapPaginatedData } from "@/lib/api";
+import { useAuth } from '@/contexts/AuthContext';
 
 interface NotificationRow {
   id: string;
@@ -26,8 +28,12 @@ interface NotificationRow {
 }
 
 export default function NotificationsPage() {
+  const { user } = useAuth();
   const [notifications, setNotifications] = useState<NotificationRow[]>([]);
   const [loading, setLoading] = useState(true);
+
+  const dashboardPath =
+    user?.role === 'ADMIN' ? '/admin' : user?.role === 'LECTURER' ? '/lecturer' : '/student';
 
   const loadNotifications = async () => {
     setLoading(true);
@@ -61,6 +67,8 @@ export default function NotificationsPage() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <BackToDashboardButton to={dashboardPath} className="-ml-2" />
+
         <div className="flex items-center justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold text-foreground">

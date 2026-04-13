@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  ArrowLeft,
   Save,
   Settings2,
   Shuffle,
@@ -32,9 +30,9 @@ import {
   Loader2,
   CheckCircle2,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 export default function AdvancedExamRuleConfig() {
-  const navigate = useNavigate();
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -90,13 +88,7 @@ export default function AdvancedExamRuleConfig() {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto">
-        <Button
-          variant="ghost" size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/lecturer')}
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/lecturer" className="mb-4 -ml-2" />
 
         <div className="flex items-start justify-between mb-6">
           <div>

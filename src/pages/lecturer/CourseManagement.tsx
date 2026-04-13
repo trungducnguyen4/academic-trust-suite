@@ -16,6 +16,7 @@ import {
 import { Link } from 'react-router-dom';
 import { api, unwrapPaginatedData } from '@/lib/api';
 import { formatDistanceToNow } from 'date-fns';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import {
   Select,
   SelectContent,
@@ -123,6 +124,8 @@ export default function CourseManagement() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

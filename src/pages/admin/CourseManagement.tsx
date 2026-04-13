@@ -37,11 +37,21 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, Pencil, Plus, Search, Trash2, Users } from 'lucide-react';
+import {
+  BookOpen,
+  GraduationCap,
+  Loader2,
+  Pencil,
+  Plus,
+  Search,
+  Trash2,
+  Users,
+} from 'lucide-react';
 import api, { unwrapPaginatedData } from '@/lib/api';
 import { toast } from 'sonner';
 import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface Lecturer {
   id: string;
@@ -147,6 +157,20 @@ export default function AdminCourseManagement() {
       );
     });
   }, [courses, search]);
+
+  const courseStats = useMemo(() => {
+    const totalCourses = courses.length;
+    const assignedLecturers = courses.filter((course) => Boolean(course.lecturerId)).length;
+    const totalEnrollments = courses.reduce((sum, course) => sum + (course._count?.enrollments || 0), 0);
+    const activeCourses = courses.filter((course) => (course.status || 'draft').toLowerCase() !== 'archived').length;
+
+    return {
+      totalCourses,
+      assignedLecturers,
+      totalEnrollments,
+      activeCourses,
+    };
+  }, [courses]);
 
   const toPayload = (form: CourseForm, allowUnassign = false) => ({
     name: form.name.trim(),
@@ -306,6 +330,8 @@ export default function AdminCourseManagement() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <BackToDashboardButton to="/admin" className="-ml-2" />
+
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">Course Management</h1>
@@ -335,6 +361,61 @@ export default function AdminCourseManagement() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+        </div>
+
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
+                  <BookOpen className="h-5 w-5 text-blue-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{courseStats.totalCourses}</p>
+                  <p className="text-xs text-muted-foreground">Total Courses</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
+                  <GraduationCap className="h-5 w-5 text-violet-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{courseStats.assignedLecturers}</p>
+                  <p className="text-xs text-muted-foreground">Assigned Lecturers</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
+                  <Users className="h-5 w-5 text-emerald-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{courseStats.totalEnrollments}</p>
+                  <p className="text-xs text-muted-foreground">Total Enrollments</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
+                  <Pencil className="h-5 w-5 text-amber-600" />
+                </div>
+                <div>
+                  <p className="text-2xl font-semibold">{courseStats.activeCourses}</p>
+                  <p className="text-xs text-muted-foreground">Active Courses</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </div>
 
         <Card>

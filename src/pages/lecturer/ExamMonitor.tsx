@@ -23,7 +23,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import {
-  ArrowLeft,
   Loader2,
   Users,
   Clock,
@@ -43,6 +42,7 @@ import {
   Activity,
   MousePointerClick,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import api, { API_BASE_URL, unwrapPaginatedData } from '@/lib/api';
 import { Bar } from 'react-chartjs-2';
 import {
@@ -370,15 +370,7 @@ export default function ExamMonitor() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
-        <Button
-          variant="ghost" size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          asChild
-        >
-          <Link to="/lecturer">
-            <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-          </Link>
-        </Button>
+        <BackToDashboardButton to="/lecturer" className="mb-4 -ml-2" />
 
         <div className="flex items-start justify-between mb-6">
           <div>

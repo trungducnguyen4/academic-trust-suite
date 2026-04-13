@@ -1,4 +1,3 @@
-import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -14,7 +13,6 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import {
-  ArrowLeft,
   CheckCircle2,
   XCircle,
   Cpu,
@@ -23,6 +21,7 @@ import {
   History,
   MessageSquare,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 // This file is a template copy of the grading UI (keeps mock data UI intact)
 interface GradedQuestion {
@@ -58,8 +57,6 @@ const gradingHistory = [
 ];
 
 export default function GradingTemplate() {
-  const navigate = useNavigate();
-
   const autoQuestions = gradedQuestions.filter((q) => q.type === 'auto');
   const manualQuestions = gradedQuestions.filter((q) => q.type === 'manual');
   const autoScore = autoQuestions.reduce((s, q) => s + q.points, 0);
@@ -72,15 +69,7 @@ export default function GradingTemplate() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/student')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
 
         <h1 className="text-2xl font-semibold text-foreground mb-1">Grading Breakdown (Template)</h1>
         <p className="text-muted-foreground mb-6">

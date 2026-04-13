@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Loader2, Award } from 'lucide-react';
 import api from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 export default function StudentResults() {
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -30,6 +31,8 @@ export default function StudentResults() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <BackToDashboardButton to="/student" className="-ml-2" />
+
         <div>
           <h1 className="text-2xl font-bold text-foreground">Results</h1>
           <p className="text-muted-foreground mt-1">Your past submissions and grades</p>

@@ -6,7 +6,6 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Progress } from '@/components/ui/progress';
 import { Separator } from '@/components/ui/separator';
 import {
-  ArrowLeft,
   TrendingUp,
   TrendingDown,
   Target,
@@ -21,6 +20,7 @@ import {
   CheckCircle2,
   XCircle,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 // Mock data
 const examResult = {
@@ -72,15 +72,7 @@ export default function FeedbackDetail() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/student')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
 
         {/* Header */}
         <div className="flex items-start justify-between mb-6">

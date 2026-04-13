@@ -27,6 +27,7 @@ import {
   FileText,
 } from 'lucide-react';
 import { IntegrityCaseDetail } from '@/components/admin/IntegrityCaseDetail';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 export interface FlaggedSubmission {
   id: string;
@@ -258,6 +259,8 @@ export default function IntegrityOverview() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <BackToDashboardButton to="/admin" className="-ml-2" />
+
         {/* Header */}
         <div>
           <h1 className="text-2xl font-semibold text-foreground">

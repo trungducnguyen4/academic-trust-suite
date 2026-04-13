@@ -1,5 +1,4 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -7,7 +6,6 @@ import { StatusBadge } from '@/components/ui/status-badge';
 import { Separator } from '@/components/ui/separator';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
-  ArrowLeft,
   LogIn,
   Play,
   Edit3,
@@ -21,6 +19,7 @@ import {
   Shield,
   MessageSquare,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface TimelineEvent {
   id: string;
@@ -63,7 +62,6 @@ const mockIntegrityNotes: IntegrityNote[] = [
 ];
 
 export default function ExamEventTimeline() {
-  const navigate = useNavigate();
   const [selectedTab, setSelectedTab] = useState('events');
 
   const getEventIcon = (type: TimelineEvent['type']) => {
@@ -101,15 +99,7 @@ export default function ExamEventTimeline() {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/student')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
 
         <div className="flex items-start justify-between mb-6">
           <div>

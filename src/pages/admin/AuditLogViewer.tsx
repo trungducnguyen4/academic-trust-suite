@@ -1,5 +1,4 @@
 import { useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,7 +26,6 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import {
-  ArrowLeft,
   Search,
   Download,
   RefreshCw,
@@ -43,6 +41,7 @@ import {
   ChevronLeft,
   ChevronRight,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface AuditLog {
   id: string;
@@ -101,7 +100,6 @@ const ACTION_ICONS: Record<string, typeof User> = {
 const PAGE_SIZE = 10;
 
 export default function AuditLogViewer() {
-  const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [severityFilter, setSeverityFilter] = useState('all');
   const [roleFilter, setRoleFilter] = useState('all');
@@ -142,13 +140,7 @@ export default function AuditLogViewer() {
       <div className="space-y-6">
         <div className="flex items-start justify-between">
           <div>
-            <Button
-              variant="ghost" size="sm"
-              className="mb-2 gap-2 text-muted-foreground -ml-2"
-              onClick={() => navigate('/admin')}
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-            </Button>
+            <BackToDashboardButton to="/admin" className="mb-2 -ml-2" />
             <h1 className="text-2xl font-semibold text-foreground mb-1">Audit Log Viewer</h1>
             <p className="text-muted-foreground">View and search all system activity logs</p>
           </div>

@@ -2,11 +2,16 @@ import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 export default function LearningFeedbackDetail() {
   return (
     <DashboardLayout>
       <div className="flex flex-col md:flex-row gap-8">
+        <div className="w-full">
+          <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
+        </div>
+
         {/* Sidebar */}
         <aside className="w-full md:w-64 mb-6 md:mb-0">
           <Card className="mb-4">

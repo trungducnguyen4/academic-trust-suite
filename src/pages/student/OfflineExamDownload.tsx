@@ -14,12 +14,12 @@ import {
   CheckCircle2,
   FileText,
   Clock,
-  ArrowLeft,
   Loader2,
   AlertCircle,
   Package,
   Shield,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface OfflineExamPackage {
   id: string;
@@ -104,15 +104,7 @@ export default function OfflineExamDownload() {
   return (
     <DashboardLayout>
       <div className="max-w-3xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/student')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
 
         <h1 className="text-2xl font-semibold text-foreground mb-1">Offline Exam Packages</h1>
         <p className="text-muted-foreground mb-6">

@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { ArrowLeft, BookOpen, Calendar, Clock, FileText } from 'lucide-react';
+import { BookOpen, Calendar, Clock, FileText } from 'lucide-react';
 
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import api, { unwrapPaginatedData } from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 type Course = {
   id: string;
@@ -84,12 +85,7 @@ export default function StudentCourseDetail() {
     <DashboardLayout>
       <div className="mx-auto max-w-6xl space-y-6">
         <div className="space-y-3">
-          <Button variant="ghost" className="gap-2 pl-0" asChild>
-            <Link to="/student">
-              <ArrowLeft className="h-4 w-4" />
-              Back to Dashboard
-            </Link>
-          </Button>
+          <BackToDashboardButton to="/student" className="-ml-2" />
 
           <div className="rounded-2xl border border-border/50 bg-card p-6">
             <div className="flex flex-wrap items-center gap-3">

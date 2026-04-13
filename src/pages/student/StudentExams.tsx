@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Calendar, Loader2 } from 'lucide-react';
 import api from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 export default function StudentExams() {
   const [exams, setExams] = useState<any[]>([]);
@@ -39,6 +40,8 @@ export default function StudentExams() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        <BackToDashboardButton to="/student" className="-ml-2" />
+
         <div>
           <h1 className="text-2xl font-bold text-foreground">Exams</h1>
           <p className="text-muted-foreground mt-1">Available examinations for you</p>

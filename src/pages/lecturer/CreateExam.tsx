@@ -47,6 +47,7 @@ import {
   Loader2,
 } from "lucide-react";
 import { toast } from "sonner";
+import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 // ─── Steps ───────────────────────────────────────────────────────
 type Step = "info" | "settings" | "questions" | "preview";
@@ -569,12 +570,11 @@ export default function CreateExam() {
             </p>
           </div>
           <div className="flex gap-3">
-            <Button
+            <BackToDashboardButton
+              to="/lecturer"
               variant="outline"
-              onClick={() => navigate("/lecturer/exams")}
-            >
-              Back to Dashboard
-            </Button>
+              size="default"
+            />
             <Button onClick={() => navigate("/lecturer/exams")}>
               <Plus className="h-4 w-4 mr-2" /> Add Questions
             </Button>

@@ -16,6 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loader2, AlertTriangle, Activity } from 'lucide-react';
 import api from '@/lib/api';
 import { unwrapPaginatedData } from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 import {
   ResponsiveContainer,
   BarChart,
@@ -161,6 +162,8 @@ export default function ExamResultsList() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-4">
+        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
+
         <div className="flex items-center justify-between mb-4 flex-col sm:flex-row gap-3">
           <div>
             <h1 className="text-2xl font-semibold">Student Exam Results List - {examTitle}</h1>

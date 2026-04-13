@@ -38,10 +38,20 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import api, { unwrapPaginatedData } from '@/lib/api';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface Exam {
   id: string;
@@ -62,11 +72,11 @@ interface Exam {
   };
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'warning' | 'info' | 'destructive' }> = {
+const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   DRAFT: { label: 'Draft', variant: 'default' },
-  PUBLISHED: { label: 'Published', variant: 'info' },
-  ONGOING: { label: 'Ongoing', variant: 'warning' },
-  COMPLETED: { label: 'Completed', variant: 'success' },
+  PUBLISHED: { label: 'Published', variant: 'secondary' },
+  ONGOING: { label: 'Ongoing', variant: 'outline' },
+  COMPLETED: { label: 'Completed', variant: 'secondary' },
   ARCHIVED: { label: 'Archived', variant: 'destructive' },
 };
 
@@ -157,6 +167,8 @@ export default function AdminExamManagement() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-8">
+        <BackToDashboardButton to="/admin" className="-ml-2" />
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -369,16 +381,22 @@ export default function AdminExamManagement() {
       </div>
 
       {/* Delete Dialog */}
-      <ConfirmActionDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        title="Delete exam"
-        description={`Are you sure you want to delete "${selectedExam?.title}"? This action cannot be undone.`}
-        actionLabel="Delete"
-        isLoading={isDeleting}
-        onConfirm={handleDeleteExam}
-        isDangerous
-      />
+      <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete exam</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{selectedExam?.title}"? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteExam} className="bg-destructive hover:bg-destructive/90" disabled={isDeleting}>
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </DashboardLayout>
   );
 }

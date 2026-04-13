@@ -54,7 +54,7 @@ import { Textarea } from '@/components/ui/textarea';
 import api, { unwrapPaginatedData } from '@/lib/api';
 import { toast } from 'sonner';
 import { formatDistanceToNow } from 'date-fns';
-import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface Exam {
   id: string;
@@ -74,11 +74,11 @@ interface Exam {
   };
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'warning' | 'info' | 'destructive' }> = {
+const statusConfig: Record<string, { label: string; variant: 'default' | 'secondary' | 'outline' | 'destructive' }> = {
   DRAFT: { label: 'Draft', variant: 'default' },
-  PUBLISHED: { label: 'Published', variant: 'info' },
-  ONGOING: { label: 'Ongoing', variant: 'warning' },
-  COMPLETED: { label: 'Completed', variant: 'success' },
+  PUBLISHED: { label: 'Published', variant: 'secondary' },
+  ONGOING: { label: 'Ongoing', variant: 'outline' },
+  COMPLETED: { label: 'Completed', variant: 'secondary' },
   ARCHIVED: { label: 'Archived', variant: 'destructive' },
 };
 
@@ -205,6 +205,8 @@ export default function ExamManagement() {
   return (
     <DashboardLayout>
       <div className="max-w-7xl mx-auto space-y-8">
+        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -484,16 +486,23 @@ export default function ExamManagement() {
       </Dialog>
 
       {/* Delete Dialog */}
-      <ConfirmActionDialog
-        open={showDeleteDialog}
-        onOpenChange={setShowDeleteDialog}
-        title="Delete exam"
-        description={`Are you sure you want to delete "${selectedExam?.title}"? This action cannot be undone.`}
-        actionLabel="Delete"
-        isLoading={isDeleting}
-        onConfirm={handleDeleteExam}
-        isDangerous
-      />
+      <Dialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete exam</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete "{selectedExam?.title}"? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowDeleteDialog(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteExam} disabled={isDeleting}>
+              {isDeleting ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+              Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </DashboardLayout>
   );
 }

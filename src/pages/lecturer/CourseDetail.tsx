@@ -42,6 +42,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { unwrapPaginatedData } from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface Student {
   enrollmentId: string;
@@ -264,6 +265,8 @@ export default function CourseDetail() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto space-y-6">
+        {/* <BackToDashboardButton to={basePath} className="-ml-2" /> */}
+
         {/* Header */}
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>

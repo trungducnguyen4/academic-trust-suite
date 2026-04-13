@@ -38,6 +38,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface GeneratedQuestion {
   id: string;
@@ -202,6 +203,8 @@ export default function UploadDocAIGen() {
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto">
+        {/* <BackToDashboardButton to="/lecturer" className="mb-2 -ml-2" /> */}
+
         <Button
           variant="ghost"
           size="sm"

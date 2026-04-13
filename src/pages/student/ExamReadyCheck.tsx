@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate, useSearchParams } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -24,12 +24,12 @@ import {
   AlertTriangle,
   Lock,
   ArrowRight,
-  ArrowLeft,
   RefreshCw,
   Download,
   Package,
   LockKeyhole,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 type CheckStatus = 'pending' | 'checking' | 'passed' | 'failed';
 type ExamStep = 'download' | 'system-check' | 'locked' | 'ready';
@@ -281,13 +281,7 @@ export default function ExamReadyCheck() {
   return (
     <DashboardLayout>
       <div className="max-w-2xl mx-auto">
-        <Button
-          variant="ghost" size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/student')}
-        >
-          <ArrowLeft className="h-4 w-4" /> Back to Dashboard
-        </Button>
+        <BackToDashboardButton to="/student" className="mb-4 -ml-2" />
 
         {/* Exam Header */}
         <Card className="mb-4">
@@ -688,9 +682,13 @@ export default function ExamReadyCheck() {
                   Start Exam Now
                 </Button>
               )}
-              <Button variant="outline" asChild className="h-12">
-                <Link to="/student">Return to Dashboard</Link>
-              </Button>
+              <BackToDashboardButton
+                to="/student"
+                label="Return to Dashboard"
+                variant="outline"
+                size="default"
+                className="h-12"
+              />
             </div>
           </>
         )}

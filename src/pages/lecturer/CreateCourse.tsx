@@ -28,7 +28,6 @@ import {
   DialogTrigger,
 } from '@/components/ui/dialog';
 import {
-  ArrowLeft,
   ArrowRight,
   Plus,
   BookOpen,
@@ -51,6 +50,7 @@ import api, { unwrapPaginatedData } from '@/lib/api';
 import { toast } from 'sonner';
 import { ConfirmActionDialog } from '@/components/common/ConfirmActionDialog';
 import { useAuth } from '@/contexts/AuthContext';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 interface Course {
   id: string;
@@ -469,15 +469,7 @@ export default function CreateCourse() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => navigate('/lecturer')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Back to Dashboard
-        </Button>
+        {/* <BackToDashboardButton to="/lecturer" className="mb-4 -ml-2" /> */}
 
         <div className="flex items-start justify-between mb-6">
           <div>

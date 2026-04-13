@@ -24,6 +24,7 @@ import {
   BookOpen,
   FileText,
 } from 'lucide-react';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 // ─── Mock data ────────────────────────────────────────────────────
 const exams = [
@@ -75,6 +76,8 @@ export default function ExamAnalytics() {
   return (
     <DashboardLayout>
       <div className="space-y-6">
+        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
+
         {/* Header */}
         <div className="flex items-start justify-between gap-4 flex-wrap">
           <div>

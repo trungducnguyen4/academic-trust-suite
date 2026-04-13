@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { Loader2, Clock, BookOpen, PencilLine, ArrowLeft, BarChart3 } from 'lucide-react';
 import api from '@/lib/api';
+import { BackToDashboardButton } from '@/components/common/BackToDashboardButton';
 
 type ExamQuestion = {
   id: string;
@@ -143,6 +144,8 @@ export default function ExamPreview() {
   return (
     <DashboardLayout>
       <div className="max-w-5xl mx-auto space-y-6">
+        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
+
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <div>
             <Button variant="ghost" className="px-0" onClick={() => navigate('/lecturer/exams')}>
