@@ -466,7 +466,7 @@ export default function StudentDashboard() {
           </div>
 
           {/* Upcoming Exams */}
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-3">
             <Card className="card-elevated">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>

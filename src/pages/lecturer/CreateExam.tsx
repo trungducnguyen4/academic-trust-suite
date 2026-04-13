@@ -157,6 +157,12 @@ interface CourseOption {
   name: string;
 }
 
+interface BankTopic {
+  topic: string;
+  count: number;
+  selected: boolean;
+}
+
 const QUESTION_TYPE_OPTIONS = [
   { value: "mixed", label: "Mixed (all types)" },
   { value: "single-choice", label: "Single Choice only" },
@@ -228,6 +234,23 @@ const mapQuestionTypeToDb = (value: string) => {
   return map[normalized] || map[normalized.toUpperCase()] || "MULTIPLE_CHOICE";
 };
 
+const safeParseTags = (tags: unknown): string[] => {
+  if (!tags) return [];
+  if (Array.isArray(tags)) return tags.filter((t) => typeof t === "string");
+  if (typeof tags !== "string") return [];
+  try {
+    const parsed = JSON.parse(tags);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return tags
+      .split(",")
+      .map((t) => t.trim())
+      .filter(Boolean);
+  }
+};
+
+const UNTAGGED_LABEL = "Untagged";
+
 const normalizeDifficultyForQuestion = (value: unknown) => {
   const n = Number(value);
   if (Number.isNaN(n)) return 5;
@@ -247,6 +270,8 @@ export default function CreateExam() {
   const [isAiGenerating, setIsAiGenerating] = useState(false);
   const [aiGeneratedQuestions, setAiGeneratedQuestions] = useState<any[]>([]);
   const [courses, setCourses] = useState<CourseOption[]>([]);
+  const [bankTopics, setBankTopics] = useState<BankTopic[]>([]);
+  const [isLoadingBankTopics, setIsLoadingBankTopics] = useState(false);
 
   const set = (key: keyof ExamForm, val: string | boolean) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -269,6 +294,80 @@ export default function CreateExam() {
 
     loadCourses();
   }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadBankTopics = async () => {
+      if (!form.course) {
+        setBankTopics([]);
+        return;
+      }
+
+      setBankTopics([]);
+      setIsLoadingBankTopics(true);
+      try {
+        const limit = 100;
+        let page = 1;
+        let totalPages = 1;
+        const counts = new Map<string, number>();
+
+        while (page <= totalPages) {
+          const response: any = await api.getQuestions({
+            courseId: form.course,
+            page,
+            limit,
+          });
+          const items = Array.isArray(response?.data)
+            ? response.data
+            : Array.isArray(response)
+              ? response
+              : [];
+
+          totalPages = Number(response?.totalPages || 1);
+
+          items.forEach((q: any) => {
+            const tags = safeParseTags(q?.tags);
+            if (tags.length === 0) {
+              counts.set(UNTAGGED_LABEL, (counts.get(UNTAGGED_LABEL) || 0) + 1);
+              return;
+            }
+
+            tags.forEach((tag) => {
+              const key = tag.trim();
+              if (!key) return;
+              counts.set(key, (counts.get(key) || 0) + 1);
+            });
+          });
+
+          page += 1;
+        }
+
+        if (!active) return;
+
+        const nextTopics = Array.from(counts.entries())
+          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+          .map(([topic, count]) => ({
+            topic,
+            count,
+            selected: true,
+          }));
+
+        setBankTopics(nextTopics);
+      } catch (error) {
+        console.error("Failed to load question bank topics:", error);
+        if (active) setBankTopics([]);
+      } finally {
+        if (active) setIsLoadingBankTopics(false);
+      }
+    };
+
+    loadBankTopics();
+
+    return () => {
+      active = false;
+    };
+  }, [form.course]);
 
   const stepIdx = STEPS.findIndex((s) => s.key === step);
   const canNext = (): boolean => {
@@ -828,38 +927,54 @@ export default function CreateExam() {
                     <p className="text-sm font-medium text-muted-foreground pt-2">
                       Topics to include
                     </p>
-                    <div className="space-y-2">
-                      {[
-                        {
-                          topic: "Relational Algebra",
-                          count: 24,
-                          selected: true,
-                        },
-                        { topic: "SQL Queries", count: 38, selected: true },
-                        { topic: "Normalization", count: 17, selected: false },
-                        {
-                          topic: "Transaction Management",
-                          count: 12,
-                          selected: true,
-                        },
-                      ].map((bank) => (
-                        <label
-                          key={bank.topic}
-                          className={`flex items-center gap-3 border rounded-lg px-4 py-3 cursor-pointer transition-all
+                    {!form.course && (
+                      <p className="text-sm text-muted-foreground">
+                        Select a course to load available topics.
+                      </p>
+                    )}
+
+                    {form.course && isLoadingBankTopics && (
+                      <p className="text-sm text-muted-foreground">
+                        Loading topics...
+                      </p>
+                    )}
+
+                    {form.course && !isLoadingBankTopics && bankTopics.length === 0 && (
+                      <p className="text-sm text-muted-foreground">
+                        No topics found for this course yet.
+                      </p>
+                    )}
+
+                    {bankTopics.length > 0 && (
+                      <div className="space-y-2">
+                        {bankTopics.map((bank) => (
+                          <label
+                            key={bank.topic}
+                            className={`flex items-center gap-3 border rounded-lg px-4 py-3 cursor-pointer transition-all
                           ${bank.selected ? "border-primary bg-primary/5" : "border-border"}`}
-                        >
-                          <input
-                            type="checkbox"
-                            defaultChecked={bank.selected}
-                            className="accent-primary"
-                          />
-                          <span className="flex-1 text-sm">{bank.topic}</span>
-                          <Badge variant="secondary">
-                            {bank.count} questions
-                          </Badge>
-                        </label>
-                      ))}
-                    </div>
+                          >
+                            <input
+                              type="checkbox"
+                              checked={bank.selected}
+                              onChange={() =>
+                                setBankTopics((prev) =>
+                                  prev.map((item) =>
+                                    item.topic === bank.topic
+                                      ? { ...item, selected: !item.selected }
+                                      : item,
+                                  ),
+                                )
+                              }
+                              className="accent-primary"
+                            />
+                            <span className="flex-1 text-sm">{bank.topic}</span>
+                            <Badge variant="secondary">
+                              {bank.count} questions
+                            </Badge>
+                          </label>
+                        ))}
+                      </div>
+                    )}
 
                     <Button
                       variant="outline"

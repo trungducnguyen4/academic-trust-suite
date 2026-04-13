@@ -1,495 +1,249 @@
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
 
+const DEPARTMENTS = [
+  'Computer Science',
+  'Information Technology',
+  'Business Administration',
+  'Economics',
+  'Mathematics',
+  'Physics',
+];
+
+const STUDENT_PASSWORD = '123123123Az!';
+const STUDENTS_PER_COHORT = 2000;
+const COHORT_PREFIXES = ['522h', '523h', '524h', '525h'];
+const LECTURER_COUNT = 20;
+const MIN_PER_COURSE = 90;
+const MAX_PER_COURSE = 100;
+const ENROLLMENT_BATCH_SIZE = 1000;
+const STUDENT_BATCH_SIZE = 500;
+
+const padNumber = (value: number, length: number) => value.toString().padStart(length, '0');
+
+const randomItem = <T>(items: T[]) => items[Math.floor(Math.random() * items.length)];
+
+const chunkArray = <T>(items: T[], chunkSize: number) => {
+  const chunks: T[][] = [];
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+  return chunks;
+};
+
+const shuffle = <T>(items: T[]) => {
+  const result = [...items];
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [result[i], result[j]] = [result[j], result[i]];
+  }
+  return result;
+};
+
+const buildStudentId = (prefix: string, index: number) => `${prefix}${padNumber(index, 4)}`;
+
+const isMissingTableError = (error: unknown) =>
+  error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021';
+
+const safeDelete = async (name: string, action: () => Promise<unknown>) => {
+  try {
+    await action();
+  } catch (error) {
+    if (isMissingTableError(error)) {
+      console.warn(`WARN: Skipped delete for ${name} (table missing).`);
+      return;
+    }
+    throw error;
+  }
+};
+
+async function clearDatabase() {
+  await safeDelete('integrity_logs', () => prisma.integrityLog.deleteMany());
+  await safeDelete('proctoring_sessions', () => prisma.proctoringSession.deleteMany());
+  await safeDelete('submission_answers', () => prisma.submissionAnswer.deleteMany());
+  await safeDelete('exam_submissions', () => prisma.examSubmission.deleteMany());
+  await safeDelete('exam_questions', () => prisma.examQuestion.deleteMany());
+  await safeDelete('exam_link_usages', () => prisma.examLinkUsage.deleteMany());
+  await safeDelete('exam_links', () => prisma.examLink.deleteMany());
+  await safeDelete('questions', () => prisma.question.deleteMany());
+  await safeDelete('exams', () => prisma.exam.deleteMany());
+  await safeDelete('enrollments', () => prisma.enrollment.deleteMany());
+  await safeDelete('courses', () => prisma.course.deleteMany());
+  await safeDelete('notifications', () => prisma.notification.deleteMany());
+  await safeDelete('users', () => prisma.user.deleteMany());
+}
+
 async function main() {
   console.log('🌱 Seeding database...');
-
-  // Clear existing data
-  await prisma.integrityLog.deleteMany();
-  await prisma.proctoringSession.deleteMany();
-  await prisma.submissionAnswer.deleteMany();
-  await prisma.examSubmission.deleteMany();
-  await prisma.examQuestion.deleteMany();
-  await prisma.question.deleteMany();
-  await prisma.exam.deleteMany();
-  await prisma.enrollment.deleteMany();
-  await prisma.course.deleteMany();
-  await prisma.user.deleteMany();
-
+  await clearDatabase();
   console.log('✅ Cleared existing data');
 
-  // Create password hash (password: 123456)
-  const hashedPassword = await bcrypt.hash('123456', 10);
+  const hashedPassword = await bcrypt.hash(STUDENT_PASSWORD, 10);
 
-  // Create Admin
   const admin = await prisma.user.create({
     data: {
-      email: 'admin@examtrust.edu',
+      email: 'admin@tdhuhu.edu.vn',
       password: hashedPassword,
-      fullName: 'System Administrator',
+      fullName: 'System Admin',
       role: 'ADMIN',
-      department: 'IT Department',
+      department: 'Information Technology',
     },
   });
   console.log('✅ Created admin:', admin.email);
 
-  // Create Lecturers
-  const lecturer1 = await prisma.user.create({
-    data: {
-      email: 'lecturer@examtrust.edu',
-      password: hashedPassword,
-      fullName: 'Dr. Nguyễn Văn A',
-      role: 'LECTURER',
-      department: 'Computer Science',
-    },
+  const lecturersData = Array.from({ length: LECTURER_COUNT }, (_, index) => ({
+    email: `lecturer${padNumber(index + 1, 2)}@tdhuhu.edu.vn`,
+    password: hashedPassword,
+    fullName: `Lecturer ${padNumber(index + 1, 2)}`,
+    role: 'LECTURER',
+    department: randomItem(DEPARTMENTS),
+  }));
+  await prisma.user.createMany({ data: lecturersData });
+  const lecturers = await prisma.user.findMany({
+    where: { role: 'LECTURER' },
+    orderBy: { email: 'asc' },
   });
+  console.log(`✅ Created ${lecturers.length} lecturers`);
 
-  const lecturer2 = await prisma.user.create({
-    data: {
-      email: 'lecturer2@examtrust.edu',
-      password: hashedPassword,
-      fullName: 'Dr. Trần Thị B',
-      role: 'LECTURER',
-      department: 'Information Technology',
-    },
-  });
-  console.log('✅ Created lecturers');
+  let studentBatch: Array<{
+    email: string;
+    password: string;
+    fullName: string;
+    role: string;
+    studentId: string;
+    department: string;
+  }> = [];
 
-  // Create Students
-  const students = await Promise.all([
-    prisma.user.create({
-      data: {
-        email: 'student@examtrust.edu',
+  for (const prefix of COHORT_PREFIXES) {
+    for (let i = 1; i <= STUDENTS_PER_COHORT; i += 1) {
+      const studentId = buildStudentId(prefix, i);
+      studentBatch.push({
+        email: `${studentId}@tdhuhu.edu.vn`,
         password: hashedPassword,
-        fullName: 'Lê Văn C',
+        fullName: `Student ${studentId}`,
         role: 'STUDENT',
-        studentId: 'SV001',
-        department: 'Computer Science',
-      },
-    }),
-    prisma.user.create({
-      data: {
-        email: 'student2@examtrust.edu',
-        password: hashedPassword,
-        fullName: 'Phạm Thị D',
-        role: 'STUDENT',
-        studentId: 'SV002',
-        department: 'Computer Science',
-      },
-    }),
-    prisma.user.create({
-      data: {
-        email: 'student3@examtrust.edu',
-        password: hashedPassword,
-        fullName: 'Hoàng Văn E',
-        role: 'STUDENT',
-        studentId: 'SV003',
-        department: 'Information Technology',
-      },
-    }),
-    prisma.user.create({
-      data: {
-        email: 'student4@examtrust.edu',
-        password: hashedPassword,
-        fullName: 'Ngô Thị F',
-        role: 'STUDENT',
-        studentId: 'SV004',
-        department: 'Information Technology',
-      },
-    }),
-    prisma.user.create({
-      data: {
-        email: 'student5@examtrust.edu',
-        password: hashedPassword,
-        fullName: 'Vũ Văn G',
-        role: 'STUDENT',
-        studentId: 'SV005',
-        department: 'Computer Science',
-      },
-    }),
-  ]);
-  console.log('✅ Created', students.length, 'students');
+        studentId,
+        department: randomItem(DEPARTMENTS),
+      });
 
-  // Create Courses
-  const course1 = await prisma.course.create({
-    data: {
-      code: 'CS101',
-      name: 'Introduction to Programming',
-      description: 'Learn the basics of programming with Python',
-      credits: 3,
-      semester: '2024-1',
-      lecturerId: lecturer1.id,
-    },
+      if (studentBatch.length >= STUDENT_BATCH_SIZE) {
+        await prisma.user.createMany({ data: studentBatch });
+        studentBatch = [];
+      }
+    }
+  }
+
+  if (studentBatch.length > 0) {
+    await prisma.user.createMany({ data: studentBatch });
+  }
+
+  const students = await prisma.user.findMany({
+    where: { role: 'STUDENT' },
+    select: { id: true },
+  });
+  console.log(`✅ Created ${students.length} students`);
+
+  const totalStudents = students.length;
+  const minCourses = Math.ceil(totalStudents / MAX_PER_COURSE);
+  const maxCourses = Math.floor(totalStudents / MIN_PER_COURSE);
+  const courseCount = maxCourses;
+
+  if (courseCount < minCourses || courseCount > maxCourses) {
+    throw new Error('Course count does not satisfy size constraints.');
+  }
+
+  const baseCoursesPerLecturer = Math.floor(courseCount / lecturers.length);
+  const remainderCourses = courseCount % lecturers.length;
+  const coursesData: Array<{
+    code: string;
+    name: string;
+    description: string;
+    credits: number;
+    semester: string;
+    lecturerId: string;
+  }> = [];
+
+  let courseIndex = 1;
+  lecturers.forEach((lecturer, index) => {
+    const classesForLecturer = baseCoursesPerLecturer + (index < remainderCourses ? 1 : 0);
+    for (let i = 0; i < classesForLecturer; i += 1) {
+      const code = `CLS${padNumber(courseIndex, 3)}`;
+      coursesData.push({
+        code,
+        name: `Class ${code}`,
+        description: `Generated class ${code}`,
+        credits: 3,
+        semester: '2026-1',
+        lecturerId: lecturer.id,
+      });
+      courseIndex += 1;
+    }
   });
 
-  const course2 = await prisma.course.create({
-    data: {
-      code: 'CS201',
-      name: 'Data Structures and Algorithms',
-      description: 'Advanced concepts in data structures and algorithmic thinking',
-      credits: 4,
-      semester: '2024-1',
-      lecturerId: lecturer1.id,
-    },
+  await prisma.course.createMany({ data: coursesData });
+  const courses = await prisma.course.findMany({
+    orderBy: { code: 'asc' },
+    select: { id: true, code: true },
+  });
+  console.log(`✅ Created ${courses.length} classes`);
+
+  if (totalStudents < courses.length * MIN_PER_COURSE || totalStudents > courses.length * MAX_PER_COURSE) {
+    throw new Error('Student count cannot be distributed with the requested class size.');
+  }
+
+  const baseSize = MIN_PER_COURSE;
+  let remaining = totalStudents - baseSize * courses.length;
+  const extras = new Array<number>(courses.length).fill(0);
+
+  while (remaining > 0) {
+    const index = Math.floor(Math.random() * courses.length);
+    if (extras[index] < MAX_PER_COURSE - MIN_PER_COURSE) {
+      extras[index] += 1;
+      remaining -= 1;
+    }
+  }
+
+  const courseSizes = extras.map((extra) => baseSize + extra);
+  const shuffledStudentIds = shuffle(students.map((student) => student.id));
+  const enrollmentsData: Array<{ courseId: string; studentId: string }> = [];
+
+  let offset = 0;
+  courses.forEach((course, index) => {
+    const size = courseSizes[index];
+    const assigned = shuffledStudentIds.slice(offset, offset + size);
+    offset += size;
+    assigned.forEach((studentId) => {
+      enrollmentsData.push({ courseId: course.id, studentId });
+    });
   });
 
-  const course3 = await prisma.course.create({
-    data: {
-      code: 'IT301',
-      name: 'Database Management Systems',
-      description: 'Learn about relational databases and SQL',
-      credits: 3,
-      semester: '2024-1',
-      lecturerId: lecturer2.id,
-    },
-  });
+  if (offset !== shuffledStudentIds.length) {
+    throw new Error('Enrollment distribution mismatch.');
+  }
 
-  const course4 = await prisma.course.create({
-    data: {
-      code: 'IT401',
-      name: 'Web Development',
-      description: 'Full-stack web development with modern technologies',
-      credits: 4,
-      semester: '2024-1',
-      lecturerId: lecturer2.id,
-    },
-  });
-  console.log('✅ Created 4 courses');
-
-  // Enroll students
-  await prisma.enrollment.createMany({
-    data: [
-      { studentId: students[0].id, courseId: course1.id },
-      { studentId: students[0].id, courseId: course2.id },
-      { studentId: students[0].id, courseId: course3.id },
-      { studentId: students[1].id, courseId: course1.id },
-      { studentId: students[1].id, courseId: course2.id },
-      { studentId: students[2].id, courseId: course3.id },
-      { studentId: students[2].id, courseId: course4.id },
-      { studentId: students[3].id, courseId: course3.id },
-      { studentId: students[3].id, courseId: course4.id },
-      { studentId: students[4].id, courseId: course1.id },
-      { studentId: students[4].id, courseId: course4.id },
-    ],
-  });
-  console.log('✅ Created enrollments');
-
-  // Create Questions
-  const questions = await Promise.all([
-    // Multiple Choice Questions
-    prisma.question.create({
-      data: {
-        type: 'MULTIPLE_CHOICE',
-        content: 'What is the time complexity of binary search?',
-        options: {
-          A: 'O(1)',
-          B: 'O(n)',
-          C: 'O(log n)',
-          D: 'O(n²)',
-        },
-        correctAnswer: { answer: 'C' },
-        explanation: 'Binary search divides the search space in half each time, resulting in O(log n) complexity.',
-        difficulty: 3,
-        points: 2,
-        tags: JSON.stringify(['algorithms', 'searching', 'complexity']),
-        creatorId: lecturer1.id,
-        courseId: course2.id,
-      },
-    }),
-    prisma.question.create({
-      data: {
-        type: 'MULTIPLE_CHOICE',
-        content: 'Which data structure uses LIFO principle?',
-        options: {
-          A: 'Queue',
-          B: 'Stack',
-          C: 'Linked List',
-          D: 'Array',
-        },
-        correctAnswer: { answer: 'B' },
-        explanation: 'Stack follows Last-In-First-Out (LIFO) principle.',
-        difficulty: 2,
-        points: 1,
-        tags: JSON.stringify(['data-structures', 'stack']),
-        creatorId: lecturer1.id,
-        courseId: course2.id,
-      },
-    }),
-    prisma.question.create({
-      data: {
-        type: 'MULTIPLE_CHOICE',
-        content: 'What does SQL stand for?',
-        options: {
-          A: 'Structured Query Language',
-          B: 'Simple Query Language',
-          C: 'Standard Query Logic',
-          D: 'System Query Language',
-        },
-        correctAnswer: { answer: 'A' },
-        explanation: 'SQL stands for Structured Query Language.',
-        difficulty: 1,
-        points: 1,
-        tags: JSON.stringify(['database', 'sql', 'basics']),
-        creatorId: lecturer2.id,
-        courseId: course3.id,
-      },
-    }),
-    // True/False Questions
-    prisma.question.create({
-      data: {
-        type: 'TRUE_FALSE',
-        content: 'Python is a compiled language.',
-        correctAnswer: { answer: false },
-        explanation: 'Python is an interpreted language, not compiled.',
-        difficulty: 1,
-        points: 1,
-        tags: JSON.stringify(['python', 'programming-languages']),
-        creatorId: lecturer1.id,
-        courseId: course1.id,
-      },
-    }),
-    prisma.question.create({
-      data: {
-        type: 'TRUE_FALSE',
-        content: 'A primary key can contain NULL values.',
-        correctAnswer: { answer: false },
-        explanation: 'Primary keys must be unique and NOT NULL.',
-        difficulty: 2,
-        points: 1,
-        tags: JSON.stringify(['database', 'constraints']),
-        creatorId: lecturer2.id,
-        courseId: course3.id,
-      },
-    }),
-    // Multi-Select Questions
-    prisma.question.create({
-      data: {
-        type: 'MULTI_SELECT',
-        content: 'Which of the following are valid Python data types? (Select all that apply)',
-        options: {
-          A: 'int',
-          B: 'varchar',
-          C: 'list',
-          D: 'dictionary',
-          E: 'float',
-        },
-        correctAnswer: { answers: ['A', 'C', 'D', 'E'] },
-        explanation: 'Python supports int, list, dict (dictionary), and float. varchar is a SQL data type.',
-        difficulty: 2,
-        points: 3,
-        tags: JSON.stringify(['python', 'data-types']),
-        creatorId: lecturer1.id,
-        courseId: course1.id,
-      },
-    }),
-    // Short Answer Questions
-    prisma.question.create({
-      data: {
-        type: 'SHORT_ANSWER',
-        content: 'What keyword is used to define a function in Python?',
-        correctAnswer: { answer: 'def' },
-        difficulty: 1,
-        points: 1,
-        tags: JSON.stringify(['python', 'functions']),
-        creatorId: lecturer1.id,
-        courseId: course1.id,
-      },
-    }),
-    // Essay Questions
-    prisma.question.create({
-      data: {
-        type: 'ESSAY',
-        content: 'Explain the difference between a stack and a queue. Provide real-world examples for each.',
-        explanation: 'Expected answer should cover LIFO vs FIFO principles with appropriate examples.',
-        difficulty: 4,
-        points: 10,
-        tags: JSON.stringify(['data-structures', 'concepts']),
-        creatorId: lecturer1.id,
-        courseId: course2.id,
-      },
-    }),
-    // Fill in Blank
-    prisma.question.create({
-      data: {
-        type: 'FILL_IN_BLANK',
-        content: 'The SELECT statement is used to _____ data from a database.',
-        correctAnswer: { answers: ['retrieve', 'select', 'fetch', 'get'] },
-        difficulty: 1,
-        points: 1,
-        tags: JSON.stringify(['sql', 'basics']),
-        creatorId: lecturer2.id,
-        courseId: course3.id,
-      },
-    }),
-    // More questions for variety
-    prisma.question.create({
-      data: {
-        type: 'MULTIPLE_CHOICE',
-        content: 'What is the default port for HTTP?',
-        options: {
-          A: '21',
-          B: '22',
-          C: '80',
-          D: '443',
-        },
-        correctAnswer: { answer: 'C' },
-        explanation: 'HTTP uses port 80 by default, HTTPS uses 443.',
-        difficulty: 2,
-        points: 1,
-        tags: JSON.stringify(['web', 'networking']),
-        creatorId: lecturer2.id,
-        courseId: course4.id,
-      },
-    }),
-  ]);
-  console.log('✅ Created', questions.length, 'questions');
-
-  // Create Exams
-  const now = new Date();
-  const nextWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const nextMonth = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-  const exam1 = await prisma.exam.create({
-    data: {
-      title: 'Midterm Exam - Data Structures',
-      description: 'Covers topics from weeks 1-7',
-      courseId: course2.id,
-      creatorId: lecturer1.id,
-      duration: 90,
-      totalPoints: 100,
-      passingScore: 50,
-      startTime: now,
-      endTime: nextWeek,
-      status: 'PUBLISHED',
-      settings: {
-        shuffleQuestions: true,
-        showResults: true,
-        allowReview: true,
-      },
-    },
-  });
-
-  const exam2 = await prisma.exam.create({
-    data: {
-      title: 'Quiz 1 - Python Basics',
-      description: 'Short quiz on Python fundamentals',
-      courseId: course1.id,
-      creatorId: lecturer1.id,
-      duration: 30,
-      totalPoints: 20,
-      passingScore: 10,
-      startTime: now,
-      endTime: nextMonth,
-      status: 'PUBLISHED',
-      settings: {
-        shuffleQuestions: false,
-        showResults: true,
-        allowReview: true,
-      },
-    },
-  });
-
-  const exam3 = await prisma.exam.create({
-    data: {
-      title: 'Database Final Exam',
-      description: 'Comprehensive exam covering all SQL topics',
-      courseId: course3.id,
-      creatorId: lecturer2.id,
-      duration: 120,
-      totalPoints: 100,
-      passingScore: 60,
-      startTime: nextWeek,
-      endTime: nextMonth,
-      status: 'DRAFT',
-      settings: {
-        shuffleQuestions: true,
-        showResults: false,
-        allowReview: false,
-        proctoring: true,
-      },
-    },
-  });
-  console.log('✅ Created 3 exams');
-
-  // Add questions to exams
-  await prisma.examQuestion.createMany({
-    data: [
-      { examId: exam1.id, questionId: questions[0].id, orderIndex: 1, points: 10 },
-      { examId: exam1.id, questionId: questions[1].id, orderIndex: 2, points: 5 },
-      { examId: exam1.id, questionId: questions[7].id, orderIndex: 3, points: 20 },
-      { examId: exam2.id, questionId: questions[3].id, orderIndex: 1, points: 5 },
-      { examId: exam2.id, questionId: questions[5].id, orderIndex: 2, points: 10 },
-      { examId: exam2.id, questionId: questions[6].id, orderIndex: 3, points: 5 },
-      { examId: exam3.id, questionId: questions[2].id, orderIndex: 1, points: 10 },
-      { examId: exam3.id, questionId: questions[4].id, orderIndex: 2, points: 10 },
-      { examId: exam3.id, questionId: questions[8].id, orderIndex: 3, points: 10 },
-    ],
-  });
-  console.log('✅ Added questions to exams');
-
-  // Create sample submissions
-  const submission1 = await prisma.examSubmission.create({
-    data: {
-      examId: exam2.id,
-      studentId: students[0].id,
-      status: 'GRADED',
-      startedAt: new Date(now.getTime() - 3600000),
-      submittedAt: new Date(now.getTime() - 1800000),
-      gradedAt: now,
-      score: 18,
-    },
-  });
-
-  await prisma.submissionAnswer.createMany({
-    data: [
-      {
-        submissionId: submission1.id,
-        questionId: questions[3].id,
-        answer: { answer: false },
-        isCorrect: true,
-        pointsAwarded: 5,
-        timeTaken: 120,
-      },
-      {
-        submissionId: submission1.id,
-        questionId: questions[5].id,
-        answer: { answers: ['A', 'C', 'D', 'E'] },
-        isCorrect: true,
-        pointsAwarded: 10,
-        timeTaken: 180,
-      },
-      {
-        submissionId: submission1.id,
-        questionId: questions[6].id,
-        answer: { answer: 'def' },
-        isCorrect: true,
-        pointsAwarded: 3,
-        timeTaken: 60,
-      },
-    ],
-  });
-  console.log('✅ Created sample submission');
+  for (const chunk of chunkArray(enrollmentsData, ENROLLMENT_BATCH_SIZE)) {
+    await prisma.enrollment.createMany({ data: chunk });
+  }
+  console.log(`✅ Created ${enrollmentsData.length} enrollments`);
 
   console.log('\n🎉 Seeding completed successfully!\n');
-
   console.log('📋 TEST ACCOUNTS:');
   console.log('┌──────────────────────────────────────────────────────────────┐');
-  console.log('│ Role      │ Email                    │ Password │ Name       │');
+  console.log('│ Role      │ Email                     │ Password       │ Name │');
   console.log('├──────────────────────────────────────────────────────────────┤');
-  console.log('│ ADMIN     │ admin@examtrust.edu      │ 123456   │ System Admin│');
-  console.log('│ LECTURER  │ lecturer@examtrust.edu   │ 123456   │ Dr. Nguyễn │');
-  console.log('│ LECTURER  │ lecturer2@examtrust.edu  │ 123456   │ Dr. Trần   │');
-  console.log('│ STUDENT   │ student@examtrust.edu    │ 123456   │ Lê Văn C   │');
-  console.log('│ STUDENT   │ student2@examtrust.edu   │ 123456   │ Phạm Thị D │');
+  console.log('│ ADMIN     │ admin@tdhuhu.edu.vn        │ 123123123Az!   │ Admin│');
+  console.log('│ LECTURER  │ lecturer01@tdhuhu.edu.vn   │ 123123123Az!   │ L01  │');
+  console.log('│ STUDENT   │ 522h0001@tdhuhu.edu.vn     │ 123123123Az!   │ S001 │');
   console.log('└──────────────────────────────────────────────────────────────┘');
   console.log('\n📊 DATA SUMMARY:');
-  console.log(`   - Users: 8 (1 admin, 2 lecturers, 5 students)`);
-  console.log(`   - Courses: 4`);
-  console.log(`   - Enrollments: 11`);
-  console.log(`   - Questions: ${questions.length}`);
-  console.log(`   - Exams: 3 (1 draft, 2 published)`);
+  console.log(`   - Users: ${1 + lecturers.length + students.length}`);
+  console.log(`   - Lecturers: ${lecturers.length}`);
+  console.log(`   - Students: ${students.length}`);
+  console.log(`   - Classes: ${courses.length}`);
+  console.log(`   - Enrollments: ${enrollmentsData.length}`);
+  console.log(`   - Class size range: ${Math.min(...courseSizes)}-${Math.max(...courseSizes)}`);
 }
 
 main()

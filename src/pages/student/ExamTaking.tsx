@@ -32,7 +32,6 @@ import {
   ChevronLeft,
   ChevronRight,
   Send,
-  AlertTriangle,
   Volume2,
   Maximize,
   X,
@@ -44,6 +43,8 @@ import {
 } from 'lucide-react';
 
 import { api } from '@/lib/api';
+import { ExamSecurityModal } from '../../components/common/ExamSecurityModal';
+import { useExamSecurity, type ViolationLog } from '../../hooks/use-exam-security';
 
 // ─── Question types ───────────────────────────────────────────────
 type QType =
@@ -258,6 +259,7 @@ function isAnswered(q: Question, answers: AnswerMap): boolean {
 }
 
 const EXAM_DURATION = 90 * 60;
+const MAX_VIOLATIONS = 3;
 const MOUSE_IDLE_THRESHOLD_MS = 45000;
 
 const typeBadgeColor: Record<QType, string> = {
@@ -299,10 +301,6 @@ export default function ExamTaking() {
   const [answers, setAnswers]       = useState<AnswerMap>({});
   const [flagged, setFlagged]       = useState<Record<number, boolean>>({});
   const [timeLeft, setTimeLeft]     = useState(EXAM_DURATION);
-  const [tabSwitches, setTabSwitches] = useState(0);
-  const [showTabWarning, setShowTabWarning] = useState(false);
-  const [fullscreenExits, setFullscreenExits] = useState(0);
-  const [showFullscreenWarning, setShowFullscreenWarning] = useState(false);
   const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
@@ -376,37 +374,8 @@ export default function ExamTaking() {
     logRef.current.push({ type, ts: Date.now(), detail });
   }, []);
 
-  // Fullscreen: enter on mount, watch for exits
   useEffect(() => {
-    document.documentElement.requestFullscreen?.().catch(() => {});
     log('exam_start');
-
-    const onFullscreenChange = () => {
-      if (!document.fullscreenElement) {
-        setFullscreenExits((n) => n + 1);
-        setShowFullscreenWarning(true);
-        log('fullscreen_exit', 'User exited fullscreen');
-
-        // send immediate log to server (fire-and-forget)
-        try {
-          const submissionId = localStorage.getItem('currentSubmissionId');
-          if (submissionId) {
-            api.sendExamLogs(submissionId, [{ type: 'fullscreen_exit', details: 'User exited fullscreen', ts: Date.now() }])
-              .catch((e) => console.error('sendExamLogs failed', e));
-          }
-        } catch (e) {
-          console.error('Failed to send fullscreen log', e);
-        }
-
-        setTimeout(() => setShowFullscreenWarning(false), 5000);
-      }
-    };
-
-    document.addEventListener('fullscreenchange', onFullscreenChange);
-    return () => {
-      document.removeEventListener('fullscreenchange', onFullscreenChange);
-      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-    };
   }, [log]);
 
   // Timer with auto-submit
@@ -473,46 +442,48 @@ export default function ExamTaking() {
     else navigate('/student/grading');
   }, [log, navigate, examId, answers, questions]);
 
+  const handleViolation = useCallback((entry: ViolationLog) => {
+    log(entry.type, entry.detail);
+    try {
+      const submissionId = localStorage.getItem('currentSubmissionId');
+      if (submissionId) {
+        api.sendExamLogs(submissionId, [
+          {
+            type: entry.type,
+            details: entry.detail ?? `Security violation: ${entry.type}`,
+            ts: entry.timestamp,
+          },
+        ]).catch((e) => console.error('sendExamLogs failed', e));
+      }
+    } catch (e) {
+      console.error('Failed to send violation log', e);
+    }
+  }, [log]);
+
+  const {
+    isBlocked: isSecurityBlocked,
+    violationCount,
+    isEscalated,
+    lastViolation,
+    returnToExam,
+    canFullscreen,
+  } = useExamSecurity({
+    enabled: !isSubmitting,
+    maxViolations: MAX_VIOLATIONS,
+    onViolation: handleViolation,
+    onEscalate: () => {
+      if (isSubmitting) return;
+      log('violation_escalation', `Reached ${MAX_VIOLATIONS} violations`);
+      doSubmit();
+    },
+  });
+
   useEffect(() => {
     const id = setInterval(() => {
       setTimeLeft((t) => { if (t <= 1) { doSubmit(); return 0; } return t - 1; });
     }, 1000);
     return () => clearInterval(id);
   }, [doSubmit]);
-
-  // Tab switch detection with server logging
-  useEffect(() => {
-    const onVis = () => {
-      if (document.hidden) {
-        setTabSwitches((n) => {
-          const newCount = n + 1;
-          setShowTabWarning(true);
-          log('tab_switch', `Tab switched ${newCount} times`);
-
-          // Send log to server
-          try {
-            const submissionId = localStorage.getItem('currentSubmissionId');
-            if (submissionId) {
-              api.sendExamLogs(submissionId, [
-                {
-                  type: 'tab_switch',
-                  details: `Tab switched ${newCount} times`,
-                  ts: Date.now(),
-                },
-              ]).catch((e) => console.error('sendExamLogs failed', e));
-            }
-          } catch (e) {
-            console.error('Failed to send tab switch log', e);
-          }
-
-          setTimeout(() => setShowTabWarning(false), 5000);
-          return newCount;
-        });
-      }
-    };
-    document.addEventListener('visibilitychange', onVis);
-    return () => document.removeEventListener('visibilitychange', onVis);
-  }, [log]);
 
   // Mouse idle tracking (silent for student): logs when no activity for a threshold period.
   useEffect(() => {
@@ -623,9 +594,9 @@ export default function ExamTaking() {
           <Shield className="h-5 w-5 text-primary" />
           <span className="font-semibold text-sm">Database Systems Quiz</span>
                     <span className="font-semibold text-sm">{examTitle}</span>
-          {tabSwitches > 0 && (
+          {violationCount > 0 && (
             <StatusBadge variant="destructive">
-              {tabSwitches} tab switch{tabSwitches > 1 ? 'es' : ''}
+              {violationCount} violation{violationCount > 1 ? 's' : ''}
             </StatusBadge>
           )}
         </div>
@@ -635,52 +606,21 @@ export default function ExamTaking() {
           }`}>
             <Clock className="h-4 w-4" /> {formatTime(timeLeft)}
           </div>
-          <Button variant="ghost" size="sm" onClick={() => document.documentElement.requestFullscreen?.()}>
+          <Button variant="ghost" size="sm" onClick={returnToExam} disabled={!canFullscreen}>
             <Maximize className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
-      {/* ── Tab switch overlay ───────────────────────────────────── */}
-      {showTabWarning && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center">
-          <div className="bg-card rounded-xl p-8 max-w-sm text-center border shadow-xl">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Tab Switch Detected!</h2>
-            <p className="text-muted-foreground mb-1">This incident has been recorded.</p>
-            <p className="text-muted-foreground text-sm mb-5">Total violations: <strong>{tabSwitches}</strong></p>
-            <Button onClick={() => setShowTabWarning(false)}>Return to Exam</Button>
-          </div>
-        </div>
-      )}
-
-      {/* Fullscreen exit overlay */}
-      {showFullscreenWarning && (
-        <div className="fixed inset-0 z-[60] bg-black/80 flex items-center justify-center">
-          <div className="bg-card rounded-xl p-8 max-w-sm text-center border shadow-xl">
-            <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Fullscreen Exited!</h2>
-            <p className="text-muted-foreground mb-1">This incident has been recorded and reported to your instructor.</p>
-            <p className="text-muted-foreground text-sm mb-5">Total violations: <strong>{fullscreenExits}</strong></p>
-            <Button
-              onClick={async () => {
-                try {
-                  if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
-                    await document.documentElement.requestFullscreen();
-                    log('fullscreen_resume', 'User returned to fullscreen via warning dialog');
-                  }
-                } catch (e) {
-                  console.error('Failed to re-enter fullscreen', e);
-                } finally {
-                  setShowFullscreenWarning(false);
-                }
-              }}
-            >
-              Return to Exam
-            </Button>
-          </div>
-        </div>
-      )}
+      <ExamSecurityModal
+        open={isSecurityBlocked}
+        violationCount={violationCount}
+        maxViolations={MAX_VIOLATIONS}
+        isEscalated={isEscalated}
+        lastViolation={lastViolation}
+        canFullscreen={canFullscreen}
+        onReturnToExam={returnToExam}
+      />
 
       <div className="flex pt-14 min-h-screen">
         {/* ── Navigator Sidebar ────────────────────────────────── */}
