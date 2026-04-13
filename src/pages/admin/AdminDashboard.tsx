@@ -1,10 +1,18 @@
-import { useEffect, useState } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { 
+import { useEffect, useState } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
   Users,
   Shield,
   Settings,
@@ -14,17 +22,17 @@ import {
   ArrowRight,
   Loader2,
   BookOpen,
-} from 'lucide-react';
-import { Link } from 'react-router-dom';
-import { Progress } from '@/components/ui/progress';
-import api, { unwrapPaginatedData } from '@/lib/api';
+} from "lucide-react";
+import { Link } from "react-router-dom";
+import { Progress } from "@/components/ui/progress";
+import api, { unwrapPaginatedData } from "@/lib/api";
 import { FileText } from "@/components/layout/DashboardLayout";
 
 interface User {
   id: string;
   email: string;
   fullName: string;
-  role: 'ADMIN' | 'LECTURER' | 'STUDENT';
+  role: "ADMIN" | "LECTURER" | "STUDENT";
   createdAt: string;
 }
 
@@ -55,18 +63,19 @@ export default function AdminDashboard() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const [usersRes, examsRes, submissionsRes, coursesRes] = await Promise.all([
-          api.getUsers(),
-          api.getExams(),
-          api.getSubmissions(),
-          api.getCourses(),
-        ]);
+        const [usersRes, examsRes, submissionsRes, coursesRes] =
+          await Promise.all([
+            api.getUsers(),
+            api.getExams(),
+            api.getSubmissions(),
+            api.getCourses(),
+          ]);
         setUsers(unwrapPaginatedData(usersRes));
         setExams(unwrapPaginatedData(examsRes));
         setSubmissions(unwrapPaginatedData(submissionsRes));
         setCourses(unwrapPaginatedData(coursesRes));
       } catch (err) {
-        console.error('Failed to fetch admin data:', err);
+        console.error("Failed to fetch admin data:", err);
       } finally {
         setLoading(false);
       }
@@ -76,33 +85,47 @@ export default function AdminDashboard() {
 
   // Calculate stats from real data
   const now = new Date();
-  const activeExams = exams.filter(e => new Date(e.startTime) <= now && new Date(e.endTime) >= now).length;
+  const activeExams = exams.filter(
+    (e) => new Date(e.startTime) <= now && new Date(e.endTime) >= now,
+  ).length;
   const totalUsers = users.length;
-  
-  const studentCount = users.filter(u => u.role === 'STUDENT').length;
-  const lecturerCount = users.filter(u => u.role === 'LECTURER').length;
-  const adminCount = users.filter(u => u.role === 'ADMIN').length;
-  
+
+  const studentCount = users.filter((u) => u.role === "STUDENT").length;
+  const lecturerCount = users.filter((u) => u.role === "LECTURER").length;
+  const adminCount = users.filter((u) => u.role === "ADMIN").length;
+
   const userBreakdown = [
-    { role: 'Students', count: studentCount, percentage: totalUsers ? (studentCount / totalUsers) * 100 : 0 },
-    { role: 'Lecturers', count: lecturerCount, percentage: totalUsers ? (lecturerCount / totalUsers) * 100 : 0 },
-    { role: 'Administrators', count: adminCount, percentage: totalUsers ? (adminCount / totalUsers) * 100 : 0 },
+    {
+      role: "Students",
+      count: studentCount,
+      percentage: totalUsers ? (studentCount / totalUsers) * 100 : 0,
+    },
+    {
+      role: "Lecturers",
+      count: lecturerCount,
+      percentage: totalUsers ? (lecturerCount / totalUsers) * 100 : 0,
+    },
+    {
+      role: "Administrators",
+      count: adminCount,
+      percentage: totalUsers ? (adminCount / totalUsers) * 100 : 0,
+    },
   ];
 
   // Recent activity from submissions and users
   const recentActivity = [
-    ...submissions.slice(0, 2).map(s => ({
+    ...submissions.slice(0, 2).map((s) => ({
       id: s.id,
-      action: `Exam submission: ${s.exam?.title || 'Unknown'}`,
-      user: s.student?.fullName || 'Student',
-      time: new Date(s.startedAt).toLocaleDateString()
+      action: `Exam submission: ${s.exam?.title || "Unknown"}`,
+      user: s.student?.fullName || "Student",
+      time: new Date(s.startedAt).toLocaleDateString(),
     })),
-    ...users.slice(0, 2).map(u => ({
+    ...users.slice(0, 2).map((u) => ({
       id: u.id,
       action: `User registered: ${u.role}`,
       user: u.fullName,
-      time: new Date(u.createdAt).toLocaleDateString()
-    }))
+      time: new Date(u.createdAt).toLocaleDateString(),
+    })),
   ].slice(0, 4);
 
   if (loading) {
@@ -117,7 +140,7 @@ export default function AdminDashboard() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-8">
+      <AdminPageShell showBackButton={false}>
         {/* Header */}
         <div>
           <h1 className="text-2xl font-semibold text-foreground">
@@ -129,59 +152,33 @@ export default function AdminDashboard() {
         </div>
 
         {/* System Stats */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{totalUsers.toLocaleString()}</p>
-                  <p className="text-sm text-muted-foreground">Total Users</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-info/10 flex items-center justify-center">
-                  <Activity className="h-5 w-5 text-info" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{activeExams}</p>
-                  <p className="text-sm text-muted-foreground">Active Exams</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{submissions.length}</p>
-                  <p className="text-sm text-muted-foreground">Submissions</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-success/10 flex items-center justify-center">
-                  <Database className="h-5 w-5 text-success" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{courses.length}</p>
-                  <p className="text-sm text-muted-foreground">Total Courses</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminStatCard
+            icon={Users}
+            value={totalUsers.toLocaleString()}
+            label="Total Users"
+          />
+          <AdminStatCard
+            icon={Activity}
+            value={activeExams}
+            label="Active Exams"
+            iconWrapClassName="bg-info/10"
+            iconClassName="text-info"
+          />
+          <AdminStatCard
+            icon={Shield}
+            value={submissions.length}
+            label="Submissions"
+            iconWrapClassName="bg-warning/10"
+            iconClassName="text-warning"
+          />
+          <AdminStatCard
+            icon={Database}
+            value={courses.length}
+            label="Total Courses"
+            iconWrapClassName="bg-success/10"
+            iconClassName="text-success"
+          />
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
@@ -216,7 +213,9 @@ export default function AdminDashboard() {
                   <div key={activity.id} className="flex items-start gap-3">
                     <div className="h-2 w-2 mt-2 rounded-full bg-primary" />
                     <div className="space-y-1 flex-1">
-                      <p className="text-sm text-foreground">{activity.action}</p>
+                      <p className="text-sm text-foreground">
+                        {activity.action}
+                      </p>
                       <p className="text-xs text-muted-foreground">
                         {activity.user} • {activity.time}
                       </p>
@@ -234,7 +233,12 @@ export default function AdminDashboard() {
                 <CardTitle className="text-lg">Recent Submissions</CardTitle>
                 <CardDescription>Latest exam submissions</CardDescription>
               </div>
-              <Button variant="ghost" size="sm" className="text-muted-foreground" asChild>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-muted-foreground"
+                asChild
+              >
                 <Link to="/admin/integrity">
                   View all
                   <ArrowRight className="ml-1 h-4 w-4" />
@@ -244,17 +248,28 @@ export default function AdminDashboard() {
             <CardContent>
               <div className="space-y-4">
                 {submissions.length === 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-4">No submissions yet</p>
+                  <p className="text-sm text-muted-foreground text-center py-4">
+                    No submissions yet
+                  </p>
                 ) : (
                   submissions.slice(0, 3).map((sub) => (
-                    <div key={sub.id} className="rounded-lg border border-border p-3 space-y-2">
+                    <div
+                      key={sub.id}
+                      className="rounded-lg border border-border p-3 space-y-2"
+                    >
                       <div className="flex items-start justify-between">
                         <div>
-                          <p className="text-sm font-medium text-foreground">{sub.exam?.title || 'Unknown Exam'}</p>
-                          <p className="text-xs text-muted-foreground">{sub.student?.fullName || 'Unknown Student'}</p>
+                          <p className="text-sm font-medium text-foreground">
+                            {sub.exam?.title || "Unknown Exam"}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {sub.student?.fullName || "Unknown Student"}
+                          </p>
                         </div>
-                        <StatusBadge variant={sub.score !== null ? 'success' : 'warning'}>
-                          {sub.score !== null ? `${sub.score}%` : 'Pending'}
+                        <StatusBadge
+                          variant={sub.score !== null ? "success" : "warning"}
+                        >
+                          {sub.score !== null ? `${sub.score}%` : "Pending"}
                         </StatusBadge>
                       </div>
                       <p className="text-xs text-muted-foreground">
@@ -276,37 +291,61 @@ export default function AdminDashboard() {
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-4">
-              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2"
+                asChild
+              >
                 <Link to="/admin/users">
                   <Users className="h-5 w-5" />
                   <span>Manage Users</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2"
+                asChild
+              >
                 <Link to="/admin/exams">
                   <FileText className="h-5 w-5" />
                   <span>Manage Exams</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2"
+                asChild
+              >
                 <Link to="/admin/integrity">
                   <Shield className="h-5 w-5" />
                   <span>Review Integrity</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2"
+                asChild
+              >
                 <Link to="/admin/settings">
                   <Settings className="h-5 w-5" />
                   <span>System Settings</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2"
+                asChild
+              >
                 <Link to="/admin/courses">
                   <BarChart3 className="h-5 w-5" />
                   <span>Manage Courses</span>
                 </Link>
               </Button>
-              <Button variant="outline" className="h-auto py-4 flex-col gap-2" asChild>
+              <Button
+                variant="outline"
+                className="h-auto py-4 flex-col gap-2"
+                asChild
+              >
                 <Link to="/admin/question-bank">
                   <BookOpen className="h-5 w-5" />
                   <span>Question Bank</span>
@@ -315,7 +354,7 @@ export default function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

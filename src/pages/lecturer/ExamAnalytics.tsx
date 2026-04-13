@@ -30,7 +30,8 @@ import {
   BookOpen,
   FileText,
 } from "lucide-react";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 
 // ─── Mock data ────────────────────────────────────────────────────
 const exams = [
@@ -145,7 +146,7 @@ export default function ExamAnalytics() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <AdminPageShell backTo="/lecturer">
         {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
 
         {/* Header */}
@@ -171,50 +172,39 @@ export default function ExamAnalytics() {
         </div>
 
         {/* KPI cards */}
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {[
-            {
-              label: "Students",
-              value: exam.students,
-              sub: "submitted",
-              icon: <Users className="h-5 w-5 text-blue-600" />,
-              bg: "bg-blue-50",
-            },
-            {
-              label: "Avg. Score",
-              value: `${exam.avgScore}%`,
-              sub: "out of 100",
-              icon: <Award className="h-5 w-5 text-violet-600" />,
-              bg: "bg-violet-50",
-            },
-            {
-              label: "Pass Rate",
-              value: `${exam.passRate}%`,
-              sub: "of students",
-              icon: <CheckCircle2 className="h-5 w-5 text-green-600" />,
-              bg: "bg-green-50",
-            },
-            {
-              label: "Avg. Time",
-              value: exam.avgTime,
-              sub: "to complete",
-              icon: <Clock className="h-5 w-5 text-amber-600" />,
-              bg: "bg-amber-50",
-            },
-          ].map(({ label, value, sub, icon, bg }) => (
-            <Card key={label}>
-              <CardContent className="pt-5 pb-4">
-                <div
-                  className={`w-10 h-10 rounded-lg ${bg} flex items-center justify-center mb-3`}
-                >
-                  {icon}
-                </div>
-                <p className="text-2xl font-bold">{value}</p>
-                <p className="text-sm text-muted-foreground">{label}</p>
-                <p className="text-xs text-muted-foreground">{sub}</p>
-              </CardContent>
-            </Card>
-          ))}
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 justify-center">
+          <AdminStatCard
+            icon={Users}
+            value={exam.students}
+            label="Students"
+            iconWrapClassName="bg-blue-50"
+            iconClassName="text-blue-600"
+            className="w-full"
+          />
+          <AdminStatCard
+            icon={Award}
+            value={`${exam.avgScore}%`}
+            label="Avg. Score"
+            iconWrapClassName="bg-violet-50"
+            iconClassName="text-violet-600"
+            className="w-full"
+          />
+          <AdminStatCard
+            icon={CheckCircle2}
+            value={`${exam.passRate}%`}
+            label="Pass Rate"
+            iconWrapClassName="bg-green-50"
+            iconClassName="text-green-600"
+            className="w-full"
+          />
+          <AdminStatCard
+            icon={Clock}
+            value={exam.avgTime}
+            label="Avg. Time"
+            iconWrapClassName="bg-amber-50"
+            iconClassName="text-amber-600"
+            className="w-full"
+          />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -417,7 +407,7 @@ export default function ExamAnalytics() {
             <FileText className="h-4 w-4" /> Export Report
           </Button>
         </div>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

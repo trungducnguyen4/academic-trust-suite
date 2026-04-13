@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import {
   Card,
   CardContent,
@@ -35,7 +36,6 @@ import {
   CheckCircle2,
   RotateCcw,
 } from "lucide-react";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export default function SystemPolicyConfig() {
   const [saving, setSaving] = useState(false);
@@ -97,9 +97,7 @@ export default function SystemPolicyConfig() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-4xl mx-auto">
-        <BackToDashboardButton to="/admin" className="mb-4 -ml-2" />
-
+      <AdminPageShell>
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-foreground mb-1">
@@ -498,7 +496,7 @@ export default function SystemPolicyConfig() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

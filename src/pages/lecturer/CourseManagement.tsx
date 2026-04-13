@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -22,7 +24,6 @@ import {
 import { Link } from "react-router-dom";
 import { api, unwrapPaginatedData } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import {
   Select,
   SelectContent,
@@ -128,12 +129,19 @@ export default function CourseManagement() {
   };
 
   const groupedCourses = groupCoursesByFaculty(courses);
+  const totalStudents = courses.reduce(
+    (sum, course) => sum + (course._count?.enrollments ?? 0),
+    0,
+  );
+  const totalExams = courses.reduce(
+    (sum, course) => sum + (course._count?.exams ?? 0),
+    0,
+  );
+  const facultiesCount = Object.keys(groupedCourses).length;
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
-
+      <AdminPageShell backTo="/lecturer">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -165,6 +173,20 @@ export default function CourseManagement() {
             </Button>
           </div>
         </div>
+
+        {/* Quick stats */}
+        <section>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <AdminStatCard icon={BookOpen} value={courses.length} label="Total Courses" />
+            <AdminStatCard icon={Users} value={totalStudents} label="Total Students" />
+            <AdminStatCard icon={Clock} value={totalExams} label="Total Exams" />
+            <AdminStatCard
+              icon={Filter}
+              value={facultiesCount}
+              label="Faculties"
+            />
+          </div>
+        </section>
 
         {/* Recently Accessed Courses */}
         <section>
@@ -390,7 +412,7 @@ export default function CourseManagement() {
             </div>
           )}
         </section>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -51,7 +53,6 @@ import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Lecturer {
   id: string;
@@ -361,9 +362,7 @@ export default function AdminCourseManagement() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <BackToDashboardButton to="/admin" className="-ml-2" />
-
+      <AdminPageShell>
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-semibold text-foreground">
@@ -415,73 +414,35 @@ export default function AdminCourseManagement() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <BookOpen className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {courseStats.totalCourses}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Total Courses</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                  <GraduationCap className="h-5 w-5 text-violet-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {courseStats.assignedLecturers}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Assigned Lecturers
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {courseStats.totalEnrollments}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Total Enrollments
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <Pencil className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {courseStats.activeCourses}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Active Courses
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminStatCard
+            icon={BookOpen}
+            value={courseStats.totalCourses}
+            label="Total Courses"
+            iconWrapClassName="bg-blue-500/10"
+            iconClassName="text-blue-600"
+          />
+          <AdminStatCard
+            icon={GraduationCap}
+            value={courseStats.assignedLecturers}
+            label="Assigned Lecturers"
+            iconWrapClassName="bg-violet-500/10"
+            iconClassName="text-violet-600"
+          />
+          <AdminStatCard
+            icon={Users}
+            value={courseStats.totalEnrollments}
+            label="Total Enrollments"
+            iconWrapClassName="bg-emerald-500/10"
+            iconClassName="text-emerald-600"
+          />
+          <AdminStatCard
+            icon={Pencil}
+            value={courseStats.activeCourses}
+            label="Active Courses"
+            iconWrapClassName="bg-amber-500/10"
+            iconClassName="text-amber-600"
+          />
         </div>
 
         <Card>
@@ -610,7 +571,7 @@ export default function AdminCourseManagement() {
             </Table>
           </CardContent>
         </Card>
-      </div>
+      </AdminPageShell>
 
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
         <DialogContent className="max-w-2xl">

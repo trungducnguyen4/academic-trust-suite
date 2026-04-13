@@ -1,5 +1,7 @@
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -57,7 +59,6 @@ import {
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Exam {
   id: string;
@@ -183,9 +184,7 @@ export default function AdminExamManagement() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-8">
-        <BackToDashboardButton to="/admin" className="-ml-2" />
-
+      <AdminPageShell>
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -199,61 +198,29 @@ export default function AdminExamManagement() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">Total Exams</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.published}</p>
-                  <p className="text-xs text-muted-foreground">Published</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.ongoing}</p>
-                  <p className="text-xs text-muted-foreground">Ongoing</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-emerald-500/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-emerald-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.submissions}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Total Submissions
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminStatCard icon={FileText} value={stats.total} label="Total Exams" />
+          <AdminStatCard
+            icon={CheckCircle2}
+            value={stats.published}
+            label="Published"
+            iconWrapClassName="bg-blue-500/10"
+            iconClassName="text-blue-600"
+          />
+          <AdminStatCard
+            icon={Clock}
+            value={stats.ongoing}
+            label="Ongoing"
+            iconWrapClassName="bg-amber-500/10"
+            iconClassName="text-amber-600"
+          />
+          <AdminStatCard
+            icon={Users}
+            value={stats.submissions}
+            label="Total Submissions"
+            iconWrapClassName="bg-emerald-500/10"
+            iconClassName="text-emerald-600"
+          />
         </div>
 
         {/* Exam List */}
@@ -430,7 +397,7 @@ export default function AdminExamManagement() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </AdminPageShell>
 
       {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

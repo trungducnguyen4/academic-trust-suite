@@ -170,7 +170,11 @@ export default function StudentDashboard() {
           }));
 
         setUpcomingExams(upcoming);
-        setExamHistory(submissions.filter((s: any) => s.status === 'GRADED' || s.status === 'SUBMITTED'));
+        setExamHistory(
+          submissions.filter(
+            (s: any) => s.status === "GRADED" || s.status === "SUBMITTED",
+          ),
+        );
 
         const safeRelativeTime = (raw: any): string => {
           if (!raw) return "—";

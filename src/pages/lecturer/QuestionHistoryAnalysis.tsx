@@ -358,7 +358,7 @@ export default function QuestionHistoryAnalysis() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
-        <BackToDashboardButton to={basePath} className="mb-2 -ml-2" />
+        {/* <BackToDashboardButton to={basePath} className="mb-2 -ml-2" /> */}
 
         <Button
           variant="ghost"

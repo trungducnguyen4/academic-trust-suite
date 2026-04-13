@@ -500,7 +500,9 @@ export function DashboardLayout({
                                     variant="ghost"
                                     size="icon"
                                     className="h-6 w-6 text-muted-foreground"
-                                    onClick={() => void removeNotification(item.id)}
+                                    onClick={() =>
+                                      void removeNotification(item.id)
+                                    }
                                   >
                                     <Trash2 className="h-3.5 w-3.5" />
                                   </Button>
@@ -514,7 +516,7 @@ export function DashboardLayout({
                         <Button
                           variant="outline"
                           className="w-full h-8 text-xs"
-                          onClick={() => navigate('/notifications')}
+                          onClick={() => navigate("/notifications")}
                         >
                           Open full notifications
                         </Button>
@@ -572,8 +574,8 @@ export function DashboardLayout({
             </div>
           </div>
 
-          <div className="p-4 lg:p-6 xl:p-8">
-            <div className="mx-auto max-w-[1400px]">{children}</div>
+          <div className="p-4 lg:p-6">
+            <div className="mx-auto w-full max-w-7xl">{children}</div>
           </div>
         </main>
       </div>

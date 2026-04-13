@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -62,7 +64,6 @@ import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { useAuth } from "@/contexts/AuthContext";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Course {
   id: string;
@@ -546,8 +547,7 @@ export default function CreateCourse() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-5xl mx-auto">
-        {/* <BackToDashboardButton to="/lecturer" className="mb-4 -ml-2" /> */}
+      <AdminPageShell backTo="/lecturer">
 
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -1170,54 +1170,23 @@ export default function CreateCourse() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 mb-6">
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <BookOpen className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{courses.length}</p>
-                  <p className="text-xs text-muted-foreground">Total Courses</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {courses.reduce((s, c) => s + c.students, 0)}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Total Students
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <GraduationCap className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {courses.filter((c) => c.status === "active").length}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Active Courses
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <AdminStatCard icon={BookOpen} value={courses.length} label="Total Courses" />
+          <AdminStatCard
+            icon={Users}
+            value={courses.reduce((s, c) => s + c.students, 0)}
+            label="Total Students"
+          />
+          <AdminStatCard
+            icon={GraduationCap}
+            value={courses.filter((c) => c.status === "active").length}
+            label="Active Courses"
+          />
+          <AdminStatCard
+            icon={FileSpreadsheet}
+            value={courses.reduce((s, c) => s + c.exams, 0)}
+            label="Total Exams"
+          />
         </div>
 
         {/* Course List */}
@@ -1327,7 +1296,7 @@ export default function CreateCourse() {
             </Table>
           </CardContent>
         </Card>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

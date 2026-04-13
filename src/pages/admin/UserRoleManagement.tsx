@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -51,7 +53,6 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import api, { unwrapPaginatedData } from "@/lib/api";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 type BackendRole = "STUDENT" | "LECTURER" | "ADMIN";
 type BackendStatus = "active" | "suspended" | "pending";
@@ -313,9 +314,7 @@ export default function UserRoleManagement() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto">
-        <BackToDashboardButton to="/admin" className="mb-4 -ml-2" />
-
+      <AdminPageShell>
         <div className="flex items-start justify-between mb-6 gap-4">
           <div>
             <h1 className="text-2xl font-semibold text-foreground mb-1">
@@ -469,67 +468,29 @@ export default function UserRoleManagement() {
           </Dialog>
         </div>
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{totalUsers}</p>
-                  <p className="text-xs text-muted-foreground">Total Users</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-sky-500/10 flex items-center justify-center">
-                  <BadgeCheck className="h-5 w-5 text-sky-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{pageStats.students}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Students (current page)
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-violet-500/10 flex items-center justify-center">
-                  <Users className="h-5 w-5 text-violet-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {pageStats.lecturers}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Lecturers (current page)
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <Crown className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{pageStats.admins}</p>
-                  <p className="text-xs text-muted-foreground">
-                    Admins (current page)
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-6">
+          <AdminStatCard icon={Users} value={totalUsers} label="Total Users" />
+          <AdminStatCard
+            icon={BadgeCheck}
+            value={pageStats.students}
+            label="Students (current page)"
+            iconWrapClassName="bg-sky-500/10"
+            iconClassName="text-sky-600"
+          />
+          <AdminStatCard
+            icon={Users}
+            value={pageStats.lecturers}
+            label="Lecturers (current page)"
+            iconWrapClassName="bg-violet-500/10"
+            iconClassName="text-violet-600"
+          />
+          <AdminStatCard
+            icon={Crown}
+            value={pageStats.admins}
+            label="Admins (current page)"
+            iconWrapClassName="bg-amber-500/10"
+            iconClassName="text-amber-600"
+          />
         </div>
 
         <Card className="mb-6">
@@ -870,7 +831,7 @@ export default function UserRoleManagement() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

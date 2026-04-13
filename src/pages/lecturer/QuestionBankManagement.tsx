@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -54,7 +56,6 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { unwrapPaginatedData } from "@/lib/api";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Question {
   id: string;
@@ -259,9 +260,7 @@ export default function QuestionBankManagement() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto">
-        <BackToDashboardButton to={basePath} className="mb-4 -ml-2" />
-
+      <AdminPageShell backTo={basePath}>
         {/* COURSE SELECTION VIEW */}
         {!selectedCourse ? (
           <>
@@ -283,73 +282,33 @@ export default function QuestionBankManagement() {
             </div>
 
             {/* Stats Row */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                      <Database className="h-5 w-5 text-primary" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold">
-                        {questions.length}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Total Questions
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-green-100 flex items-center justify-center">
-                      <CheckCircle2 className="h-5 w-5 text-green-600" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold">{courses.length}</p>
-                      <p className="text-xs text-muted-foreground">Courses</p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                      <BarChart3 className="h-5 w-5 text-blue-600" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold">{avgDifficulty}</p>
-                      <p className="text-xs text-muted-foreground">
-                        Avg Difficulty
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-lg bg-purple-100 flex items-center justify-center">
-                      <Tag className="h-5 w-5 text-purple-600" />
-                    </div>
-                    <div>
-                      <p className="text-2xl font-semibold">
-                        {
-                          Object.keys(typeLabels).filter((t) =>
-                            questions.some((q) => q.type === t),
-                          ).length
-                        }
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Question Types
-                      </p>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-8">
+              <AdminStatCard
+                icon={Database}
+                value={questions.length}
+                label="Total Questions"
+              />
+              <AdminStatCard
+                icon={CheckCircle2}
+                value={courses.length}
+                label="Courses"
+                iconWrapClassName="bg-green-100"
+                iconClassName="text-green-600"
+              />
+              <AdminStatCard
+                icon={BarChart3}
+                value={avgDifficulty}
+                label="Avg Difficulty"
+                iconWrapClassName="bg-blue-100"
+                iconClassName="text-blue-600"
+              />
+              <AdminStatCard
+                icon={Tag}
+                value={Object.keys(typeLabels).filter((t) => questions.some((q) => q.type === t)).length}
+                label="Question Types"
+                iconWrapClassName="bg-purple-100"
+                iconClassName="text-purple-600"
+              />
             </div>
 
             {/* Course Cards */}
@@ -752,7 +711,7 @@ export default function QuestionBankManagement() {
             )}
           </DialogContent>
         </Dialog>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

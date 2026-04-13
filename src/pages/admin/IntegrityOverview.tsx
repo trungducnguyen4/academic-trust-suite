@@ -1,5 +1,7 @@
 import { useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -33,7 +35,6 @@ import {
   FileText,
 } from "lucide-react";
 import { IntegrityCaseDetail } from "@/components/admin/IntegrityCaseDetail";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export interface FlaggedSubmission {
   id: string;
@@ -280,9 +281,7 @@ export default function IntegrityOverview() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
-        <BackToDashboardButton to="/admin" className="-ml-2" />
-
+      <AdminPageShell>
         {/* Header */}
         <div>
           <h1 className="text-2xl font-semibold text-foreground">
@@ -294,71 +293,35 @@ export default function IntegrityOverview() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-warning/10 flex items-center justify-center">
-                  <Shield className="h-5 w-5 text-warning" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.totalFlagged}</p>
-                  <p className="text-sm text-muted-foreground">Total Flagged</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-info/10 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-info" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {stats.pendingReview}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Pending Review
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center">
-                  <AlertTriangle className="h-5 w-5 text-destructive" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {stats.highConfidence}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    High Confidence
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-4">
-                <div className="h-10 w-10 rounded-lg bg-destructive/10 flex items-center justify-center">
-                  <XCircle className="h-5 w-5 text-destructive" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">
-                    {stats.confirmedCases}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    Confirmed Cases
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminStatCard
+            icon={Shield}
+            value={stats.totalFlagged}
+            label="Total Flagged"
+            iconWrapClassName="bg-warning/10"
+            iconClassName="text-warning"
+          />
+          <AdminStatCard
+            icon={Clock}
+            value={stats.pendingReview}
+            label="Pending Review"
+            iconWrapClassName="bg-info/10"
+            iconClassName="text-info"
+          />
+          <AdminStatCard
+            icon={AlertTriangle}
+            value={stats.highConfidence}
+            label="High Confidence"
+            iconWrapClassName="bg-destructive/10"
+            iconClassName="text-destructive"
+          />
+          <AdminStatCard
+            icon={XCircle}
+            value={stats.confirmedCases}
+            label="Confirmed Cases"
+            iconWrapClassName="bg-destructive/10"
+            iconClassName="text-destructive"
+          />
         </div>
 
         {/* Main Content */}
@@ -603,7 +566,7 @@ export default function IntegrityOverview() {
             </CardContent>
           </Card>
         </div>
-      </div>
+      </AdminPageShell>
     </DashboardLayout>
   );
 }

@@ -1,6 +1,8 @@
 import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminPageShell } from "@/components/admin/AdminPageShell";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import {
   Card,
   CardContent,
@@ -60,7 +62,6 @@ import { Textarea } from "@/components/ui/textarea";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface Exam {
   id: string;
@@ -221,9 +222,7 @@ export default function ExamManagement() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-7xl mx-auto space-y-8">
-        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
-
+      <AdminPageShell backTo="/lecturer">
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>
@@ -244,59 +243,29 @@ export default function ExamManagement() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-4 gap-4">
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                  <FileText className="h-5 w-5 text-primary" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.total}</p>
-                  <p className="text-xs text-muted-foreground">Total Exams</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-blue-500/10 flex items-center justify-center">
-                  <CheckCircle2 className="h-5 w-5 text-blue-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.published}</p>
-                  <p className="text-xs text-muted-foreground">Published</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-amber-500/10 flex items-center justify-center">
-                  <Clock className="h-5 w-5 text-amber-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.ongoing}</p>
-                  <p className="text-xs text-muted-foreground">Ongoing</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-4">
-              <div className="flex items-center gap-3">
-                <div className="h-10 w-10 rounded-lg bg-gray-500/10 flex items-center justify-center">
-                  <AlertCircle className="h-5 w-5 text-gray-600" />
-                </div>
-                <div>
-                  <p className="text-2xl font-semibold">{stats.draft}</p>
-                  <p className="text-xs text-muted-foreground">Draft</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminStatCard icon={FileText} value={stats.total} label="Total Exams" />
+          <AdminStatCard
+            icon={CheckCircle2}
+            value={stats.published}
+            label="Published"
+            iconWrapClassName="bg-blue-500/10"
+            iconClassName="text-blue-600"
+          />
+          <AdminStatCard
+            icon={Clock}
+            value={stats.ongoing}
+            label="Ongoing"
+            iconWrapClassName="bg-amber-500/10"
+            iconClassName="text-amber-600"
+          />
+          <AdminStatCard
+            icon={AlertCircle}
+            value={stats.draft}
+            label="Draft"
+            iconWrapClassName="bg-gray-500/10"
+            iconClassName="text-gray-600"
+          />
         </div>
 
         {/* Exam List */}
@@ -501,7 +470,7 @@ export default function ExamManagement() {
             )}
           </CardContent>
         </Card>
-      </div>
+      </AdminPageShell>
 
       {/* Edit Dialog */}
       <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>

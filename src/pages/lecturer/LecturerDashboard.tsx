@@ -1,12 +1,19 @@
-import { useState, useEffect } from 'react';
-import { DashboardLayout } from '@/components/layout/DashboardLayout';
-import { useAuth } from '@/contexts/AuthContext';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { StatusBadge } from '@/components/ui/status-badge';
-import { 
+import { useState, useEffect } from "react";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { useAuth } from "@/contexts/AuthContext";
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { StatusBadge } from "@/components/ui/status-badge";
+import {
   Plus,
-  FileText, 
+  FileText,
   Users,
   BarChart3,
   Clock,
@@ -14,13 +21,12 @@ import {
   BookOpen,
   GraduationCap,
   Loader2,
-  TrendingUp,
   Sparkles,
   Zap,
-} from 'lucide-react';
-import { format, addHours } from 'date-fns';
-import { Link } from 'react-router-dom';
-import api, { unwrapPaginatedData } from '@/lib/api';
+} from "lucide-react";
+import { format, addHours } from "date-fns";
+import { Link } from "react-router-dom";
+import api, { unwrapPaginatedData } from "@/lib/api";
 
 interface Exam {
   id: string;
@@ -42,12 +48,15 @@ interface CourseSummary {
   _count?: { enrollments?: number; exams?: number };
 }
 
-const statusConfig: Record<string, { label: string; variant: 'default' | 'success' | 'warning' | 'info' }> = {
-  DRAFT: { label: 'Draft', variant: 'default' },
-  PUBLISHED: { label: 'Published', variant: 'info' },
-  ONGOING: { label: 'Ongoing', variant: 'warning' },
-  COMPLETED: { label: 'Completed', variant: 'success' },
-  ARCHIVED: { label: 'Archived', variant: 'default' },
+const statusConfig: Record<
+  string,
+  { label: string; variant: "default" | "success" | "warning" | "info" }
+> = {
+  DRAFT: { label: "Draft", variant: "default" },
+  PUBLISHED: { label: "Published", variant: "info" },
+  ONGOING: { label: "Ongoing", variant: "warning" },
+  COMPLETED: { label: "Completed", variant: "success" },
+  ARCHIVED: { label: "Archived", variant: "default" },
 };
 
 export default function LecturerDashboard() {
@@ -68,9 +77,13 @@ export default function LecturerDashboard() {
         ]);
         setExams(unwrapPaginatedData(examsData));
         setQuestionCount(unwrapPaginatedData(questionsData).length);
-        setCourses(Array.isArray(coursesData) ? coursesData : unwrapPaginatedData(coursesData));
+        setCourses(
+          Array.isArray(coursesData)
+            ? coursesData
+            : unwrapPaginatedData(coursesData),
+        );
       } catch (error) {
-        console.error('Failed to fetch dashboard data:', error);
+        console.error("Failed to fetch dashboard data:", error);
       } finally {
         setLoading(false);
       }
@@ -78,22 +91,33 @@ export default function LecturerDashboard() {
     fetchData();
   }, []);
 
-  const alerts: { id: string; type: 'info' | 'warning'; title: string; message: string; time: Date }[] = [
+  const alerts: {
+    id: string;
+    type: "info" | "warning";
+    title: string;
+    message: string;
+    time: Date;
+  }[] = [
     {
-      id: '1',
-      type: 'info',
-      title: 'Dashboard Ready',
+      id: "1",
+      type: "info",
+      title: "Dashboard Ready",
       message: `You have ${courses.length} courses, ${exams.length} exams, and ${questionCount} questions in your bank`,
       time: addHours(new Date(), -2),
     },
   ];
 
-  const totalStudents = courses.reduce((acc, c) => acc + (c.enrolledStudents ?? c._count?.enrollments ?? 0), 0);
+  const totalStudents = courses.reduce(
+    (acc, c) => acc + (c.enrolledStudents ?? c._count?.enrollments ?? 0),
+    0,
+  );
 
   const stats = {
     totalCourses: courses.length,
     totalStudents,
-    activeExams: exams.filter((e) => e.status === 'PUBLISHED' || e.status === 'ONGOING').length,
+    activeExams: exams.filter(
+      (e) => e.status === "PUBLISHED" || e.status === "ONGOING",
+    ).length,
     questionsInBank: questionCount,
   };
 
@@ -103,7 +127,9 @@ export default function LecturerDashboard() {
         <div className="flex items-center justify-center h-64">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
-            <p className="text-sm text-muted-foreground">Loading dashboard...</p>
+            <p className="text-sm text-muted-foreground">
+              Loading dashboard...
+            </p>
           </div>
         </div>
       </DashboardLayout>
@@ -117,13 +143,17 @@ export default function LecturerDashboard() {
         <div className="flex items-start justify-between">
           <div className="animate-fade-in opacity-0">
             <h1 className="text-2xl font-bold text-foreground">
-              Welcome back, {user?.fullName.split(' ')[0]} 👋
+              Welcome back, {user?.fullName.split(" ")[0]} 👋
             </h1>
             <p className="text-muted-foreground mt-1">
               Here's an overview of your courses, exams, and question bank.
             </p>
           </div>
-          <Button asChild className="rounded-xl shadow-sm gap-2 shine animate-fade-in opacity-0" style={{ animationDelay: '0.1s' }}>
+          <Button
+            asChild
+            className="rounded-xl shadow-sm gap-2 shine animate-fade-in opacity-0"
+            style={{ animationDelay: "0.1s" }}
+          >
             <Link to="/lecturer/exams/create">
               <Plus className="h-4 w-4" />
               Create Exam
@@ -132,30 +162,50 @@ export default function LecturerDashboard() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           {[
-            { label: 'Courses', value: stats.totalCourses, icon: GraduationCap, color: 'text-blue-600', bg: 'bg-blue-500/10', gradient: 'card-gradient-blue', trend: 'Assigned to you' },
-            { label: 'Students', value: stats.totalStudents, icon: Users, color: 'text-violet-600', bg: 'bg-violet-500/10', gradient: 'card-gradient-violet', trend: 'Across all courses' },
-            { label: 'Active Exams', value: stats.activeExams, icon: Clock, color: 'text-emerald-600', bg: 'bg-emerald-500/10', gradient: 'card-gradient-emerald', trend: 'Published or ongoing' },
-            { label: 'Questions', value: stats.questionsInBank, icon: BookOpen, color: 'text-amber-600', bg: 'bg-amber-500/10', gradient: 'card-gradient-amber', trend: 'In question bank' },
+            {
+              label: "Courses",
+              value: stats.totalCourses,
+              icon: GraduationCap,
+              color: "text-blue-600",
+              bg: "bg-blue-500/10",
+            },
+            {
+              label: "Students",
+              value: stats.totalStudents,
+              icon: Users,
+              color: "text-violet-600",
+              bg: "bg-violet-500/10",
+            },
+            {
+              label: "Active Exams",
+              value: stats.activeExams,
+              icon: Clock,
+              color: "text-emerald-600",
+              bg: "bg-emerald-500/10",
+            },
+            {
+              label: "Questions",
+              value: stats.questionsInBank,
+              icon: BookOpen,
+              color: "text-amber-600",
+              bg: "bg-amber-500/10",
+            },
           ].map((stat, i) => (
-            <Card key={stat.label} className={`card-elevated ${stat.gradient} animate-fade-in-up opacity-0 stagger-${i + 1}`}>
-              <CardContent className="pt-6">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">{stat.label}</p>
-                    <p className="text-3xl font-bold text-foreground mt-1">{stat.value}</p>
-                    <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
-                      <TrendingUp className="h-3 w-3" />
-                      {stat.trend}
-                    </p>
-                  </div>
-                  <div className={`h-11 w-11 rounded-xl ${stat.bg} flex items-center justify-center`}>
-                    <stat.icon className={`h-5 w-5 ${stat.color}`} />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
+            <div
+              key={stat.label}
+              className={`animate-fade-in-up opacity-0 stagger-${i + 1}`}
+            >
+              <AdminStatCard
+                icon={stat.icon}
+                value={stat.value}
+                label={stat.label}
+                iconWrapClassName={stat.bg}
+                iconClassName={stat.color}
+                className="card-elevated"
+              />
+            </div>
           ))}
         </div>
 
@@ -165,10 +215,17 @@ export default function LecturerDashboard() {
             <Card className="card-elevated">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <CardTitle className="text-lg font-bold">Recent Exams</CardTitle>
+                  <CardTitle className="text-lg font-bold">
+                    Recent Exams
+                  </CardTitle>
                   <CardDescription>Your latest examinations</CardDescription>
                 </div>
-                <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-primary gap-1 rounded-xl" asChild>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-muted-foreground hover:text-primary gap-1 rounded-xl"
+                  asChild
+                >
                   <Link to="/lecturer/exams">
                     View all
                     <ArrowRight className="h-4 w-4" />
@@ -182,8 +239,12 @@ export default function LecturerDashboard() {
                       <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
                         <FileText className="h-6 w-6 text-muted-foreground" />
                       </div>
-                      <p className="text-muted-foreground font-medium">No exams created yet</p>
-                      <p className="text-sm text-muted-foreground mt-1">Create your first exam to get started</p>
+                      <p className="text-muted-foreground font-medium">
+                        No exams created yet
+                      </p>
+                      <p className="text-sm text-muted-foreground mt-1">
+                        Create your first exam to get started
+                      </p>
                       <Button asChild className="mt-4 rounded-xl" size="sm">
                         <Link to="/lecturer/exams/create">
                           <Plus className="mr-2 h-4 w-4" />
@@ -191,83 +252,106 @@ export default function LecturerDashboard() {
                         </Link>
                       </Button>
                     </div>
-                  ) : exams.slice(0, 4).map((exam, i) => {
-                    const status = statusConfig[exam.status] || statusConfig.DRAFT;
-                    const questionCount = exam._count?.examQuestions || 0;
-                    const now = Date.now();
-                    const start = exam.startTime ? new Date(exam.startTime) : null;
-                    const end = start ? new Date(start.getTime() + (exam.duration || 0) * 60000) : null;
-                    const isScheduled = start ? now < start.getTime() : false;
-                    const isExpired = end ? end.getTime() < now : false;
-                    const isLiveByTime = !!start && !!end && now >= start.getTime() && now <= end.getTime();
-                    const shouldMonitor = exam.status === 'ONGOING' || isLiveByTime;
-                    const shouldShowResults = exam.status === 'COMPLETED' || isExpired;
-                    const actionLabel = shouldMonitor
-                      ? 'Monitor'
-                      : shouldShowResults
-                        ? 'View Results'
-                        : 'Preview & Edit';
-                    const actionHref = shouldMonitor
-                      ? `/lecturer/exam/${exam.id}/monitor`
-                      : shouldShowResults
-                        ? `/lecturer/exam/${exam.id}/results`
-                        : `/lecturer/exam/${exam.id}/preview`;
-                    return (
-                      <div
-                        key={exam.id}
-                        className={`flex items-center justify-between rounded-xl border border-border/50 p-4 hover:bg-secondary/50 hover:border-primary/10 transition-all duration-200 animate-fade-in opacity-0 stagger-${i + 1}`}
-                      >
-                        <div className="space-y-1.5">
-                          <div className="flex items-center gap-2.5">
-                            <h4 className="font-semibold text-foreground">{exam.title}</h4>
-                            {isExpired ? (
-                              <StatusBadge variant="destructive">Expired</StatusBadge>
-                            ) : (
-                              <StatusBadge variant={status.variant}>
-                                {status.label}
-                              </StatusBadge>
+                  ) : (
+                    exams.slice(0, 4).map((exam, i) => {
+                      const status =
+                        statusConfig[exam.status] || statusConfig.DRAFT;
+                      const questionCount = exam._count?.examQuestions || 0;
+                      const now = Date.now();
+                      const start = exam.startTime
+                        ? new Date(exam.startTime)
+                        : null;
+                      const end = start
+                        ? new Date(
+                            start.getTime() + (exam.duration || 0) * 60000,
+                          )
+                        : null;
+                      const isScheduled = start ? now < start.getTime() : false;
+                      const isExpired = end ? end.getTime() < now : false;
+                      const isLiveByTime =
+                        !!start &&
+                        !!end &&
+                        now >= start.getTime() &&
+                        now <= end.getTime();
+                      const shouldMonitor =
+                        exam.status === "ONGOING" || isLiveByTime;
+                      const shouldShowResults =
+                        exam.status === "COMPLETED" || isExpired;
+                      const actionLabel = shouldMonitor
+                        ? "Monitor"
+                        : shouldShowResults
+                          ? "View Results"
+                          : "Preview & Edit";
+                      const actionHref = shouldMonitor
+                        ? `/lecturer/exam/${exam.id}/monitor`
+                        : shouldShowResults
+                          ? `/lecturer/exam/${exam.id}/results`
+                          : `/lecturer/exam/${exam.id}/preview`;
+                      return (
+                        <div
+                          key={exam.id}
+                          className={`flex items-center justify-between rounded-xl border border-border/50 p-4 hover:bg-secondary/50 hover:border-primary/10 transition-all duration-200 animate-fade-in opacity-0 stagger-${i + 1}`}
+                        >
+                          <div className="space-y-1.5">
+                            <div className="flex items-center gap-2.5">
+                              <h4 className="font-semibold text-foreground">
+                                {exam.title}
+                              </h4>
+                              {isExpired ? (
+                                <StatusBadge variant="destructive">
+                                  Expired
+                                </StatusBadge>
+                              ) : (
+                                <StatusBadge variant={status.variant}>
+                                  {status.label}
+                                </StatusBadge>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                              <span className="font-medium">
+                                {exam.course?.code}
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <BookOpen className="h-3 w-3" />
+                                {questionCount} questions
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {exam.duration} min
+                              </span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            {exam.status === "COMPLETED" && (
+                              <div className="text-right">
+                                <p className="text-lg font-bold text-foreground">
+                                  {exam._count?.submissions || 0}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  Submissions
+                                </p>
+                              </div>
                             )}
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                            <span className="font-medium">{exam.course?.code}</span>
-                            <span className="flex items-center gap-1">
-                              <BookOpen className="h-3 w-3" />
-                              {questionCount} questions
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {exam.duration} min
-                            </span>
+                            {isScheduled &&
+                              exam.status === "PUBLISHED" &&
+                              exam.startTime && (
+                                <div className="text-right">
+                                  <p className="text-sm font-semibold text-foreground">
+                                    {format(new Date(exam.startTime), "MMM d")}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    Scheduled
+                                  </p>
+                                </div>
+                              )}
+                            <Button size="sm" className="rounded-xl" asChild>
+                              <Link to={actionHref}>{actionLabel}</Link>
+                            </Button>
                           </div>
                         </div>
-                        <div className="flex items-center gap-3">
-                          {exam.status === 'COMPLETED' && (
-                            <div className="text-right">
-                              <p className="text-lg font-bold text-foreground">
-                                {exam._count?.submissions || 0}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Submissions
-                              </p>
-                            </div>
-                          )}
-                          {isScheduled && exam.status === 'PUBLISHED' && exam.startTime && (
-                            <div className="text-right">
-                              <p className="text-sm font-semibold text-foreground">
-                                {format(new Date(exam.startTime), 'MMM d')}
-                              </p>
-                              <p className="text-xs text-muted-foreground">
-                                Scheduled
-                              </p>
-                            </div>
-                          )}
-                          <Button size="sm" className="rounded-xl" asChild>
-                            <Link to={actionHref}>{actionLabel}</Link>
-                          </Button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                      );
+                    })
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -277,25 +361,46 @@ export default function LecturerDashboard() {
           <div className="space-y-6">
             <Card className="card-elevated">
               <CardHeader className="pb-3">
-                <CardTitle className="text-base font-bold">Course Snapshot</CardTitle>
+                <CardTitle className="text-base font-bold">
+                  Course Snapshot
+                </CardTitle>
                 <CardDescription>Your recently managed courses</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {courses.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">No courses yet.</div>
+                  <div className="text-sm text-muted-foreground">
+                    No courses yet.
+                  </div>
                 ) : (
                   courses.slice(0, 4).map((course) => (
-                    <div key={course.id} className="rounded-lg border border-border/60 p-3">
-                      <p className="text-sm font-semibold text-foreground line-clamp-1">{course.code}</p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">{course.name}</p>
+                    <div
+                      key={course.id}
+                      className="rounded-lg border border-border/60 p-3"
+                    >
+                      <p className="text-sm font-semibold text-foreground line-clamp-1">
+                        {course.code}
+                      </p>
+                      <p className="text-xs text-muted-foreground line-clamp-1">
+                        {course.name}
+                      </p>
                       <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>{course.enrolledStudents ?? course._count?.enrollments ?? 0} students</span>
+                        <span>
+                          {course.enrolledStudents ??
+                            course._count?.enrollments ??
+                            0}{" "}
+                          students
+                        </span>
                         <span>{course._count?.exams ?? 0} exams</span>
                       </div>
                     </div>
                   ))
                 )}
-                <Button asChild variant="outline" size="sm" className="w-full rounded-xl">
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="w-full rounded-xl"
+                >
                   <Link to="/lecturer/courses">Manage Courses</Link>
                 </Button>
               </CardContent>
@@ -311,13 +416,21 @@ export default function LecturerDashboard() {
                   </div>
                   <div>
                     <h3 className="font-bold text-foreground">AI Assistant</h3>
-                    <p className="text-xs text-muted-foreground">Generate questions with AI</p>
+                    <p className="text-xs text-muted-foreground">
+                      Generate questions with AI
+                    </p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Use AI to auto-generate exam questions from your course content.
+                  Use AI to auto-generate exam questions from your course
+                  content.
                 </p>
-                <Button asChild variant="outline" className="w-full rounded-xl gap-2" size="sm">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="w-full rounded-xl gap-2"
+                  size="sm"
+                >
                   <Link to="/lecturer/question-bank">
                     <Zap className="h-4 w-4" />
                     Open Question Bank
@@ -337,11 +450,41 @@ export default function LecturerDashboard() {
           <CardContent>
             <div className="grid gap-4 md:grid-cols-4">
               {[
-                { icon: Plus, label: 'Create Exam', href: '/lecturer/exams/create', color: 'text-blue-600', bg: 'bg-blue-500/10' },
-                { icon: GraduationCap, label: 'Manage Courses', href: '/lecturer/courses', color: 'text-fuchsia-600', bg: 'bg-fuchsia-500/10' },
-                { icon: BookOpen, label: 'Question Bank', href: '/lecturer/question-bank', color: 'text-violet-600', bg: 'bg-violet-500/10' },
-                { icon: FileText, label: 'Manage Exams', href: '/lecturer/exams', color: 'text-amber-600', bg: 'bg-amber-500/10' },
-                { icon: BarChart3, label: 'View Analytics', href: '/lecturer/analytics', color: 'text-emerald-600', bg: 'bg-emerald-500/10' },
+                {
+                  icon: Plus,
+                  label: "Create Exam",
+                  href: "/lecturer/exams/create",
+                  color: "text-blue-600",
+                  bg: "bg-blue-500/10",
+                },
+                {
+                  icon: GraduationCap,
+                  label: "Manage Courses",
+                  href: "/lecturer/courses",
+                  color: "text-fuchsia-600",
+                  bg: "bg-fuchsia-500/10",
+                },
+                {
+                  icon: BookOpen,
+                  label: "Question Bank",
+                  href: "/lecturer/question-bank",
+                  color: "text-violet-600",
+                  bg: "bg-violet-500/10",
+                },
+                {
+                  icon: FileText,
+                  label: "Manage Exams",
+                  href: "/lecturer/exams",
+                  color: "text-amber-600",
+                  bg: "bg-amber-500/10",
+                },
+                {
+                  icon: BarChart3,
+                  label: "View Analytics",
+                  href: "/lecturer/analytics",
+                  color: "text-emerald-600",
+                  bg: "bg-emerald-500/10",
+                },
               ].map((action) => (
                 <Button
                   key={action.label}
@@ -350,7 +493,9 @@ export default function LecturerDashboard() {
                   asChild
                 >
                   <Link to={action.href}>
-                    <div className={`h-10 w-10 rounded-xl ${action.bg} flex items-center justify-center`}>
+                    <div
+                      className={`h-10 w-10 rounded-xl ${action.bg} flex items-center justify-center`}
+                    >
                       <action.icon className={`h-5 w-5 ${action.color}`} />
                     </div>
                     <span className="font-medium">{action.label}</span>
