@@ -1,4 +1,5 @@
-import { IsString, IsArray, IsOptional, IsEnum } from 'class-validator';
+import { IsString, IsArray, IsOptional, IsEnum, IsEmail, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
 
 export class CreateEnrollmentDto {
   @IsString()
@@ -29,4 +30,31 @@ export class BulkEnrollByEmailsDto {
 export class UpdateEnrollmentStatusDto {
   @IsEnum(['ACTIVE', 'DROPPED', 'COMPLETED'])
   status: 'ACTIVE' | 'DROPPED' | 'COMPLETED';
+}
+
+export class BulkImportStudentRow {
+  @IsEmail()
+  email: string;
+
+  @IsOptional()
+  @IsString()
+  studentId?: string;
+
+  @IsOptional()
+  @IsString()
+  fullName?: string;
+
+  @IsOptional()
+  @IsString()
+  className?: string;
+}
+
+export class BulkImportStudentsDto {
+  @IsString()
+  courseId: string;
+
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => BulkImportStudentRow)
+  students: BulkImportStudentRow[];
 }

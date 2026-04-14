@@ -10,7 +10,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { EnrollmentsService } from './enrollments.service';
-import { CreateEnrollmentDto, BulkEnrollmentDto, BulkEnrollByEmailsDto, UpdateEnrollmentStatusDto } from './dto/enrollment.dto';
+import { CreateEnrollmentDto, BulkEnrollmentDto, BulkEnrollByEmailsDto, BulkImportStudentsDto, UpdateEnrollmentStatusDto } from './dto/enrollment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -43,6 +43,13 @@ export class EnrollmentsController {
   @Roles('LECTURER', 'ADMIN')
   bulkEnrollByEmails(@Body() dto: BulkEnrollByEmailsDto, @Request() req) {
     return this.enrollmentsService.bulkEnrollByEmails(dto, req.user);
+  }
+
+  @Post('bulk-import')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  bulkImport(@Body() dto: BulkImportStudentsDto, @Request() req) {
+    return this.enrollmentsService.bulkImport(dto, req.user);
   }
 
   @Get('course/:courseId')

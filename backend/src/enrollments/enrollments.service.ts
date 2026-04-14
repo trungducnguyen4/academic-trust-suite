@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException, BadRequestException, Logger, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateEnrollmentDto, BulkEnrollmentDto, BulkEnrollByEmailsDto, UpdateEnrollmentStatusDto } from './dto/enrollment.dto';
+import { CreateEnrollmentDto, BulkEnrollmentDto, BulkEnrollByEmailsDto, BulkImportStudentsDto, UpdateEnrollmentStatusDto } from './dto/enrollment.dto';
 import * as bcrypt from 'bcrypt';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -301,6 +301,147 @@ export class EnrollmentsService {
       }
     } catch {
       // Notification failures must not block bulk-by-email flow.
+    }
+
+    return results;
+  }
+
+  async bulkImport(dto: BulkImportStudentsDto, user: { id: string; role: 'ADMIN' | 'LECTURER' | 'STUDENT' }) {
+    const { courseId, students } = dto;
+
+    const course = await this.prisma.course.findUnique({ where: { id: courseId } });
+    if (!course) throw new NotFoundException('Course not found');
+
+    this.assertCanManageCourse(course.lecturerId, user);
+
+    const results = {
+      success: [] as { email: string; fullName: string; studentId: string | null; row: number }[],
+      failed: [] as { email: string; reason: string; row: number }[],
+      provisioned: 0,
+      totalProcessed: students.length,
+    };
+
+    for (let i = 0; i < students.length; i++) {
+      const row = students[i];
+      const rowNum = i + 1;
+      const email = (row.email || '').toLowerCase().trim();
+
+      if (!email) {
+        results.failed.push({ email: email || '(empty)', reason: 'Email is required', row: rowNum });
+        continue;
+      }
+
+      try {
+        let student = await this.prisma.user.findUnique({ where: { email } });
+
+        // Auto-provision: create student account if not found
+        if (!student) {
+          const tempPassword = await bcrypt.hash('Examtrust@123', 10);
+          const emailPrefix = email.split('@')[0];
+          student = await this.prisma.user.create({
+            data: {
+              email,
+              password: tempPassword,
+              fullName: row.fullName?.trim() || emailPrefix,
+              role: 'STUDENT',
+              studentId: row.studentId?.trim() || null,
+            },
+          });
+          results.provisioned++;
+        }
+
+        if (student.role !== 'STUDENT') {
+          results.failed.push({ email, reason: `User is not a student (role: ${student.role})`, row: rowNum });
+          continue;
+        }
+
+        // Update fullName/studentId if provided in file and currently empty
+        const updateData: any = {};
+        if (row.fullName?.trim() && (!student.fullName || student.fullName === email.split('@')[0])) {
+          updateData.fullName = row.fullName.trim();
+        }
+        if (row.studentId?.trim() && !student.studentId) {
+          updateData.studentId = row.studentId.trim();
+        }
+        if (Object.keys(updateData).length > 0) {
+          await this.prisma.user.update({ where: { id: student.id }, data: updateData });
+        }
+
+        const existing = await this.prisma.enrollment.findUnique({
+          where: { courseId_studentId: { studentId: student.id, courseId } },
+        });
+        if (existing) {
+          results.failed.push({ email, reason: 'Already enrolled in this course', row: rowNum });
+          continue;
+        }
+
+        await this.prisma.enrollment.create({ data: { studentId: student.id, courseId } });
+        results.success.push({
+          email,
+          fullName: row.fullName?.trim() || student.fullName,
+          studentId: row.studentId?.trim() || student.studentId,
+          row: rowNum,
+        });
+      } catch (err: any) {
+        this.logger.error(`Bulk import failed for ${email}: ${err?.message}`);
+        results.failed.push({ email, reason: err?.message ?? 'Unknown error', row: rowNum });
+      }
+    }
+
+    // --- Notifications ---
+    try {
+      // Notify each successfully enrolled student
+      if (results.success.length > 0) {
+        const successEmails = results.success.map((s) => s.email);
+        const successStudents = await this.prisma.user.findMany({
+          where: { email: { in: successEmails }, role: 'STUDENT' },
+          select: { id: true },
+        });
+
+        await this.notificationsService.createForUsers(
+          successStudents.map((s) => s.id),
+          {
+            kind: 'ENROLLMENT_CREATED',
+            title: 'Enrollment confirmed',
+            message: `You have been enrolled in ${course.code} - ${course.name}.`,
+            link: `/student/course/${course.id}`,
+            priority: 'normal',
+            metadata: { courseId: course.id },
+          },
+        );
+
+        // Notify lecturer about bulk import result
+        if (course.lecturerId) {
+          await this.notificationsService.create({
+            recipientId: course.lecturerId,
+            kind: 'ENROLLMENT_BULK_CREATED',
+            title: 'Bulk import completed',
+            message: `${results.success.length} student(s) imported into ${course.code}. ${results.failed.length} row(s) skipped.`,
+            link: `/lecturer/course/${course.id}`,
+            priority: 'normal',
+            metadata: {
+              courseId: course.id,
+              successCount: results.success.length,
+              failedCount: results.failed.length,
+              provisionedCount: results.provisioned,
+            },
+          });
+        }
+      }
+
+      // Notify admins about auto-provisioned accounts
+      if (results.provisioned > 0) {
+        await this.notificationsService.createForRole('ADMIN', {
+          kind: 'USER_AUTO_PROVISIONED',
+          title: 'Student accounts auto-provisioned',
+          message: `${results.provisioned} new student account(s) were created during bulk import into ${course.code}.`,
+          link: '/admin/users',
+          priority: 'normal',
+          metadata: { courseId: course.id, provisioned: results.provisioned },
+        });
+      }
+    } catch {
+      // Notification failures must not block bulk import flow.
     }
 
     return results;

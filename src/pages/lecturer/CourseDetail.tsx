@@ -63,6 +63,7 @@ import {
 import { toast } from "sonner";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { BulkStudentImport } from "@/components/common/BulkStudentImport";
 
 interface Student {
   enrollmentId: string;
@@ -117,28 +118,13 @@ export default function CourseDetail() {
     studentCode: { value: "", operator: "contains" },
   });
   const [page, setPage] = useState(1);
-  const [isImporting, setIsImporting] = useState(false);
-  const [importFile, setImportFile] = useState<File | null>(null);
+  const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
 
   // Manual Add Form
   const [newStudent, setNewStudent] = useState({ name: "", id: "", email: "" });
 
-  const parseEmailsFromCSV = (text: string): string[] => {
-    const lines = text.split(/\r?\n/).filter((line) => line.trim());
-    const emails: string[] = [];
-    for (const line of lines) {
-      const parts = line
-        .split(/[,;\t]/)
-        .map((part) => part.trim().replace(/^["']|["']$/g, ""));
-      for (const part of parts) {
-        if (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(part)) {
-          emails.push(part.toLowerCase());
-        }
-      }
-    }
-    return [...new Set(emails)];
-  };
+
 
   const reloadEnrollments = async (courseId: string) => {
     const enrollments: Enrollment[] = await api.getCourseEnrollments(courseId);
@@ -382,29 +368,7 @@ export default function CourseDetail() {
     }
   };
 
-  const handleImportCSV = async () => {
-    if (!importFile || !resolvedCourseId) return;
 
-    try {
-      setIsImporting(true);
-      const text = await importFile.text();
-      const emails = parseEmailsFromCSV(text);
-
-      if (emails.length === 0) {
-        toast.error("No valid emails found in file");
-        return;
-      }
-
-      const result = await api.bulkEnrollByEmails(resolvedCourseId, emails);
-      await reloadEnrollments(resolvedCourseId);
-      setImportFile(null);
-      toast.success(`Imported ${result.success.length} student(s)`);
-    } catch (err: any) {
-      toast.error(err?.message || "Failed to import CSV");
-    } finally {
-      setIsImporting(false);
-    }
-  };
 
   const handleDelete = async (enrollmentId: string) => {
     try {
@@ -455,13 +419,13 @@ export default function CourseDetail() {
                 <Button variant="outline" className="gap-2">
                   <Download className="h-4 w-4" /> Export List
                 </Button>
-                <Dialog>
+                <Dialog open={addDialogOpen} onOpenChange={setAddDialogOpen}>
                   <DialogTrigger asChild>
                     <Button className="gap-2">
                       <UserPlus className="h-4 w-4" /> Add Students
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px]">
+                  <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto overflow-x-hidden">
                     <DialogHeader>
                       <DialogTitle>Add Students to Course</DialogTitle>
                       <DialogDescription>
@@ -472,7 +436,7 @@ export default function CourseDetail() {
                     <Tabs defaultValue="manual" className="w-full">
                       <TabsList className="grid w-full grid-cols-2">
                         <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-                        <TabsTrigger value="import">Import CSV</TabsTrigger>
+                        <TabsTrigger value="import">Import File</TabsTrigger>
                       </TabsList>
 
                       {/* Manual Entry Tab */}
@@ -503,56 +467,22 @@ export default function CourseDetail() {
                         </Button>
                       </TabsContent>
 
-                      {/* Import CSV Tab */}
-                      <TabsContent value="import" className="space-y-4 py-4">
-                        <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/20">
-                          <FileSpreadsheet className="h-10 w-10 text-muted-foreground mb-3" />
-                          <p className="text-sm font-medium">
-                            Drag & drop CSV file here
-                          </p>
-                          <p className="text-xs text-muted-foreground my-2">or</p>
-                          <Button
-                            variant="secondary"
-                            size="sm"
-                            className="relative"
-                          >
-                            Browse File
-                            <input
-                              type="file"
-                              className="absolute inset-0 opacity-0 cursor-pointer"
-                              accept=".csv"
-                              onChange={(e) =>
-                                setImportFile(e.target.files?.[0] || null)
+                      {/* Import File Tab */}
+                      <TabsContent value="import" className="py-4">
+                        {resolvedCourseId ? (
+                          <BulkStudentImport
+                            courseId={resolvedCourseId}
+                            onImportSuccess={async () => {
+                              if (resolvedCourseId) {
+                                await reloadEnrollments(resolvedCourseId);
                               }
-                            />
-                          </Button>
-                          {importFile && (
-                            <div className="mt-4 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                              <CheckCircle2 className="h-4 w-4" />
-                              {importFile.name}
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-xs text-muted-foreground space-y-1">
-                          <p className="font-medium">Required CSV Format:</p>
-                          <p className="font-mono bg-muted p-1 rounded">Email</p>
-                        </div>
-                        <Button
-                          onClick={handleImportCSV}
-                          className="w-full"
-                          disabled={!importFile || isImporting}
-                        >
-                          {isImporting ? (
-                            <>
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
-                              Importing...
-                            </>
-                          ) : (
-                            <>
-                              <Upload className="mr-2 h-4 w-4" /> Import Students
-                            </>
-                          )}
-                        </Button>
+                            }}
+                          />
+                        ) : (
+                          <p className="text-sm text-muted-foreground text-center py-4">
+                            Course not resolved. Cannot import students.
+                          </p>
+                        )}
                       </TabsContent>
                     </Tabs>
                   </DialogContent>

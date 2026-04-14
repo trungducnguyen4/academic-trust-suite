@@ -249,6 +249,18 @@ class ApiClient {
     });
   }
 
+  async bulkImportStudents(courseId: string, students: { email: string; studentId?: string; fullName?: string; className?: string }[]) {
+    return this.request<{
+      success: { email: string; fullName: string; studentId: string | null; row: number }[];
+      failed: { email: string; reason: string; row: number }[];
+      provisioned: number;
+      totalProcessed: number;
+    }>('/enrollments/bulk-import', {
+      method: 'POST',
+      body: { courseId, students },
+    });
+  }
+
   // Questions endpoints
   async getQuestions(filters?: { courseId?: string; type?: string; difficulty?: number; search?: string; page?: number; limit?: number }) {
     const params = new URLSearchParams();
