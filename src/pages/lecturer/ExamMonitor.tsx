@@ -663,7 +663,7 @@ export default function ExamMonitor() {
                         placeholder="Search..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
-                        className="pl-9 h-8 text-sm"
+                        className="h-8 bg-white pl-9 text-sm"
                       />
                     </div>
                     <Select

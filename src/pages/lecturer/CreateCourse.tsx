@@ -548,7 +548,6 @@ export default function CreateCourse() {
   return (
     <DashboardLayout>
       <AdminPageShell backTo="/lecturer">
-
         <div className="flex items-start justify-between mb-6">
           <div>
             <h1 className="text-2xl font-semibold text-foreground mb-1">
@@ -751,7 +750,7 @@ export default function CreateCourse() {
                           placeholder="Search students by name, email, or student ID..."
                           value={studentSearch}
                           onChange={(e) => setStudentSearch(e.target.value)}
-                          className="pl-9"
+                          className="bg-white pl-9"
                         />
                         {isSearching && (
                           <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
@@ -1171,7 +1170,11 @@ export default function CreateCourse() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <AdminStatCard icon={BookOpen} value={courses.length} label="Total Courses" />
+          <AdminStatCard
+            icon={BookOpen}
+            value={courses.length}
+            label="Total Courses"
+          />
           <AdminStatCard
             icon={Users}
             value={courses.reduce((s, c) => s + c.students, 0)}
@@ -1205,7 +1208,7 @@ export default function CreateCourse() {
                   placeholder="Search courses..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
+                  className="bg-white pl-9"
                 />
               </div>
             </div>

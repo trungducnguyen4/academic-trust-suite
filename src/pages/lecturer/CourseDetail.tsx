@@ -459,7 +459,7 @@ export default function CourseDetail() {
               placeholder="Search by name, ID or email..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
-              className="pl-9"
+              className="bg-white pl-9"
             />
           </div>
           <div className="flex-1" /> {/* Spacer */}

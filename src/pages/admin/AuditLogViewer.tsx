@@ -364,7 +364,7 @@ export default function AuditLogViewer() {
                   <Search className="h-4 w-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
                   <Input
                     placeholder="Search by user, action, resource, IP, or log ID..."
-                    className="pl-10"
+                    className="bg-white pl-10"
                     value={search}
                     onChange={(e) => {
                       setSearch(e.target.value);

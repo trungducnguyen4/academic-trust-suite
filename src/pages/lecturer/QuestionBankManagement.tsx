@@ -1,8 +1,20 @@
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import {
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 import {
   Card,
   CardContent,
@@ -11,7 +23,6 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
@@ -23,13 +34,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import {
   Dialog,
   DialogContent,
@@ -86,6 +90,18 @@ const difficultyLabel = (d: number) => {
   return { text: "Hard", color: "text-red-600" };
 };
 
+const EMPTY_COURSE_FILTERS: FilterValues = {
+  questionState: "all",
+  difficulty: "all",
+};
+
+const EMPTY_QUESTION_FILTERS: FilterValues = {
+  type: "all",
+  difficulty: "all",
+  points: { min: undefined, max: undefined },
+  tags: { value: "", operator: "contains" },
+};
+
 // Safe parser for tags - handles arrays, JSON strings, comma-separated strings, or null
 const safeParseTags = (tags: unknown): string[] => {
   if (!tags) return [];
@@ -117,9 +133,18 @@ export default function QuestionBankManagement() {
     { id: string; code: string; name: string; faculty?: string }[]
   >([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filterCourse, setFilterCourse] = useState("all");
-  const [filterType, setFilterType] = useState("all");
+  const [courseSearchInput, setCourseSearchInput] = useState("");
+  const [appliedCourseSearch, setAppliedCourseSearch] = useState("");
+  const [questionSearchInput, setQuestionSearchInput] = useState("");
+  const [appliedQuestionSearch, setAppliedQuestionSearch] = useState("");
+  const [draftCourseFilters, setDraftCourseFilters] =
+    useState<FilterValues>(EMPTY_COURSE_FILTERS);
+  const [appliedCourseFilters, setAppliedCourseFilters] =
+    useState<FilterValues>(EMPTY_COURSE_FILTERS);
+  const [draftQuestionFilters, setDraftQuestionFilters] =
+    useState<FilterValues>(EMPTY_QUESTION_FILTERS);
+  const [appliedQuestionFilters, setAppliedQuestionFilters] =
+    useState<FilterValues>(EMPTY_QUESTION_FILTERS);
   const [sortBy, setSortBy] = useState<"difficulty" | "points">("difficulty");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
@@ -152,21 +177,141 @@ export default function QuestionBankManagement() {
     fetchData();
   }, [page]);
 
+  const courseFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "questionState",
+        label: "Question state",
+        type: "select",
+        allLabel: "All courses",
+        options: [
+          { label: "Has questions", value: "hasQuestions" },
+          { label: "No questions", value: "noQuestions" },
+        ],
+      },
+      {
+        key: "difficulty",
+        label: "Difficulty",
+        type: "select",
+        allLabel: "All difficulty",
+        options: [
+          { label: "Easy", value: "easy" },
+          { label: "Medium", value: "medium" },
+          { label: "Hard", value: "hard" },
+        ],
+      },
+    ],
+    [],
+  );
+
+  const questionFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "type",
+        label: "Question type",
+        type: "select",
+        allLabel: "All types",
+        options: Object.entries(typeLabels).map(([value, label]) => ({
+          label,
+          value,
+        })),
+      },
+      {
+        key: "difficulty",
+        label: "Difficulty",
+        type: "select",
+        allLabel: "All difficulty",
+        options: [
+          { label: "Easy", value: "easy" },
+          { label: "Medium", value: "medium" },
+          { label: "Hard", value: "hard" },
+        ],
+      },
+      {
+        key: "points",
+        label: "Points",
+        type: "number-range",
+        min: 0,
+        max: 20,
+        step: 1,
+      },
+      {
+        key: "tags",
+        label: "Tags",
+        type: "text",
+        placeholder: "Filter by tag",
+        operators: ["contains", "startsWith", "equals"],
+      },
+    ],
+    [],
+  );
+
   const filtered = questions
     .filter((q) => {
       const tags = safeParseTags(q.tags);
+      const normalizedQuestionSearch = appliedQuestionSearch
+        .trim()
+        .toLowerCase();
       const matchSearch =
-        q.content.toLowerCase().includes(search.toLowerCase()) ||
-        q.id.toLowerCase().includes(search.toLowerCase()) ||
+        q.content.toLowerCase().includes(normalizedQuestionSearch) ||
+        q.id.toLowerCase().includes(normalizedQuestionSearch) ||
         tags.some((t: string) =>
-          t.toLowerCase().includes(search.toLowerCase()),
+          t.toLowerCase().includes(normalizedQuestionSearch),
         );
-      // When a course is selected, filter by it; otherwise show all
-      const matchCourse = selectedCourse
-        ? q.course?.code === selectedCourse
-        : filterCourse === "all" || q.course?.code === filterCourse;
-      const matchType = filterType === "all" || q.type === filterType;
-      return matchSearch && matchCourse && matchType;
+
+      const matchCourse = selectedCourse ? q.course?.code === selectedCourse : true;
+
+      const typeValue = appliedQuestionFilters.type as string | undefined;
+      const difficultyValue =
+        appliedQuestionFilters.difficulty as string | undefined;
+      const pointsFilter = appliedQuestionFilters.points as
+        | { min?: number; max?: number }
+        | undefined;
+      const tagsFilter = appliedQuestionFilters.tags as
+        | TextFilterValue
+        | undefined;
+
+      const matchType = !typeValue || typeValue === "all" || q.type === typeValue;
+      const diffLabel = difficultyLabel(q.difficulty || 1).text.toLowerCase();
+      const matchDifficulty =
+        !difficultyValue ||
+        difficultyValue === "all" ||
+        diffLabel === difficultyValue;
+      const matchPoints = (() => {
+        if (!pointsFilter) return true;
+        if (
+          pointsFilter.min === undefined &&
+          pointsFilter.max === undefined
+        )
+          return true;
+        const point = q.points || 0;
+        if (pointsFilter.min !== undefined && point < pointsFilter.min)
+          return false;
+        if (pointsFilter.max !== undefined && point > pointsFilter.max)
+          return false;
+        return true;
+      })();
+      const matchTags = (() => {
+        if (!tagsFilter || !tagsFilter.value.trim()) return true;
+        const filterValue = tagsFilter.value.trim().toLowerCase();
+        const tagText = tags.join(" ").toLowerCase();
+        if (tagsFilter.operator === "startsWith") {
+          return tags.some((tag) => tag.toLowerCase().startsWith(filterValue));
+        }
+        if (tagsFilter.operator === "equals") {
+          return tags.some((tag) => tag.toLowerCase() === filterValue);
+        }
+        return tagText.includes(filterValue);
+      })();
+
+      return (
+        matchSearch &&
+        matchCourse &&
+        matchType &&
+        matchDifficulty &&
+        matchPoints &&
+        matchTags
+      );
     })
     .sort((a, b) => {
       const mul = sortDir === "asc" ? 1 : -1;
@@ -248,6 +393,90 @@ export default function QuestionBankManagement() {
         ).toFixed(1)
       : "0";
 
+  const normalizedCourseSearch = appliedCourseSearch.trim().toLowerCase();
+  const visibleCourses = courses.filter((course) => {
+    const questionState = appliedCourseFilters.questionState as string | undefined;
+    const difficultyValue = appliedCourseFilters.difficulty as string | undefined;
+
+    const haystack = `${course.code} ${course.name} ${course.faculty || ""}`
+      .toLowerCase()
+      .trim();
+
+    const searchMatched = !normalizedCourseSearch
+      ? true
+      : haystack.includes(normalizedCourseSearch);
+    if (!searchMatched) return false;
+
+    const courseQuestions = questions.filter((q) => q.course?.code === course.code);
+
+    if (questionState === "hasQuestions" && courseQuestions.length === 0)
+      return false;
+    if (questionState === "noQuestions" && courseQuestions.length > 0)
+      return false;
+
+    if (!difficultyValue || difficultyValue === "all") return true;
+    if (courseQuestions.length === 0) return false;
+
+    const avgDiff =
+      courseQuestions.reduce((sum, q) => sum + (q.difficulty || 1), 0) /
+      courseQuestions.length;
+    return difficultyLabel(avgDiff).text.toLowerCase() === difficultyValue;
+  });
+
+  const activeCourseFilterCount = getActiveFilterCount(
+    appliedCourseFilters,
+    courseFilterDefinitions,
+  );
+  const activeCourseFilterChips = getFilterChips(
+    appliedCourseFilters,
+    courseFilterDefinitions,
+  );
+  const activeQuestionFilterCount = getActiveFilterCount(
+    appliedQuestionFilters,
+    questionFilterDefinitions,
+  );
+  const activeQuestionFilterChips = getFilterChips(
+    appliedQuestionFilters,
+    questionFilterDefinitions,
+  );
+
+  const runCourseSearch = () => setAppliedCourseSearch(courseSearchInput.trim());
+  const applyCourseFilters = () => setAppliedCourseFilters(draftCourseFilters);
+  const clearCourseFilters = () => {
+    setDraftCourseFilters(EMPTY_COURSE_FILTERS);
+    setAppliedCourseFilters(EMPTY_COURSE_FILTERS);
+    setCourseSearchInput("");
+    setAppliedCourseSearch("");
+  };
+  const removeCourseFilter = (key: string) => {
+    const nextFilters = {
+      ...appliedCourseFilters,
+      [key]: EMPTY_COURSE_FILTERS[key as keyof typeof EMPTY_COURSE_FILTERS],
+    };
+    setAppliedCourseFilters(nextFilters);
+    setDraftCourseFilters(nextFilters);
+  };
+
+  const runQuestionSearch = () =>
+    setAppliedQuestionSearch(questionSearchInput.trim());
+  const applyQuestionFilters = () =>
+    setAppliedQuestionFilters(draftQuestionFilters);
+  const clearQuestionFilters = () => {
+    setDraftQuestionFilters(EMPTY_QUESTION_FILTERS);
+    setAppliedQuestionFilters(EMPTY_QUESTION_FILTERS);
+    setQuestionSearchInput("");
+    setAppliedQuestionSearch("");
+  };
+  const removeQuestionFilter = (key: string) => {
+    const nextFilters = {
+      ...appliedQuestionFilters,
+      [key]:
+        EMPTY_QUESTION_FILTERS[key as keyof typeof EMPTY_QUESTION_FILTERS],
+    };
+    setAppliedQuestionFilters(nextFilters);
+    setDraftQuestionFilters(nextFilters);
+  };
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -304,16 +533,52 @@ export default function QuestionBankManagement() {
               />
               <AdminStatCard
                 icon={Tag}
-                value={Object.keys(typeLabels).filter((t) => questions.some((q) => q.type === t)).length}
+                value={
+                  Object.keys(typeLabels).filter((t) =>
+                    questions.some((q) => q.type === t),
+                  ).length
+                }
                 label="Question Types"
                 iconWrapClassName="bg-purple-100"
                 iconClassName="text-purple-600"
               />
             </div>
 
-            {/* Course Cards */}
+            <div className="mb-6 space-y-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+                <SearchBar
+                  value={courseSearchInput}
+                  onChange={setCourseSearchInput}
+                  onSearch={runCourseSearch}
+                  placeholder="Search courses by code, name, or faculty"
+                  className="min-w-0 flex-1"
+                />
+                <FilterPanel
+                  title="Course filters"
+                  description="Filter courses by question state and average difficulty."
+                  filters={courseFilterDefinitions}
+                  value={draftCourseFilters}
+                  onValueChange={(key, nextValue) =>
+                    setDraftCourseFilters((prev) => ({
+                      ...prev,
+                      [key]: nextValue,
+                    }))
+                  }
+                  onApply={applyCourseFilters}
+                  onClear={clearCourseFilters}
+                  activeCount={activeCourseFilterCount}
+                  className="shrink-0"
+                />
+              </div>
+              <ActiveFilterChips
+                chips={activeCourseFilterChips}
+                onRemove={removeCourseFilter}
+                onClearAll={clearCourseFilters}
+              />
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {courses.map((course, index) => {
+              {visibleCourses.map((course, index) => {
                 const courseQuestions = questions.filter(
                   (q) => q.course?.code === course.code,
                 );
@@ -397,6 +662,16 @@ export default function QuestionBankManagement() {
                 </p>
               </div>
             )}
+
+            {courses.length > 0 && visibleCourses.length === 0 && (
+              <div className="text-center py-16 text-muted-foreground">
+                <Search className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                <p className="text-lg font-medium">No courses found</p>
+                <p className="text-sm">
+                  Try another keyword for course code or name.
+                </p>
+              </div>
+            )}
           </>
         ) : (
           /* QUESTION LIST VIEW (after selecting a course) */
@@ -442,35 +717,38 @@ export default function QuestionBankManagement() {
               </div>
             </div>
 
-            {/* Filters */}
-            <Card className="mb-6">
-              <CardContent className="pt-4 pb-4">
-                <div className="flex flex-wrap gap-3 items-center">
-                  <div className="relative flex-1 min-w-[200px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                    <Input
-                      placeholder="Search questions, IDs, tags..."
-                      value={search}
-                      onChange={(e) => setSearch(e.target.value)}
-                      className="pl-9"
-                    />
-                  </div>
-                  <Select value={filterType} onValueChange={setFilterType}>
-                    <SelectTrigger className="w-[160px]">
-                      <SelectValue placeholder="Type" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all">All Types</SelectItem>
-                      {Object.entries(typeLabels).map(([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </CardContent>
-            </Card>
+            <div className="mb-6 space-y-3">
+              <div className="flex flex-col gap-3 lg:flex-row lg:flex-wrap lg:items-center">
+                <SearchBar
+                  value={questionSearchInput}
+                  onChange={setQuestionSearchInput}
+                  onSearch={runQuestionSearch}
+                  placeholder="Search questions, IDs, tags..."
+                  className="min-w-0 flex-1"
+                />
+                <FilterPanel
+                  title="Question filters"
+                  description="Filter by type, difficulty, points, and tags."
+                  filters={questionFilterDefinitions}
+                  value={draftQuestionFilters}
+                  onValueChange={(key, nextValue) =>
+                    setDraftQuestionFilters((prev) => ({
+                      ...prev,
+                      [key]: nextValue,
+                    }))
+                  }
+                  onApply={applyQuestionFilters}
+                  onClear={clearQuestionFilters}
+                  activeCount={activeQuestionFilterCount}
+                  className="shrink-0"
+                />
+              </div>
+              <ActiveFilterChips
+                chips={activeQuestionFilterChips}
+                onRemove={removeQuestionFilter}
+                onClearAll={clearQuestionFilters}
+              />
+            </div>
 
             {/* Question Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

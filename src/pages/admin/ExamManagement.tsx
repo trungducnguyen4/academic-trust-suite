@@ -1,16 +1,9 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -33,7 +26,6 @@ import {
   Clock,
   Eye,
   Trash2,
-  Search,
   BarChart3,
   AlertCircle,
   CheckCircle2,
@@ -59,6 +51,19 @@ import {
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import {
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 
 interface Exam {
   id: string;
@@ -93,12 +98,24 @@ const statusConfig: Record<
   ARCHIVED: { label: "Archived", variant: "destructive" },
 };
 
+const EMPTY_FILTERS: FilterValues = {
+  status: "all",
+  courseId: "all",
+  creatorId: "all",
+  duration: { min: undefined, max: undefined },
+  totalPoints: { min: undefined, max: undefined },
+  createdAt: { from: undefined, to: undefined },
+  title: { value: "", operator: "contains" },
+};
+
 export default function AdminExamManagement() {
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [filterCourse, setFilterCourse] = useState<string>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] =
+    useState<FilterValues>(EMPTY_FILTERS);
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -127,6 +144,230 @@ export default function AdminExamManagement() {
     }
   };
 
+  const examFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        allLabel: "All Status",
+        options: [
+          { label: "Draft", value: "DRAFT" },
+          { label: "Published", value: "PUBLISHED" },
+          { label: "Ongoing", value: "ONGOING" },
+          { label: "Completed", value: "COMPLETED" },
+          { label: "Archived", value: "ARCHIVED" },
+        ],
+      },
+      {
+        key: "courseId",
+        label: "Course",
+        type: "select",
+        allLabel: "All Courses",
+        options: courses.map((course: any) => ({
+          label: `${course.code} - ${course.name}`,
+          value: course.id,
+        })),
+      },
+      {
+        key: "creatorId",
+        label: "Creator",
+        type: "select",
+        allLabel: "All Creators",
+        options: Array.from(
+          new Map(
+            exams.map((exam) => [exam.creator.id, exam.creator.fullName]),
+          ).entries(),
+        ).map(([value, label]) => ({ label, value })),
+      },
+      {
+        key: "title",
+        label: "Title",
+        type: "text",
+        placeholder: "Filter by title",
+        operators: ["contains", "startsWith", "equals"],
+        defaultOperator: "contains",
+      },
+      {
+        key: "duration",
+        label: "Duration (min)",
+        type: "number-range",
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        key: "totalPoints",
+        label: "Total Points",
+        type: "number-range",
+        min: 0,
+        max: 500,
+        step: 1,
+      },
+      {
+        key: "createdAt",
+        label: "Created At",
+        type: "date-range",
+      },
+    ],
+    [courses, exams],
+  );
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+
+  const filteredExams = useMemo(() => {
+    const statusValue = appliedFilters.status as string | undefined;
+    const courseValue = appliedFilters.courseId as string | undefined;
+    const creatorValue = appliedFilters.creatorId as string | undefined;
+    const titleFilter = appliedFilters.title as TextFilterValue | undefined;
+    const durationFilter = appliedFilters.duration as
+      | { min?: number; max?: number }
+      | undefined;
+    const totalPointsFilter = appliedFilters.totalPoints as
+      | { min?: number; max?: number }
+      | undefined;
+    const createdAtRange = appliedFilters.createdAt as
+      | { from?: string; to?: string }
+      | undefined;
+
+    const matchesText = (source: string, filter?: TextFilterValue) => {
+      if (!filter || !filter.value.trim()) return true;
+      const sourceValue = source.toLowerCase();
+      const filterValue = filter.value.trim().toLowerCase();
+      if (filter.operator === "startsWith")
+        return sourceValue.startsWith(filterValue);
+      if (filter.operator === "equals") return sourceValue === filterValue;
+      return sourceValue.includes(filterValue);
+    };
+
+    return exams.filter((exam) => {
+      const matchesSearch = !normalizedSearch
+        ? true
+        : [
+            exam.title,
+            exam.course.code,
+            exam.course.name,
+            exam.creator.fullName,
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+      const matchesStatus =
+        !statusValue || statusValue === "all" || exam.status === statusValue;
+      const matchesCourse =
+        !courseValue || courseValue === "all" || exam.course.id === courseValue;
+      const matchesCreator =
+        !creatorValue ||
+        creatorValue === "all" ||
+        exam.creator.id === creatorValue;
+      const matchesTitle = matchesText(exam.title, titleFilter);
+      const matchesDuration = (() => {
+        if (
+          !durationFilter ||
+          (durationFilter.min === undefined && durationFilter.max === undefined)
+        )
+          return true;
+        if (
+          durationFilter.min !== undefined &&
+          exam.duration < durationFilter.min
+        )
+          return false;
+        if (
+          durationFilter.max !== undefined &&
+          exam.duration > durationFilter.max
+        )
+          return false;
+        return true;
+      })();
+      const matchesPoints = (() => {
+        if (
+          !totalPointsFilter ||
+          (totalPointsFilter.min === undefined &&
+            totalPointsFilter.max === undefined)
+        )
+          return true;
+        if (exam.totalPoints === undefined || exam.totalPoints === null)
+          return false;
+        if (
+          totalPointsFilter.min !== undefined &&
+          exam.totalPoints < totalPointsFilter.min
+        )
+          return false;
+        if (
+          totalPointsFilter.max !== undefined &&
+          exam.totalPoints > totalPointsFilter.max
+        )
+          return false;
+        return true;
+      })();
+      const matchesCreatedAt = (() => {
+        if (!createdAtRange?.from && !createdAtRange?.to) return true;
+        const createdAt = new Date(exam.createdAt).getTime();
+        if (createdAtRange.from) {
+          const from = new Date(createdAtRange.from).getTime();
+          if (!Number.isNaN(from) && createdAt < from) return false;
+        }
+        if (createdAtRange.to) {
+          const to = new Date(createdAtRange.to).getTime();
+          if (!Number.isNaN(to) && createdAt > to) return false;
+        }
+        return true;
+      })();
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesCourse &&
+        matchesCreator &&
+        matchesTitle &&
+        matchesDuration &&
+        matchesPoints &&
+        matchesCreatedAt
+      );
+    });
+  }, [exams, normalizedSearch, appliedFilters]);
+
+  const displayedExams = useMemo(
+    () => filteredExams.slice(0, 10),
+    [filteredExams],
+  );
+  const EXAM_ROWS_PER_VIEW = 10;
+  const EXAM_ROW_HEIGHT = 60;
+  const EXAM_TABLE_HEADER_HEIGHT = 48;
+  const EXAM_TABLE_MIN_HEIGHT =
+    EXAM_ROWS_PER_VIEW * EXAM_ROW_HEIGHT + EXAM_TABLE_HEADER_HEIGHT;
+
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    examFilterDefinitions,
+  );
+  const activeFilterChips = getFilterChips(
+    appliedFilters,
+    examFilterDefinitions,
+  );
+
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+  };
+
+  const clearFilters = () => {
+    setDraftFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+  };
+
+  const removeFilter = (key: string) => {
+    const nextFilters = {
+      ...appliedFilters,
+      [key]: EMPTY_FILTERS[key as keyof typeof EMPTY_FILTERS],
+    };
+    setAppliedFilters(nextFilters);
+    setDraftFilters(nextFilters);
+  };
+
   const handleDeleteExam = async () => {
     if (!selectedExam) return;
     try {
@@ -143,21 +384,6 @@ export default function AdminExamManagement() {
       setIsDeleting(false);
     }
   };
-
-  const filteredExams = exams.filter((exam) => {
-    const matchesSearch =
-      exam.title.toLowerCase().includes(search.toLowerCase()) ||
-      exam.course.code.toLowerCase().includes(search.toLowerCase()) ||
-      exam.course.name.toLowerCase().includes(search.toLowerCase()) ||
-      exam.creator.fullName.toLowerCase().includes(search.toLowerCase());
-
-    const matchesStatus =
-      filterStatus === "all" || exam.status === filterStatus;
-    const matchesCourse =
-      filterCourse === "all" || exam.course.id === filterCourse;
-
-    return matchesSearch && matchesStatus && matchesCourse;
-  });
 
   const stats = {
     total: exams.length,
@@ -185,21 +411,15 @@ export default function AdminExamManagement() {
   return (
     <DashboardLayout>
       <AdminPageShell>
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-foreground">
-              Exam Management
-            </h1>
-            <p className="text-muted-foreground">
-              Monitor and manage all exams across the platform
-            </p>
-          </div>
-        </div>
+        <ListPageHeader title="All Exams" className="mb-4" />
 
         {/* Stats */}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <AdminStatCard icon={FileText} value={stats.total} label="Total Exams" />
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <AdminStatCard
+            icon={FileText}
+            value={stats.total}
+            label="Total Exams"
+          />
           <AdminStatCard
             icon={CheckCircle2}
             value={stats.published}
@@ -223,56 +443,43 @@ export default function AdminExamManagement() {
           />
         </div>
 
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search exams, courses, or lecturers"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="Exam filters"
+              description="Filter by status, course, creator, duration, points, and created date."
+              filters={examFilterDefinitions}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
+            />
+          </div>
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
+        </div>
+
         {/* Exam List */}
         <Card>
-          <CardHeader>
-            <div>
-              <CardTitle className="text-lg">All Exams</CardTitle>
-              <CardDescription>
-                Manage exams from all lecturers and courses
-              </CardDescription>
-            </div>
-            <div className="flex items-center gap-3 mt-4">
-              <div className="relative flex-1">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search exams, courses, or lecturers..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="DRAFT">Draft</SelectItem>
-                  <SelectItem value="PUBLISHED">Published</SelectItem>
-                  <SelectItem value="ONGOING">Ongoing</SelectItem>
-                  <SelectItem value="COMPLETED">Completed</SelectItem>
-                  <SelectItem value="ARCHIVED">Archived</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select value={filterCourse} onValueChange={setFilterCourse}>
-                <SelectTrigger className="w-40">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Courses</SelectItem>
-                  {courses.map((course: any) => (
-                    <SelectItem key={course.id} value={course.id}>
-                      {course.code}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </CardHeader>
-          <CardContent>
-            {filteredExams.length === 0 ? (
-              <div className="text-center py-12">
+          <CardContent className="p-0">
+            {displayedExams.length === 0 ? (
+              <div
+                className="flex flex-col items-center justify-center px-6 py-12 text-center"
+                style={{ minHeight: EXAM_TABLE_MIN_HEIGHT }}
+              >
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
                 <p className="text-muted-foreground font-medium">
                   {exams.length === 0
@@ -286,7 +493,10 @@ export default function AdminExamManagement() {
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-hidden"
+                style={{ minHeight: EXAM_TABLE_MIN_HEIGHT }}
+              >
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -302,7 +512,7 @@ export default function AdminExamManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredExams.map((exam) => {
+                    {displayedExams.map((exam) => {
                       const createdAgo = formatDistanceToNow(
                         new Date(exam.createdAt),
                         { addSuffix: true },

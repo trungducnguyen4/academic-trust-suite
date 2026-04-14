@@ -30,7 +30,7 @@ export function BackToDashboardButton({
     <Button
       variant={variant}
       size={size}
-      className={`gap-2 text-muted-foreground ${className ?? ""}`.trim()}
+      className={`!mb-1 gap-2 text-muted-foreground ${className ?? ""}`.trim()}
       asChild
     >
       <Link to={to}>

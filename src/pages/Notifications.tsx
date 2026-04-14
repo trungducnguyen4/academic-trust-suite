@@ -3,18 +3,13 @@ import { Link } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import { Button } from "@/components/ui/button";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
 import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 
 interface NotificationRow {
   id: string;
@@ -73,29 +68,21 @@ export default function NotificationsPage() {
       <div className="space-y-6">
         <BackToDashboardButton to={dashboardPath} className="-ml-2" />
 
-        <div className="flex items-center justify-between gap-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground">
-              Notifications
-            </h1>
-            <p className="text-sm text-muted-foreground">
-              Your latest alerts, reminders, and system updates.
-            </p>
-          </div>
-          <Button onClick={markAllRead} variant="outline" className="gap-2">
-            <CheckCheck className="h-4 w-4" />
-            Mark all read
-          </Button>
-        </div>
+        <ListPageHeader
+          title="All Notifications"
+          actions={
+            <Button onClick={markAllRead} variant="outline" className="gap-2">
+              <CheckCheck className="h-4 w-4" />
+              Mark all read
+            </Button>
+          }
+        />
 
         <Card className="card-elevated">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Bell className="h-5 w-5" /> Inbox
             </CardTitle>
-            <CardDescription>
-              All notifications delivered to your account.
-            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (

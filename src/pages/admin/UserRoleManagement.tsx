@@ -2,13 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -44,7 +38,6 @@ import {
   Loader2,
   Lock,
   Pencil,
-  Search,
   Trash2,
   Unlock,
   UserPlus,
@@ -53,6 +46,19 @@ import {
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import api, { unwrapPaginatedData } from "@/lib/api";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import {
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 
 type BackendRole = "STUDENT" | "LECTURER" | "ADMIN";
 type BackendStatus = "active" | "suspended" | "pending";
@@ -98,6 +104,60 @@ const EMPTY_EDIT_FORM: UserForm = {
   status: "active",
 };
 
+const USER_FILTERS: FilterDefinition[] = [
+  {
+    key: "role",
+    label: "Role",
+    type: "select",
+    allLabel: "All Roles",
+    options: [
+      { label: "Student", value: "STUDENT" },
+      { label: "Lecturer", value: "LECTURER" },
+      { label: "Admin", value: "ADMIN" },
+    ],
+  },
+  {
+    key: "status",
+    label: "Status",
+    type: "select",
+    allLabel: "All Status",
+    options: [
+      { label: "Active", value: "active" },
+      { label: "Pending", value: "pending" },
+      { label: "Suspended", value: "suspended" },
+    ],
+  },
+  {
+    key: "department",
+    label: "Department",
+    type: "text",
+    placeholder: "Filter by department",
+    defaultOperator: "contains",
+    operators: ["contains", "startsWith", "equals"],
+  },
+  {
+    key: "studentId",
+    label: "Student ID",
+    type: "text",
+    placeholder: "Filter by student ID",
+    defaultOperator: "contains",
+    operators: ["contains", "startsWith", "equals"],
+  },
+  {
+    key: "createdAt",
+    label: "Created At",
+    type: "date-range",
+  },
+];
+
+const EMPTY_FILTERS: FilterValues = {
+  role: "all",
+  status: "all",
+  department: { value: "", operator: "contains" },
+  studentId: { value: "", operator: "contains" },
+  createdAt: { from: undefined, to: undefined },
+};
+
 export default function UserRoleManagement() {
   const { user: currentUser } = useAuth();
 
@@ -113,41 +173,26 @@ export default function UserRoleManagement() {
   const [createForm, setCreateForm] = useState<UserForm>(EMPTY_CREATE_FORM);
   const [editForm, setEditForm] = useState<UserForm>(EMPTY_EDIT_FORM);
 
-  const [search, setSearch] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<"all" | BackendRole>("all");
-  const [statusFilter, setStatusFilter] = useState<"all" | BackendStatus>(
-    "all",
-  );
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] =
+    useState<FilterValues>(EMPTY_FILTERS);
 
   const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalUsers, setTotalUsers] = useState(0);
-  const ITEMS_PER_PAGE = 20;
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(search.trim());
-      setPage(1);
-    }, 350);
-    return () => clearTimeout(timer);
-  }, [search]);
+  const ITEMS_PER_PAGE = 10;
+  const USER_ROW_HEIGHT = 56;
+  const USER_TABLE_HEADER_HEIGHT = 48;
+  const USER_TABLE_MIN_HEIGHT =
+    ITEMS_PER_PAGE * USER_ROW_HEIGHT + USER_TABLE_HEADER_HEIGHT;
 
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await api.getUsers({
-        page,
-        limit: ITEMS_PER_PAGE,
-        role: roleFilter === "all" ? undefined : roleFilter,
-        status: statusFilter === "all" ? undefined : statusFilter,
-        search: debouncedSearch || undefined,
-      });
+      const response = await api.getUsers({ page: 1, limit: 1000 });
 
       const rows = unwrapPaginatedData<UserRow>(response);
       setUsers(rows);
-      setTotalPages(response?.totalPages ?? 1);
-      setTotalUsers(response?.total ?? rows.length);
     } catch (error: any) {
       toast.error(error?.message || "Failed to load users");
     } finally {
@@ -157,8 +202,123 @@ export default function UserRoleManagement() {
 
   useEffect(() => {
     fetchUsers();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [page, roleFilter, statusFilter, debouncedSearch]);
+  }, []);
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+
+  const filteredUsers = useMemo(() => {
+    return users.filter((item) => {
+      const matchesSearch = !normalizedSearch
+        ? true
+        : [
+            item.fullName,
+            item.email,
+            item.studentId || "",
+            item.department || "",
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+
+      const roleValue = appliedFilters.role as string | undefined;
+      const statusValue = appliedFilters.status as string | undefined;
+      const departmentFilter = appliedFilters.department as
+        | TextFilterValue
+        | undefined;
+      const studentIdFilter = appliedFilters.studentId as
+        | TextFilterValue
+        | undefined;
+      const createdAtRange = appliedFilters.createdAt as
+        | { from?: string; to?: string }
+        | undefined;
+
+      const matchesRole =
+        !roleValue || roleValue === "all" || item.role === roleValue;
+      const matchesStatus =
+        !statusValue || statusValue === "all" || item.status === statusValue;
+
+      const matchesText = (
+        source: string | null | undefined,
+        filter?: TextFilterValue,
+      ) => {
+        if (!filter || !filter.value.trim()) return true;
+        const sourceValue = (source || "").toLowerCase();
+        const filterValue = filter.value.trim().toLowerCase();
+        if (filter.operator === "startsWith")
+          return sourceValue.startsWith(filterValue);
+        if (filter.operator === "equals") return sourceValue === filterValue;
+        return sourceValue.includes(filterValue);
+      };
+
+      const matchesDepartment = matchesText(item.department, departmentFilter);
+      const matchesStudentId = matchesText(item.studentId, studentIdFilter);
+
+      const matchesCreatedAt = (() => {
+        if (!createdAtRange?.from && !createdAtRange?.to) return true;
+        const createdAt = new Date(item.createdAt).getTime();
+        if (createdAtRange.from) {
+          const from = new Date(createdAtRange.from).getTime();
+          if (!Number.isNaN(from) && createdAt < from) return false;
+        }
+        if (createdAtRange.to) {
+          const to = new Date(createdAtRange.to).getTime();
+          if (!Number.isNaN(to) && createdAt > to) return false;
+        }
+        return true;
+      })();
+
+      return (
+        matchesSearch &&
+        matchesRole &&
+        matchesStatus &&
+        matchesDepartment &&
+        matchesStudentId &&
+        matchesCreatedAt
+      );
+    });
+  }, [users, normalizedSearch, appliedFilters]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredUsers.length / ITEMS_PER_PAGE),
+  );
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, totalPages));
+  }, [totalPages]);
+
+  const paginatedUsers = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return filteredUsers.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredUsers, page]);
+
+  const activeFilterCount = getActiveFilterCount(appliedFilters, USER_FILTERS);
+  const activeFilterChips = getFilterChips(appliedFilters, USER_FILTERS);
+
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setPage(1);
+  };
+
+  const clearFilters = () => {
+    setDraftFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
+  };
+
+  const removeFilter = (key: string) => {
+    const nextFilters = {
+      ...appliedFilters,
+      [key]: EMPTY_FILTERS[key as keyof typeof EMPTY_FILTERS],
+    };
+    setAppliedFilters(nextFilters);
+    setDraftFilters(nextFilters);
+  };
 
   const openEditDialog = (target: UserRow) => {
     setEditingUser(target);
@@ -295,11 +455,12 @@ export default function UserRoleManagement() {
 
   const pageStats = useMemo(
     () => ({
-      students: users.filter((item) => item.role === "STUDENT").length,
-      lecturers: users.filter((item) => item.role === "LECTURER").length,
-      admins: users.filter((item) => item.role === "ADMIN").length,
+      students: paginatedUsers.filter((item) => item.role === "STUDENT").length,
+      lecturers: paginatedUsers.filter((item) => item.role === "LECTURER")
+        .length,
+      admins: paginatedUsers.filter((item) => item.role === "ADMIN").length,
     }),
-    [users],
+    [paginatedUsers],
   );
 
   if (loading) {
@@ -315,161 +476,157 @@ export default function UserRoleManagement() {
   return (
     <DashboardLayout>
       <AdminPageShell>
-        <div className="flex items-start justify-between mb-6 gap-4">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground mb-1">
-              User & Role Management
-            </h1>
-            <p className="text-muted-foreground">
-              Admin CRUD for account lifecycle, role assignment, and access
-              status
-            </p>
-          </div>
-          <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <UserPlus className="h-4 w-4" /> Add User
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Create User</DialogTitle>
-                <DialogDescription>
-                  Create a new user directly from admin console
-                </DialogDescription>
-              </DialogHeader>
-              <div className="space-y-4 py-2">
-                <div className="space-y-2">
-                  <Label>Full Name</Label>
-                  <Input
-                    value={createForm.fullName}
-                    onChange={(e) =>
-                      setCreateForm((prev) => ({
-                        ...prev,
-                        fullName: e.target.value,
-                      }))
-                    }
-                    placeholder="e.g. Nguyen Van A"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Email</Label>
-                    <Input
-                      type="email"
-                      value={createForm.email}
-                      onChange={(e) =>
-                        setCreateForm((prev) => ({
-                          ...prev,
-                          email: e.target.value,
-                        }))
-                      }
-                      placeholder="user@university.edu"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Initial Password</Label>
-                    <Input
-                      type="password"
-                      value={createForm.password}
-                      onChange={(e) =>
-                        setCreateForm((prev) => ({
-                          ...prev,
-                          password: e.target.value,
-                        }))
-                      }
-                      placeholder="At least 6 characters"
-                    />
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Role</Label>
-                    <Select
-                      value={createForm.role}
-                      onValueChange={(value: BackendRole) =>
-                        setCreateForm((prev) => ({ ...prev, role: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="STUDENT">Student</SelectItem>
-                        <SelectItem value="LECTURER">Lecturer</SelectItem>
-                        <SelectItem value="ADMIN">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Select
-                      value={createForm.status}
-                      onValueChange={(value: BackendStatus) =>
-                        setCreateForm((prev) => ({ ...prev, status: value }))
-                      }
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="pending">Pending</SelectItem>
-                        <SelectItem value="suspended">Suspended</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="space-y-2">
-                    <Label>Department</Label>
-                    <Input
-                      value={createForm.department}
-                      onChange={(e) =>
-                        setCreateForm((prev) => ({
-                          ...prev,
-                          department: e.target.value,
-                        }))
-                      }
-                      placeholder="e.g. Computer Science"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Student ID</Label>
-                    <Input
-                      value={createForm.studentId}
-                      onChange={(e) =>
-                        setCreateForm((prev) => ({
-                          ...prev,
-                          studentId: e.target.value,
-                        }))
-                      }
-                      placeholder="Required for students"
-                      disabled={createForm.role !== "STUDENT"}
-                    />
-                  </div>
-                </div>
-              </div>
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowAddDialog(false)}
-                >
-                  Cancel
+        <ListPageHeader
+          title="All Users"
+          actions={
+            <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <UserPlus className="h-4 w-4" /> Add User
                 </Button>
-                <Button onClick={handleCreateUser} disabled={isSubmitting}>
-                  {isSubmitting && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Create
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create User</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 py-2">
+                  <div className="space-y-2">
+                    <Label>Full Name</Label>
+                    <Input
+                      value={createForm.fullName}
+                      onChange={(e) =>
+                        setCreateForm((prev) => ({
+                          ...prev,
+                          fullName: e.target.value,
+                        }))
+                      }
+                      placeholder="e.g. Nguyen Van A"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Email</Label>
+                      <Input
+                        type="email"
+                        value={createForm.email}
+                        onChange={(e) =>
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            email: e.target.value,
+                          }))
+                        }
+                        placeholder="user@university.edu"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Initial Password</Label>
+                      <Input
+                        type="password"
+                        value={createForm.password}
+                        onChange={(e) =>
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            password: e.target.value,
+                          }))
+                        }
+                        placeholder="At least 6 characters"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Role</Label>
+                      <Select
+                        value={createForm.role}
+                        onValueChange={(value: BackendRole) =>
+                          setCreateForm((prev) => ({ ...prev, role: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="STUDENT">Student</SelectItem>
+                          <SelectItem value="LECTURER">Lecturer</SelectItem>
+                          <SelectItem value="ADMIN">Admin</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Status</Label>
+                      <Select
+                        value={createForm.status}
+                        onValueChange={(value: BackendStatus) =>
+                          setCreateForm((prev) => ({ ...prev, status: value }))
+                        }
+                      >
+                        <SelectTrigger>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="active">Active</SelectItem>
+                          <SelectItem value="pending">Pending</SelectItem>
+                          <SelectItem value="suspended">Suspended</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="space-y-2">
+                      <Label>Department</Label>
+                      <Input
+                        value={createForm.department}
+                        onChange={(e) =>
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            department: e.target.value,
+                          }))
+                        }
+                        placeholder="e.g. Computer Science"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Student ID</Label>
+                      <Input
+                        value={createForm.studentId}
+                        onChange={(e) =>
+                          setCreateForm((prev) => ({
+                            ...prev,
+                            studentId: e.target.value,
+                          }))
+                        }
+                        placeholder="Required for students"
+                        disabled={createForm.role !== "STUDENT"}
+                      />
+                    </div>
+                  </div>
+                </div>
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowAddDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button onClick={handleCreateUser} disabled={isSubmitting}>
+                    {isSubmitting && (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    )}
+                    Create
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          }
+          className="mb-4"
+        />
 
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-6">
-          <AdminStatCard icon={Users} value={totalUsers} label="Total Users" />
+          <AdminStatCard
+            icon={Users}
+            value={filteredUsers.length}
+            label="Total Users"
+          />
           <AdminStatCard
             icon={BadgeCheck}
             value={pageStats.students}
@@ -493,63 +650,44 @@ export default function UserRoleManagement() {
           />
         </div>
 
-        <Card className="mb-6">
-          <CardContent className="pt-4 pb-4">
-            <div className="flex gap-3 items-center flex-wrap">
-              <div className="relative flex-1 min-w-[240px]">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search by name, email, student ID, or department"
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="pl-9"
-                />
-              </div>
-              <Select
-                value={roleFilter}
-                onValueChange={(value: "all" | BackendRole) =>
-                  setRoleFilter(value)
-                }
-              >
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Roles</SelectItem>
-                  <SelectItem value="STUDENT">Student</SelectItem>
-                  <SelectItem value="LECTURER">Lecturer</SelectItem>
-                  <SelectItem value="ADMIN">Admin</SelectItem>
-                </SelectContent>
-              </Select>
-              <Select
-                value={statusFilter}
-                onValueChange={(value: "all" | BackendStatus) =>
-                  setStatusFilter(value)
-                }
-              >
-                <SelectTrigger className="w-[160px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="active">Active</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="suspended">Suspended</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </CardContent>
-        </Card>
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search by name, email, student ID, or department"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="User filters"
+              description="Filter by role, status, department, student ID, and created date."
+              filters={USER_FILTERS}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
+            />
+          </div>
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
+        </div>
 
         <Card>
           <CardHeader>
-            <CardTitle>Users</CardTitle>
-            <CardDescription>
-              Role/status changes are persisted directly to database
-            </CardDescription>
+            <CardTitle>Results</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
-            <div className="overflow-x-auto">
+            <div
+              className="overflow-hidden"
+              style={{ minHeight: USER_TABLE_MIN_HEIGHT }}
+            >
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -564,7 +702,7 @@ export default function UserRoleManagement() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {users.map((item) => (
+                  {paginatedUsers.map((item) => (
                     <TableRow key={item.id}>
                       <TableCell className="font-mono text-xs">
                         {item.id.slice(0, 8)}
@@ -660,7 +798,7 @@ export default function UserRoleManagement() {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {users.length === 0 && (
+                  {filteredUsers.length === 0 && (
                     <TableRow>
                       <TableCell
                         colSpan={8}
@@ -677,7 +815,7 @@ export default function UserRoleManagement() {
             {totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-4 border-t border-border">
                 <p className="text-sm text-muted-foreground">
-                  Page {page} / {totalPages} ({totalUsers} users)
+                  Page {page} / {totalPages} ({filteredUsers.length} users)
                 </p>
                 <div className="flex gap-2">
                   <Button

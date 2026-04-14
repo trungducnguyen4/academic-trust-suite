@@ -190,6 +190,7 @@ export default function ExamResultsList() {
               placeholder="Search by Name or ID"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
+              className="bg-white"
             />
             <Button onClick={() => handleExport("csv")}>Export to CSV</Button>
             <Button variant="outline" onClick={() => handleExport("pdf")}>

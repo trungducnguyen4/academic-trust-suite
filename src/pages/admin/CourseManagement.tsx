@@ -3,13 +3,20 @@ import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -45,7 +52,6 @@ import {
   Loader2,
   Pencil,
   Plus,
-  Search,
   Trash2,
   Users,
 } from "lucide-react";
@@ -104,6 +110,13 @@ const buildToken = (value: string, maxLength: number, fallback: string) => {
   return (compact.slice(0, maxLength) || fallback).toUpperCase();
 };
 
+const EMPTY_FILTERS: FilterValues = {
+  status: "all",
+  lecturerId: "all",
+  semester: { value: "", operator: "contains" },
+  credits: { min: undefined, max: undefined },
+};
+
 export default function AdminCourseManagement() {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -111,7 +124,11 @@ export default function AdminCourseManagement() {
   const [saving, setSaving] = useState(false);
   const [courses, setCourses] = useState<CourseItem[]>([]);
   const [lecturers, setLecturers] = useState<Lecturer[]>([]);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] =
+    useState<FilterValues>(EMPTY_FILTERS);
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -144,22 +161,164 @@ export default function AdminCourseManagement() {
     fetchData();
   }, []);
 
+  const courseFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        allLabel: "All Status",
+        options: [
+          { label: "Draft", value: "draft" },
+          { label: "Active", value: "active" },
+          { label: "Archived", value: "archived" },
+        ],
+      },
+      {
+        key: "lecturerId",
+        label: "Lecturer",
+        type: "select",
+        allLabel: "All Lecturers",
+        options: lecturers.map((lecturer) => ({
+          label: lecturer.fullName,
+          value: lecturer.id,
+        })),
+      },
+      {
+        key: "semester",
+        label: "Semester",
+        type: "text",
+        placeholder: "Filter by semester",
+        operators: ["contains", "startsWith", "equals"],
+        defaultOperator: "contains",
+      },
+      {
+        key: "credits",
+        label: "Credits",
+        type: "number-range",
+        min: 0,
+        max: 10,
+        step: 1,
+      },
+    ],
+    [lecturers],
+  );
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+
   const filteredCourses = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return courses;
+    const semesterFilter = appliedFilters.semester as
+      | TextFilterValue
+      | undefined;
+    const creditsFilter = appliedFilters.credits as
+      | { min?: number; max?: number }
+      | undefined;
+    const statusValue = appliedFilters.status as string | undefined;
+    const lecturerValue = appliedFilters.lecturerId as string | undefined;
+
+    const matchesText = (
+      source: string | undefined,
+      filter?: TextFilterValue,
+    ) => {
+      if (!filter || !filter.value.trim()) return true;
+      const sourceValue = (source || "").toLowerCase();
+      const filterValue = filter.value.trim().toLowerCase();
+      if (filter.operator === "startsWith")
+        return sourceValue.startsWith(filterValue);
+      if (filter.operator === "equals") return sourceValue === filterValue;
+      return sourceValue.includes(filterValue);
+    };
 
     return courses.filter((course) => {
+      const matchesSearch = !normalizedSearch
+        ? true
+        : [
+            course.code,
+            course.name,
+            course.semester || "",
+            course.lecturer?.fullName || "",
+          ]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+
+      const matchesStatus =
+        !statusValue ||
+        statusValue === "all" ||
+        (course.status || "draft") === statusValue;
+      const matchesLecturer =
+        !lecturerValue ||
+        lecturerValue === "all" ||
+        course.lecturerId === lecturerValue;
+      const matchesSemester = matchesText(course.semester, semesterFilter);
+      const matchesCredits = (() => {
+        if (
+          !creditsFilter ||
+          (creditsFilter.min === undefined && creditsFilter.max === undefined)
+        )
+          return true;
+        const credits = course.credits;
+        if (credits === undefined || credits === null) return false;
+        if (creditsFilter.min !== undefined && credits < creditsFilter.min)
+          return false;
+        if (creditsFilter.max !== undefined && credits > creditsFilter.max)
+          return false;
+        return true;
+      })();
+
       return (
-        course.code.toLowerCase().includes(q) ||
-        course.name.toLowerCase().includes(q) ||
-        (course.semester || "").toLowerCase().includes(q) ||
-        (course.lecturer?.fullName || "").toLowerCase().includes(q)
+        matchesSearch &&
+        matchesStatus &&
+        matchesLecturer &&
+        matchesSemester &&
+        matchesCredits
       );
     });
-  }, [courses, search]);
+  }, [courses, normalizedSearch, appliedFilters]);
+
+  const displayedCourses = useMemo(
+    () => filteredCourses.slice(0, 10),
+    [filteredCourses],
+  );
+  const COURSE_ROWS_PER_VIEW = 10;
+  const COURSE_ROW_HEIGHT = 72;
+  const COURSE_TABLE_HEADER_HEIGHT = 48;
+  const COURSE_TABLE_MIN_HEIGHT =
+    COURSE_ROWS_PER_VIEW * COURSE_ROW_HEIGHT + COURSE_TABLE_HEADER_HEIGHT;
+
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    courseFilterDefinitions,
+  );
+  const activeFilterChips = getFilterChips(
+    appliedFilters,
+    courseFilterDefinitions,
+  );
+
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+  };
+
+  const clearFilters = () => {
+    setDraftFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+  };
+
+  const removeFilter = (key: string) => {
+    const nextFilters = {
+      ...appliedFilters,
+      [key]: EMPTY_FILTERS[key as keyof typeof EMPTY_FILTERS],
+    };
+    setAppliedFilters(nextFilters);
+    setDraftFilters(nextFilters);
+  };
 
   const courseStats = useMemo(() => {
-    const totalCourses = courses.length;
+    const totalCourses = filteredCourses.length;
     const assignedLecturers = courses.filter((course) =>
       Boolean(course.lecturerId),
     ).length;
@@ -363,58 +522,52 @@ export default function AdminCourseManagement() {
   return (
     <DashboardLayout>
       <AdminPageShell>
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground">
-              Course Management
-            </h1>
-            <p className="text-muted-foreground mt-1">
-              Create, update, and organize courses across the platform.
-            </p>
-          </div>
-
-          <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
-            <DialogTrigger asChild>
-              <Button className="gap-2">
-                <Plus className="h-4 w-4" />
-                New Course
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>Create Course</DialogTitle>
-                <DialogDescription>
-                  Fill course information and optionally assign a lecturer.
-                </DialogDescription>
-              </DialogHeader>
-
-              {renderForm(createForm, (patch) =>
-                setCreateForm((prev) => ({ ...prev, ...patch })),
-              )}
-
-              <DialogFooter>
-                <Button
-                  variant="outline"
-                  onClick={() => setShowCreateDialog(false)}
-                >
-                  Cancel
+        <ListPageHeader
+          title="All Courses"
+          actions={
+            <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+              <DialogTrigger asChild>
+                <Button className="gap-2">
+                  <Plus className="h-4 w-4" />
+                  New Course
                 </Button>
-                <Button
-                  onClick={handleCreate}
-                  disabled={saving || !createForm.name.trim()}
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    "Create"
-                  )}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+              </DialogTrigger>
+              <DialogContent className="max-w-2xl">
+                <DialogHeader>
+                  <DialogTitle>Create Course</DialogTitle>
+                  <DialogDescription>
+                    Fill course information and optionally assign a lecturer.
+                  </DialogDescription>
+                </DialogHeader>
 
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                {renderForm(createForm, (patch) =>
+                  setCreateForm((prev) => ({ ...prev, ...patch })),
+                )}
+
+                <DialogFooter>
+                  <Button
+                    variant="outline"
+                    onClick={() => setShowCreateDialog(false)}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    onClick={handleCreate}
+                    disabled={saving || !createForm.name.trim()}
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      "Create"
+                    )}
+                  </Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
+          }
+        />
+
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <AdminStatCard
             icon={BookOpen}
             value={courseStats.totalCourses}
@@ -445,130 +598,146 @@ export default function AdminCourseManagement() {
           />
         </div>
 
-        <Card>
-          <CardHeader>
-            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-              <div>
-                <CardTitle>All Courses</CardTitle>
-                <CardDescription>
-                  Total: {courses.length} courses
-                </CardDescription>
-              </div>
-              <div className="relative md:w-72">
-                <Search className="h-4 w-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by code, name, semester..."
-                  className="pl-9"
-                />
-              </div>
-            </div>
-          </CardHeader>
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search by code, name, semester, or lecturer"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="Course filters"
+              description="Filter courses by status, lecturer, semester, and credits."
+              filters={courseFilterDefinitions}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
+            />
+          </div>
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
+        </div>
 
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Course Name</TableHead>
-                  <TableHead>Semester</TableHead>
-                  <TableHead>Lecturer</TableHead>
-                  <TableHead className="text-center min-w-20">
-                    Students
-                  </TableHead>
-                  <TableHead className="text-center min-w-20">Exams</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCourses.length > 0 ? (
-                  filteredCourses.map((course) => (
-                    <TableRow key={course.id}>
-                      <TableCell className="font-mono font-medium">
-                        {course.code}
-                      </TableCell>
-                      <TableCell className="font-medium">
-                        {course.name}
-                      </TableCell>
-                      <TableCell>{course.semester || "N/A"}</TableCell>
-                      <TableCell>
-                        {course.lecturer ? (
-                          <div className="text-sm">
-                            <p className="font-medium">
-                              {course.lecturer.fullName}
-                            </p>
-                            <p className="text-muted-foreground">
-                              {course.lecturer.email}
-                            </p>
-                          </div>
-                        ) : (
-                          <span className="text-muted-foreground">
-                            Unassigned
-                          </span>
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center font-semibold">
-                        {course._count?.enrollments || 0}
-                      </TableCell>
-                      <TableCell className="text-center font-semibold">
-                        {course._count?.exams || 0}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {(course.status || "draft").toLowerCase()}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="inline-flex items-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              navigate(`/admin/course/${course.id}`)
-                            }
-                          >
-                            <Users className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(course)}
-                          >
-                            <Pencil className="h-4 w-4" />
-                          </Button>
-                          <ConfirmActionDialog
-                            title="Delete course"
-                            description="This action cannot be undone. The course will be removed if no dependent data blocks deletion."
-                            confirmText="Delete"
-                            destructive
-                            onConfirm={() => handleDelete(course.id)}
-                          >
+        <Card>
+          <CardContent className="p-0">
+            <div
+              className="overflow-hidden"
+              style={{ minHeight: COURSE_TABLE_MIN_HEIGHT }}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Course Name</TableHead>
+                    <TableHead>Semester</TableHead>
+                    <TableHead>Lecturer</TableHead>
+                    <TableHead className="text-center min-w-20">
+                      Students
+                    </TableHead>
+                    <TableHead className="text-center min-w-20">
+                      Exams
+                    </TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayedCourses.length > 0 ? (
+                    displayedCourses.map((course) => (
+                      <TableRow key={course.id}>
+                        <TableCell className="font-mono font-medium">
+                          {course.code}
+                        </TableCell>
+                        <TableCell className="font-medium">
+                          {course.name}
+                        </TableCell>
+                        <TableCell>{course.semester || "N/A"}</TableCell>
+                        <TableCell>
+                          {course.lecturer ? (
+                            <div className="text-sm">
+                              <p className="font-medium">
+                                {course.lecturer.fullName}
+                              </p>
+                              <p className="text-muted-foreground">
+                                {course.lecturer.email}
+                              </p>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              Unassigned
+                            </span>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {course._count?.enrollments || 0}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {course._count?.exams || 0}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">
+                            {(course.status || "draft").toLowerCase()}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="inline-flex items-center gap-1">
                             <Button
                               variant="ghost"
                               size="sm"
-                              className="text-destructive hover:text-destructive"
+                              onClick={() =>
+                                navigate(`/admin/course/${course.id}`)
+                              }
                             >
-                              <Trash2 className="h-4 w-4" />
+                              <Users className="h-4 w-4" />
                             </Button>
-                          </ConfirmActionDialog>
-                        </div>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => openEditDialog(course)}
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <ConfirmActionDialog
+                              title="Delete course"
+                              description="This action cannot be undone. The course will be removed if no dependent data blocks deletion."
+                              confirmText="Delete"
+                              destructive
+                              onConfirm={() => handleDelete(course.id)}
+                            >
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-destructive hover:text-destructive"
+                              >
+                                <Trash2 className="h-4 w-4" />
+                              </Button>
+                            </ConfirmActionDialog>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={8}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        No course found.
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={8}
-                      className="text-center py-8 text-muted-foreground"
-                    >
-                      No course found.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </AdminPageShell>

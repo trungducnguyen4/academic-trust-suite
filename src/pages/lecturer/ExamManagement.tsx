@@ -244,7 +244,11 @@ export default function ExamManagement() {
 
         {/* Stats */}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <AdminStatCard icon={FileText} value={stats.total} label="Total Exams" />
+          <AdminStatCard
+            icon={FileText}
+            value={stats.total}
+            label="Total Exams"
+          />
           <AdminStatCard
             icon={CheckCircle2}
             value={stats.published}
@@ -285,7 +289,7 @@ export default function ExamManagement() {
                     placeholder="Search exams or courses..."
                     value={search}
                     onChange={(e) => setSearch(e.target.value)}
-                    className="pl-9"
+                    className="bg-white pl-9"
                   />
                 </div>
                 <Select value={filterStatus} onValueChange={setFilterStatus}>

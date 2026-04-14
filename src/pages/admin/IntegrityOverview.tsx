@@ -24,8 +24,6 @@ import {
 import {
   Shield,
   AlertTriangle,
-  Search,
-  Filter,
   Eye,
   CheckCircle2,
   XCircle,
@@ -35,6 +33,19 @@ import {
   FileText,
 } from "lucide-react";
 import { IntegrityCaseDetail } from "@/components/admin/IntegrityCaseDetail";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import {
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 
 export interface FlaggedSubmission {
   id: string;
@@ -201,32 +212,156 @@ const stats = {
   confirmedCases: 3,
 };
 
+const EMPTY_FILTERS: FilterValues = {
+  confidence: "all",
+  submittedAt: { from: undefined, to: undefined },
+  timeAnomaly: undefined,
+  examTitle: { value: "", operator: "contains" },
+};
+
 export default function IntegrityOverview() {
-  const [searchQuery, setSearchQuery] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] =
+    useState<FilterValues>(EMPTY_FILTERS);
   const [selectedCase, setSelectedCase] = useState<FlaggedSubmission | null>(
     null,
   );
   const [activeTab, setActiveTab] = useState("all");
 
+  const integrityFilters: FilterDefinition[] = [
+    {
+      key: "confidence",
+      label: "Confidence",
+      type: "select",
+      allLabel: "All Confidence",
+      options: [
+        { label: "High", value: "High" },
+        { label: "Medium", value: "Medium" },
+        { label: "Low", value: "Low" },
+      ],
+    },
+    {
+      key: "examTitle",
+      label: "Exam Title",
+      type: "text",
+      placeholder: "Filter by exam title",
+      operators: ["contains", "startsWith", "equals"],
+      defaultOperator: "contains",
+    },
+    {
+      key: "submittedAt",
+      label: "Submitted At",
+      type: "date-range",
+    },
+    {
+      key: "timeAnomaly",
+      label: "Time anomaly",
+      type: "boolean",
+      trueLabel: "Flagged",
+      falseLabel: "Not flagged",
+    },
+  ];
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+
   const filteredSubmissions = mockFlaggedSubmissions.filter((submission) => {
     const matchesSearch =
-      submission.studentName
-        .toLowerCase()
-        .includes(searchQuery.toLowerCase()) ||
-      submission.studentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      submission.examTitle.toLowerCase().includes(searchQuery.toLowerCase());
+      !normalizedSearch ||
+      submission.studentName.toLowerCase().includes(normalizedSearch) ||
+      submission.studentId.toLowerCase().includes(normalizedSearch) ||
+      submission.examTitle.toLowerCase().includes(normalizedSearch);
 
-    if (activeTab === "all") return matchesSearch;
-    if (activeTab === "pending")
-      return matchesSearch && submission.status === "pending";
-    if (activeTab === "reviewed")
-      return matchesSearch && submission.status === "reviewed";
-    if (activeTab === "confirmed")
-      return matchesSearch && submission.status === "confirmed";
-    if (activeTab === "dismissed")
-      return matchesSearch && submission.status === "dismissed";
-    return matchesSearch;
+    const confidenceValue = appliedFilters.confidence as string | undefined;
+    const examTitleFilter = appliedFilters.examTitle as
+      | TextFilterValue
+      | undefined;
+    const submittedAtRange = appliedFilters.submittedAt as
+      | { from?: string; to?: string }
+      | undefined;
+    const timeAnomaly = appliedFilters.timeAnomaly as boolean | undefined;
+
+    const matchesText = (source: string, filter?: TextFilterValue) => {
+      if (!filter || !filter.value.trim()) return true;
+      const sourceValue = source.toLowerCase();
+      const filterValue = filter.value.trim().toLowerCase();
+      if (filter.operator === "startsWith")
+        return sourceValue.startsWith(filterValue);
+      if (filter.operator === "equals") return sourceValue === filterValue;
+      return sourceValue.includes(filterValue);
+    };
+
+    const matchesConfidence =
+      !confidenceValue ||
+      confidenceValue === "all" ||
+      submission.confidence === confidenceValue;
+    const matchesExamTitle = matchesText(submission.examTitle, examTitleFilter);
+    const matchesTimeAnomaly =
+      typeof timeAnomaly !== "boolean" ||
+      timeAnomaly === submission.timeAnomaly;
+    const matchesSubmittedAt = (() => {
+      if (!submittedAtRange?.from && !submittedAtRange?.to) return true;
+      const submittedAt = new Date(submission.submittedAt).getTime();
+      if (submittedAtRange.from) {
+        const from = new Date(submittedAtRange.from).getTime();
+        if (!Number.isNaN(from) && submittedAt < from) return false;
+      }
+      if (submittedAtRange.to) {
+        const to = new Date(submittedAtRange.to).getTime();
+        if (!Number.isNaN(to) && submittedAt > to) return false;
+      }
+      return true;
+    })();
+
+    if (activeTab === "all") {
+      return (
+        matchesSearch &&
+        matchesConfidence &&
+        matchesExamTitle &&
+        matchesTimeAnomaly &&
+        matchesSubmittedAt
+      );
+    }
+
+    return (
+      matchesSearch &&
+      submission.status === activeTab &&
+      matchesConfidence &&
+      matchesExamTitle &&
+      matchesTimeAnomaly &&
+      matchesSubmittedAt
+    );
   });
+
+  const displayedSubmissions = filteredSubmissions.slice(0, 10);
+  const INTEGRITY_ROWS_PER_VIEW = 10;
+  const INTEGRITY_ROW_HEIGHT = 64;
+  const INTEGRITY_TABLE_HEADER_HEIGHT = 48;
+  const INTEGRITY_TABLE_MIN_HEIGHT =
+    INTEGRITY_ROWS_PER_VIEW * INTEGRITY_ROW_HEIGHT +
+    INTEGRITY_TABLE_HEADER_HEIGHT;
+
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    integrityFilters,
+  );
+  const activeFilterChips = getFilterChips(appliedFilters, integrityFilters);
+
+  const runSearch = () => setAppliedSearch(searchInput.trim());
+  const applyFilters = () => setAppliedFilters(draftFilters);
+  const clearFilters = () => {
+    setDraftFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+  };
+  const removeFilter = (key: string) => {
+    const nextFilters = {
+      ...appliedFilters,
+      [key]: EMPTY_FILTERS[key as keyof typeof EMPTY_FILTERS],
+    };
+    setAppliedFilters(nextFilters);
+    setDraftFilters(nextFilters);
+  };
 
   const getConfidenceBadgeVariant = (
     confidence: string,
@@ -282,18 +417,9 @@ export default function IntegrityOverview() {
   return (
     <DashboardLayout>
       <AdminPageShell>
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground">
-            Academic Integrity Monitoring
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Review flagged submissions and manage integrity cases
-          </p>
-        </div>
+        <ListPageHeader title="Academic Integrity" className="mb-4" />
 
-        {/* Stats Cards */}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="mb-6 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
           <AdminStatCard
             icon={Shield}
             value={stats.totalFlagged}
@@ -324,33 +450,37 @@ export default function IntegrityOverview() {
           />
         </div>
 
-        {/* Main Content */}
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search by student or exam"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="Integrity filters"
+              description="Filter by confidence, title, submission date, and anomaly signals."
+              filters={integrityFilters}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
+            />
+          </div>
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
+        </div>
+
         <Card>
-          <CardHeader>
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <CardTitle className="text-lg">Flagged Submissions</CardTitle>
-                <CardDescription>
-                  AI-detected potential integrity violations
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search by student or exam..."
-                    className="pl-9 w-64"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
-                </div>
-                <Button variant="outline" size="icon">
-                  <Filter className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent>
+          <CardContent className="pt-6">
             <Tabs value={activeTab} onValueChange={setActiveTab}>
               <TabsList className="mb-4">
                 <TabsTrigger value="all">All</TabsTrigger>
@@ -361,7 +491,10 @@ export default function IntegrityOverview() {
               </TabsList>
 
               <TabsContent value={activeTab} className="mt-0">
-                <div className="overflow-x-auto">
+                <div
+                  className="overflow-hidden"
+                  style={{ minHeight: INTEGRITY_TABLE_MIN_HEIGHT }}
+                >
                   <div className="rounded-md border">
                     <Table>
                       <TableHeader>
@@ -376,7 +509,7 @@ export default function IntegrityOverview() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {filteredSubmissions.length === 0 ? (
+                        {displayedSubmissions.length === 0 ? (
                           <TableRow>
                             <TableCell
                               colSpan={7}
@@ -386,7 +519,7 @@ export default function IntegrityOverview() {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          filteredSubmissions.map((submission) => (
+                          displayedSubmissions.map((submission) => (
                             <TableRow key={submission.id}>
                               <TableCell>
                                 <div>
@@ -454,7 +587,6 @@ export default function IntegrityOverview() {
           </CardContent>
         </Card>
 
-        {/* Integrity Insights */}
         <div className="grid gap-6 md:grid-cols-2">
           <Card>
             <CardHeader>

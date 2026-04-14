@@ -18,11 +18,11 @@ export function AdminPageShell({
   backButtonClassName,
 }: AdminPageShellProps) {
   return (
-    <div className={cn("space-y-6", className)}>
+    <div className={cn("space-y-3", className)}>
       {showBackButton && (
         <BackToDashboardButton
           to={backTo}
-          className={cn("-ml-2 mb-1", backButtonClassName)}
+          className={cn("-ml-2", backButtonClassName)}
         />
       )}
       {children}
