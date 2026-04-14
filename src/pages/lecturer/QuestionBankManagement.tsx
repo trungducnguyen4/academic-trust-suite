@@ -4,6 +4,7 @@ import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
@@ -150,10 +151,8 @@ export default function QuestionBankManagement() {
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
-  const [page, setPage] = useState(1);
-  const [totalPages, setTotalPages] = useState(1);
-  const [total, setTotal] = useState(0);
-  const ITEMS_PER_PAGE = 20;
+  const [questionPage, setQuestionPage] = useState(1);
+  const QUESTIONS_PER_PAGE = 12;
   const COURSES_PER_PAGE = 12;
   const [coursePage, setCoursePage] = useState(1);
 
@@ -161,15 +160,32 @@ export default function QuestionBankManagement() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [questionsRes, coursesData] = await Promise.all([
-          api.getQuestions({ page, limit: ITEMS_PER_PAGE }),
+        const [coursesData, firstQuestionsPage] = await Promise.all([
           api.getCourses(),
+          api.getQuestions({ page: 1, limit: 200 }),
         ]);
-        // Handle paginated response
-        const qData = unwrapPaginatedData(questionsRes);
-        setQuestions(qData);
-        setTotalPages(questionsRes?.totalPages ?? 1);
-        setTotal(questionsRes?.total ?? qData.length);
+
+        const firstPageQuestions = unwrapPaginatedData<Question>(firstQuestionsPage);
+        const pages = Math.max(1, Number(firstQuestionsPage?.totalPages ?? 1));
+
+        if (pages === 1) {
+          setQuestions(firstPageQuestions);
+        } else {
+          const requests: Promise<any>[] = [];
+          for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
+            requests.push(api.getQuestions({ page: currentPage, limit: 200 }));
+          }
+
+          const remainingPages = await Promise.all(requests);
+          const mergedQuestions = [
+            ...firstPageQuestions,
+            ...remainingPages.flatMap((response) =>
+              unwrapPaginatedData<Question>(response),
+            ),
+          ];
+          setQuestions(mergedQuestions);
+        }
+
         setCourses(unwrapPaginatedData(coursesData));
       } catch (error) {
         console.error("Failed to fetch questions:", error);
@@ -178,7 +194,7 @@ export default function QuestionBankManagement() {
       }
     };
     fetchData();
-  }, [page]);
+  }, []);
 
   const courseFilterDefinitions: FilterDefinition[] = useMemo(
     () => [
@@ -480,6 +496,14 @@ export default function QuestionBankManagement() {
     setDraftQuestionFilters(nextFilters);
   };
 
+  useEffect(() => {
+    setCoursePage(1);
+  }, [appliedCourseSearch, appliedCourseFilters, questions.length]);
+
+  useEffect(() => {
+    setQuestionPage(1);
+  }, [selectedCourse, appliedQuestionSearch, appliedQuestionFilters, sortBy, sortDir]);
+
   if (loading) {
     return (
       <DashboardLayout>
@@ -496,22 +520,18 @@ export default function QuestionBankManagement() {
         {/* COURSE SELECTION VIEW */}
         {!selectedCourse ? (
           <>
-            <div className="flex items-start justify-between mb-6 flex-col sm:flex-row gap-3">
-              <div>
-                <h1 className="text-2xl font-semibold text-foreground mb-1">
-                  Question Bank
-                </h1>
-                <p className="text-muted-foreground">
-                  Select a course to manage its questions
-                </p>
-              </div>
-              <Button
-                className="gap-2"
-                onClick={() => navigate(questionEditorPath)}
-              >
-                <Plus className="h-4 w-4" /> New Question
-              </Button>
-            </div>
+            <ListPageHeader
+              title="Question Bank"
+              className="mb-6"
+              actions={
+                <Button
+                  className="gap-2"
+                  onClick={() => navigate(questionEditorPath)}
+                >
+                  <Plus className="h-4 w-4" /> New Question
+                </Button>
+              }
+            />
 
             {/* Stats Row */}
             <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4 mb-8">
@@ -582,7 +602,10 @@ export default function QuestionBankManagement() {
 
             {/* Course Card Pagination */}
             {(() => {
-              const courseTotalPages = Math.max(1, Math.ceil(visibleCourses.length / COURSES_PER_PAGE));
+              const courseTotalPages = Math.max(
+                1,
+                Math.ceil(visibleCourses.length / COURSES_PER_PAGE),
+              );
               const paginatedCourses = visibleCourses.slice(
                 (coursePage - 1) * COURSES_PER_PAGE,
                 coursePage * COURSES_PER_PAGE,
@@ -774,131 +797,147 @@ export default function QuestionBankManagement() {
               />
             </div>
 
-            {/* Question Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filtered.map((question, qIndex) => {
-                const diff = difficultyLabel(question.difficulty || 1);
-                const tags = safeParseTags(question.tags);
-                return (
-                  <Card
-                    key={question.id}
-                    className="overflow-hidden hover:shadow-md transition-shadow"
-                  >
-                    <div
-                      className={`h-24 ${getGradientClass(qIndex)} relative`}
-                    >
-                      <div className="absolute inset-0 bg-black/20" />
-                      <div className="absolute top-3 right-3 flex gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-white hover:bg-white/20 h-6 w-6 p-0"
-                          onClick={() => setPreviewQuestion(question)}
+            {(() => {
+              const totalQuestionPages = Math.max(
+                1,
+                Math.ceil(filtered.length / QUESTIONS_PER_PAGE),
+              );
+              const displayedQuestions = filtered.slice(
+                (questionPage - 1) * QUESTIONS_PER_PAGE,
+                questionPage * QUESTIONS_PER_PAGE,
+              );
+
+              return (
+                <>
+                  {/* Question Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {displayedQuestions.map((question, qIndex) => {
+                      const diff = difficultyLabel(question.difficulty || 1);
+                      const tags = safeParseTags(question.tags);
+                      return (
+                        <Card
+                          key={question.id}
+                          className="overflow-hidden hover:shadow-md transition-shadow"
                         >
-                          <Eye className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="text-white hover:bg-white/20 h-6 w-6 p-0"
-                          onClick={() =>
-                            navigate(
-                              `${questionEditorPath}?id=${question.id}&courseCode=${selectedCourse}`,
-                            )
-                          }
-                        >
-                          <Edit2 className="h-3 w-3" />
-                        </Button>
-                      </div>
-                    </div>
-
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        <div>
-                          <div className="flex items-center justify-between mb-2">
-                            <span className="text-xs font-mono text-muted-foreground">
-                              {question.id.slice(0, 8)}
-                            </span>
-                            <span
-                              className={`text-xs font-medium px-1.5 py-0.5 rounded ${diff.color}`}
-                            >
-                              {diff.text}
-                            </span>
-                          </div>
-                          <p className="text-sm line-clamp-3 mb-2">
-                            {question.content}
-                          </p>
-
-                          <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-                            <span>
-                              {typeLabels[question.type] || question.type}
-                            </span>
-                            <span>•</span>
-                            <span>{question.points || 1} pts</span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-1">
-                            {tags.slice(0, 3).map((tag: string) => (
-                              <span
-                                key={tag}
-                                className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground"
+                          <div
+                            className={`h-24 ${getGradientClass(qIndex)} relative`}
+                          >
+                            <div className="absolute inset-0 bg-black/20" />
+                            <div className="absolute top-3 right-3 flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-white hover:bg-white/20 h-6 w-6 p-0"
+                                onClick={() => setPreviewQuestion(question)}
                               >
-                                <Tag className="h-2.5 w-2.5" />
-                                {tag}
-                              </span>
-                            ))}
-                            {tags.length > 3 && (
-                              <span className="text-[10px] text-muted-foreground">
-                                +{tags.length - 3}
-                              </span>
-                            )}
+                                <Eye className="h-3 w-3" />
+                              </Button>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-white hover:bg-white/20 h-6 w-6 p-0"
+                                onClick={() =>
+                                  navigate(
+                                    `${questionEditorPath}?id=${question.id}&courseCode=${selectedCourse}`,
+                                  )
+                                }
+                              >
+                                <Edit2 className="h-3 w-3" />
+                              </Button>
+                            </div>
                           </div>
-                        </div>
 
-                        <div className="flex gap-1 pt-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="flex-1 h-7 text-xs"
-                            onClick={() => handleDuplicate(question)}
-                          >
-                            <Copy className="h-3 w-3 mr-1" />
-                            Copy
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                            onClick={() => handleDelete(question.id)}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </Button>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              <div>
+                                <div className="flex items-center justify-between mb-2">
+                                  <span className="text-xs font-mono text-muted-foreground">
+                                    {question.id.slice(0, 8)}
+                                  </span>
+                                  <span
+                                    className={`text-xs font-medium px-1.5 py-0.5 rounded ${diff.color}`}
+                                  >
+                                    {diff.text}
+                                  </span>
+                                </div>
+                                <p className="text-sm line-clamp-3 mb-2">
+                                  {question.content}
+                                </p>
 
-            {filtered.length === 0 && (
-              <div className="text-center py-16 text-muted-foreground">
-                <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                <p className="text-lg font-medium">No questions found</p>
-                <p className="text-sm">
-                  Create your first question for this course.
-                </p>
-              </div>
-            )}
+                                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
+                                  <span>
+                                    {typeLabels[question.type] || question.type}
+                                  </span>
+                                  <span>•</span>
+                                  <span>{question.points || 1} pts</span>
+                                </div>
 
-            <DataPagination
-              currentPage={page}
-              totalPages={totalPages}
-              totalItems={total}
-              onPageChange={setPage}
-              itemLabel="questions"
-              className="border-t-0 px-0 pt-2"
-            />
+                                <div className="flex flex-wrap gap-1">
+                                  {tags.slice(0, 3).map((tag: string) => (
+                                    <span
+                                      key={tag}
+                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground"
+                                    >
+                                      <Tag className="h-2.5 w-2.5" />
+                                      {tag}
+                                    </span>
+                                  ))}
+                                  {tags.length > 3 && (
+                                    <span className="text-[10px] text-muted-foreground">
+                                      +{tags.length - 3}
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="flex gap-1 pt-2">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 h-7 text-xs"
+                                  onClick={() => handleDuplicate(question)}
+                                >
+                                  <Copy className="h-3 w-3 mr-1" />
+                                  Copy
+                                </Button>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                  onClick={() => handleDelete(question.id)}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+
+                  {filtered.length === 0 && (
+                    <div className="text-center py-16 text-muted-foreground">
+                      <Database className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                      <p className="text-lg font-medium">No questions found</p>
+                      <p className="text-sm">
+                        Create your first question for this course.
+                      </p>
+                    </div>
+                  )}
+
+                  <DataPagination
+                    currentPage={questionPage}
+                    totalPages={totalQuestionPages}
+                    totalItems={filtered.length}
+                    onPageChange={setQuestionPage}
+                    itemLabel="questions"
+                    className="border-t-0 px-0 pt-2"
+                    syncUrl={false}
+                  />
+                </>
+              );
+            })()}
           </>
         )}
 

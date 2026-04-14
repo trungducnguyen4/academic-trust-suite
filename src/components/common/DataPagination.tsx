@@ -44,6 +44,7 @@ export function DataPagination({
   syncUrl = true,
   urlParamKey = "page",
 }: DataPaginationProps) {
+  const effectiveTotalPages = Math.max(1, totalPages);
   const [searchParams, setSearchParams] = useSearchParams();
   const [inputValue, setInputValue] = useState(String(currentPage));
 
@@ -58,7 +59,12 @@ export function DataPagination({
     const urlPage = searchParams.get(urlParamKey);
     if (urlPage) {
       const parsed = Number(urlPage);
-      if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= totalPages && parsed !== currentPage) {
+      if (
+        !Number.isNaN(parsed) &&
+        parsed >= 1 &&
+        parsed <= effectiveTotalPages &&
+        parsed !== currentPage
+      ) {
         onPageChange(parsed);
       }
     }
@@ -68,7 +74,7 @@ export function DataPagination({
 
   const changePage = useCallback(
     (newPage: number) => {
-      const clamped = Math.max(1, Math.min(totalPages, newPage));
+      const clamped = Math.max(1, Math.min(effectiveTotalPages, newPage));
       onPageChange(clamped);
 
       if (syncUrl) {
@@ -86,7 +92,7 @@ export function DataPagination({
         );
       }
     },
-    [totalPages, onPageChange, syncUrl, setSearchParams, urlParamKey],
+    [effectiveTotalPages, onPageChange, syncUrl, setSearchParams, urlParamKey],
   );
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -102,14 +108,12 @@ export function DataPagination({
 
   const handleInputBlur = () => {
     const parsed = Number(inputValue);
-    if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= totalPages) {
+    if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= effectiveTotalPages) {
       changePage(parsed);
     } else {
       setInputValue(String(currentPage));
     }
   };
-
-  if (totalPages <= 1) return null;
 
   return (
     <div
@@ -120,7 +124,7 @@ export function DataPagination({
     >
       {/* Left: page info */}
       <p className="text-sm text-muted-foreground whitespace-nowrap">
-        Page {currentPage} / {totalPages}
+        Page {currentPage} / {effectiveTotalPages}
         {totalItems !== undefined && (
           <span>
             {" "}
@@ -147,20 +151,20 @@ export function DataPagination({
           <Input
             type="number"
             min={1}
-            max={totalPages}
+            max={effectiveTotalPages}
             value={inputValue}
             onChange={(e) => setInputValue(e.target.value)}
             onKeyDown={handleInputKeyDown}
             onBlur={handleInputBlur}
             className="h-8 w-16 text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
           />
-          <span className="text-sm text-muted-foreground">/ {totalPages}</span>
+          <span className="text-sm text-muted-foreground">/ {effectiveTotalPages}</span>
         </div>
 
         <Button
           variant="outline"
           size="sm"
-          disabled={currentPage >= totalPages}
+          disabled={currentPage >= effectiveTotalPages}
           onClick={() => changePage(currentPage + 1)}
           className="gap-1"
         >

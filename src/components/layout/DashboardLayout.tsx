@@ -78,7 +78,7 @@ const lecturerNavItems: NavItem[] = [
   },
   {
     title: "Courses",
-    href: "/lecturer/create-course",
+    href: "/lecturer/courses",
     icon: <GraduationCap className="h-[18px] w-[18px]" />,
   },
   {

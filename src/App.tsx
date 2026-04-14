@@ -42,7 +42,6 @@ import AdvancedExamRuleConfig from "./pages/lecturer/AdvancedExamRuleConfig";
 import ExamMonitor from "./pages/lecturer/ExamMonitor";
 import ExamManagement from "./pages/lecturer/ExamManagement";
 import CreateCourse from "./pages/lecturer/CreateCourse";
-import CourseManagement from "./pages/lecturer/CourseManagement";
 import CourseDetail from "./pages/lecturer/CourseDetail";
 import UploadDocAIGen from "./pages/lecturer/UploadDocAIGen";
 import GenerateExamLink from "./pages/lecturer/GenerateExamLink";
@@ -159,7 +158,7 @@ const App = () => {
                 path="/lecturer/exam-rule-config"
                 element={<AdvancedExamRuleConfig />}
               />
-              <Route path="/lecturer/courses" element={<CourseManagement />} />
+              <Route path="/lecturer/courses" element={<CreateCourse />} />
               <Route
                 path="/lecturer/create-course"
                 element={<CreateCourse />}

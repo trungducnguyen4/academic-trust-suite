@@ -4,15 +4,21 @@ import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
 import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   Table,
@@ -31,21 +37,12 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Plus,
   FileText,
-  Users,
   Clock,
   Eye,
   Edit2,
   Trash2,
-  Search,
   BarChart3,
   AlertCircle,
   CheckCircle2,
@@ -59,6 +56,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
@@ -82,6 +80,12 @@ interface Exam {
   };
 }
 
+interface CourseOption {
+  id: string;
+  code: string;
+  name: string;
+}
+
 const statusConfig: Record<
   string,
   {
@@ -99,9 +103,24 @@ const statusConfig: Record<
 export default function ExamManagement() {
   const navigate = useNavigate();
   const [exams, setExams] = useState<Exam[]>([]);
+  const [courses, setCourses] = useState<CourseOption[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>({
+    status: "all",
+    courseId: "all",
+    title: { value: "", operator: "contains" },
+    duration: { min: undefined, max: undefined },
+    createdAt: { from: undefined, to: undefined },
+  });
+  const [appliedFilters, setAppliedFilters] = useState<FilterValues>({
+    status: "all",
+    courseId: "all",
+    title: { value: "", operator: "contains" },
+    duration: { min: undefined, max: undefined },
+    createdAt: { from: undefined, to: undefined },
+  });
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -120,9 +139,16 @@ export default function ExamManagement() {
   const fetchExams = async () => {
     try {
       setLoading(true);
-      const data = await api.getExams();
-      const exams = unwrapPaginatedData(data);
-      setExams(exams || []);
+      const [examData, courseData] = await Promise.all([
+        api.getExams(),
+        api.getMyCourses(),
+      ]);
+      setExams(unwrapPaginatedData(examData) || []);
+      setCourses(
+        (Array.isArray(courseData)
+          ? courseData
+          : unwrapPaginatedData(courseData)) || [],
+      );
     } catch (error) {
       console.error("Failed to fetch exams:", error);
       toast.error("Failed to load exams");
@@ -189,21 +215,185 @@ export default function ExamManagement() {
     }
   };
 
-  const filteredExams = exams.filter((exam) => {
-    const matchesSearch =
-      exam.title.toLowerCase().includes(search.toLowerCase()) ||
-      exam.course.code.toLowerCase().includes(search.toLowerCase()) ||
-      exam.course.name.toLowerCase().includes(search.toLowerCase());
+  const examFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        allLabel: "All Status",
+        options: [
+          { label: "Draft", value: "DRAFT" },
+          { label: "Published", value: "PUBLISHED" },
+          { label: "Ongoing", value: "ONGOING" },
+          { label: "Completed", value: "COMPLETED" },
+          { label: "Archived", value: "ARCHIVED" },
+        ],
+      },
+      {
+        key: "courseId",
+        label: "Course",
+        type: "select",
+        allLabel: "All Courses",
+        options: courses.map((course) => ({
+          label: `${course.code} - ${course.name}`,
+          value: course.id,
+        })),
+      },
+      {
+        key: "title",
+        label: "Title",
+        type: "text",
+        placeholder: "Filter by title",
+        operators: ["contains", "startsWith", "equals"],
+      },
+      {
+        key: "duration",
+        label: "Duration (min)",
+        type: "number-range",
+        min: 0,
+        max: 300,
+        step: 5,
+      },
+      {
+        key: "createdAt",
+        label: "Created At",
+        type: "date-range",
+      },
+    ],
+    [courses],
+  );
 
-    const matchesStatus =
-      filterStatus === "all" || exam.status === filterStatus;
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+  const filteredExams = useMemo(() => {
+    const statusValue = appliedFilters.status as string | undefined;
+    const courseValue = appliedFilters.courseId as string | undefined;
+    const titleFilter = appliedFilters.title as TextFilterValue | undefined;
+    const durationFilter = appliedFilters.duration as
+      | { min?: number; max?: number }
+      | undefined;
+    const createdAtRange = appliedFilters.createdAt as
+      | { from?: string; to?: string }
+      | undefined;
 
-    return matchesSearch && matchesStatus;
-  });
+    const matchesText = (source: string, filter?: TextFilterValue) => {
+      if (!filter || !filter.value.trim()) return true;
+      const sourceValue = source.toLowerCase();
+      const filterValue = filter.value.trim().toLowerCase();
+      if (filter.operator === "startsWith") return sourceValue.startsWith(filterValue);
+      if (filter.operator === "equals") return sourceValue === filterValue;
+      return sourceValue.includes(filterValue);
+    };
+
+    return exams.filter((exam) => {
+      const matchesSearch = !normalizedSearch
+        ? true
+        : [exam.title, exam.course.code, exam.course.name]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+
+      const matchesStatus =
+        !statusValue || statusValue === "all" || exam.status === statusValue;
+      const matchesCourse =
+        !courseValue || courseValue === "all" || exam.course.id === courseValue;
+      const matchesTitle = matchesText(exam.title, titleFilter);
+
+      const matchesDuration = (() => {
+        if (
+          !durationFilter ||
+          (durationFilter.min === undefined && durationFilter.max === undefined)
+        ) {
+          return true;
+        }
+        if (durationFilter.min !== undefined && exam.duration < durationFilter.min) {
+          return false;
+        }
+        if (durationFilter.max !== undefined && exam.duration > durationFilter.max) {
+          return false;
+        }
+        return true;
+      })();
+
+      const matchesCreatedAt = (() => {
+        if (!createdAtRange || (!createdAtRange.from && !createdAtRange.to)) {
+          return true;
+        }
+        const createdAt = new Date(exam.createdAt).getTime();
+        if (Number.isNaN(createdAt)) return false;
+        if (createdAtRange.from) {
+          const fromTs = new Date(createdAtRange.from).getTime();
+          if (!Number.isNaN(fromTs) && createdAt < fromTs) return false;
+        }
+        if (createdAtRange.to) {
+          const toDate = new Date(createdAtRange.to);
+          toDate.setHours(23, 59, 59, 999);
+          const toTs = toDate.getTime();
+          if (!Number.isNaN(toTs) && createdAt > toTs) return false;
+        }
+        return true;
+      })();
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesCourse &&
+        matchesTitle &&
+        matchesDuration &&
+        matchesCreatedAt
+      );
+    });
+  }, [appliedFilters, exams, normalizedSearch]);
+
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
+  };
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setPage(1);
+  };
+  const clearFilters = () => {
+    const empty: FilterValues = {
+      status: "all",
+      courseId: "all",
+      title: { value: "", operator: "contains" },
+      duration: { min: undefined, max: undefined },
+      createdAt: { from: undefined, to: undefined },
+    };
+    setDraftFilters(empty);
+    setAppliedFilters(empty);
+    setSearchInput("");
+    setAppliedSearch("");
+    setPage(1);
+  };
+  const removeFilter = (key: string) => {
+    const empty: FilterValues = {
+      status: "all",
+      courseId: "all",
+      title: { value: "", operator: "contains" },
+      duration: { min: undefined, max: undefined },
+      createdAt: { from: undefined, to: undefined },
+    };
+    const next = { ...appliedFilters, [key]: empty[key] };
+    setAppliedFilters(next);
+    setDraftFilters(next);
+    setPage(1);
+  };
+
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    examFilterDefinitions,
+  );
+  const activeFilterChips = getFilterChips(appliedFilters, examFilterDefinitions);
 
   const ITEMS_PER_PAGE = 10;
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(filteredExams.length / ITEMS_PER_PAGE));
+  const EXAM_ROW_HEIGHT = 60;
+  const EXAM_TABLE_HEADER_HEIGHT = 48;
+  const EXAM_TABLE_MIN_HEIGHT =
+    ITEMS_PER_PAGE * EXAM_ROW_HEIGHT + EXAM_TABLE_HEADER_HEIGHT;
 
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
@@ -237,24 +427,18 @@ export default function ExamManagement() {
   return (
     <DashboardLayout>
       <AdminPageShell backTo="/lecturer">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-foreground">
-              Exam Management
-            </h1>
-            <p className="text-muted-foreground">
-              Create, manage, and monitor your exams
-            </p>
-          </div>
-          <Button
-            onClick={() => navigate("/lecturer/exams/create")}
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            Create Exam
-          </Button>
-        </div>
+        <ListPageHeader
+          title="Exam Management"
+          actions={
+            <Button
+              onClick={() => navigate("/lecturer/exams/create")}
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              Create Exam
+            </Button>
+          }
+        />
 
         {/* Stats */}
         <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -286,45 +470,43 @@ export default function ExamManagement() {
           />
         </div>
 
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search exams, courses"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="Exam filters"
+              description="Filter by status, course, title, duration, and date."
+              filters={examFilterDefinitions}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
+            />
+          </div>
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
+        </div>
+
         {/* Exam List */}
         <Card>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Your Exams</CardTitle>
-                <CardDescription>
-                  Manage, edit, and monitor your exams
-                </CardDescription>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="relative w-64">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    placeholder="Search exams or courses..."
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
-                    className="bg-white pl-9"
-                  />
-                </div>
-                <Select value={filterStatus} onValueChange={setFilterStatus}>
-                  <SelectTrigger className="w-40">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Status</SelectItem>
-                    <SelectItem value="DRAFT">Draft</SelectItem>
-                    <SelectItem value="PUBLISHED">Published</SelectItem>
-                    <SelectItem value="ONGOING">Ongoing</SelectItem>
-                    <SelectItem value="COMPLETED">Completed</SelectItem>
-                    <SelectItem value="ARCHIVED">Archived</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-          </CardHeader>
           <CardContent>
             {filteredExams.length === 0 ? (
-              <div className="text-center py-12">
+              <div
+                className="flex flex-col items-center justify-center px-6 py-12 text-center"
+                style={{ minHeight: EXAM_TABLE_MIN_HEIGHT }}
+              >
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-3 opacity-50" />
                 <p className="text-muted-foreground font-medium">
                   {exams.length === 0
@@ -334,7 +516,7 @@ export default function ExamManagement() {
                 <p className="text-sm text-muted-foreground mt-1">
                   {exams.length === 0
                     ? "Create your first exam to get started"
-                    : "Try adjusting your search"}
+                    : "Try adjusting your filters"}
                 </p>
                 {exams.length === 0 && (
                   <Button
@@ -348,7 +530,10 @@ export default function ExamManagement() {
                 )}
               </div>
             ) : (
-              <div className="overflow-x-auto">
+              <div
+                className="overflow-x-auto"
+                style={{ minHeight: EXAM_TABLE_MIN_HEIGHT }}
+              >
                 <Table>
                   <TableHeader>
                     <TableRow>

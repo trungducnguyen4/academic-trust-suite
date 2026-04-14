@@ -2,6 +2,20 @@ import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { DataPagination } from "@/components/common/DataPagination";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import {
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -90,7 +104,19 @@ export default function CourseDetail() {
   const [loading, setLoading] = useState(true);
   const [resolvedCourseId, setResolvedCourseId] = useState<string | null>(null);
   const [enrollmentsRaw, setEnrollmentsRaw] = useState<any[] | null>(null);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>({
+    status: "all",
+    joinedAt: { from: undefined, to: undefined },
+    studentCode: { value: "", operator: "contains" },
+  });
+  const [appliedFilters, setAppliedFilters] = useState<FilterValues>({
+    status: "all",
+    joinedAt: { from: undefined, to: undefined },
+    studentCode: { value: "", operator: "contains" },
+  });
+  const [page, setPage] = useState(1);
   const [isImporting, setIsImporting] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [isAdding, setIsAdding] = useState(false);
@@ -201,12 +227,130 @@ export default function CourseDetail() {
     fetchData();
   }, [id]);
 
-  const filteredStudents = students.filter(
-    (s) =>
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.studentCode.toLowerCase().includes(search.toLowerCase()) ||
-      s.email.toLowerCase().includes(search.toLowerCase()),
+  const studentFilterDefinitions: FilterDefinition[] = [
+    {
+      key: "status",
+      label: "Status",
+      type: "select",
+      allLabel: "All Status",
+      options: [{ label: "Active", value: "active" }],
+    },
+    {
+      key: "joinedAt",
+      label: "Joined Date",
+      type: "date-range",
+    },
+    {
+      key: "studentCode",
+      label: "Student ID",
+      type: "text",
+      placeholder: "Filter by student ID",
+      operators: ["contains", "startsWith", "equals"],
+    },
+  ];
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+  const filteredStudents = students.filter((student) => {
+    const statusFilter = appliedFilters.status as string | undefined;
+    const joinedAtFilter = appliedFilters.joinedAt as
+      | { from?: string; to?: string }
+      | undefined;
+    const codeFilter = appliedFilters.studentCode as TextFilterValue | undefined;
+
+    const searchMatched = !normalizedSearch
+      ? true
+      : [student.name, student.studentCode, student.email]
+          .join(" ")
+          .toLowerCase()
+          .includes(normalizedSearch);
+    if (!searchMatched) return false;
+
+    const matchesStatus =
+      !statusFilter || statusFilter === "all" || student.status === statusFilter;
+    if (!matchesStatus) return false;
+
+    const matchesCode = (() => {
+      if (!codeFilter || !codeFilter.value.trim()) return true;
+      const source = student.studentCode.toLowerCase();
+      const value = codeFilter.value.trim().toLowerCase();
+      if (codeFilter.operator === "startsWith") return source.startsWith(value);
+      if (codeFilter.operator === "equals") return source === value;
+      return source.includes(value);
+    })();
+    if (!matchesCode) return false;
+
+    const matchesJoinedDate = (() => {
+      if (!joinedAtFilter || (!joinedAtFilter.from && !joinedAtFilter.to)) return true;
+      const joinedTs = new Date(student.joinedAt).getTime();
+      if (Number.isNaN(joinedTs)) return false;
+      if (joinedAtFilter.from) {
+        const fromTs = new Date(joinedAtFilter.from).getTime();
+        if (!Number.isNaN(fromTs) && joinedTs < fromTs) return false;
+      }
+      if (joinedAtFilter.to) {
+        const toDate = new Date(joinedAtFilter.to);
+        toDate.setHours(23, 59, 59, 999);
+        const toTs = toDate.getTime();
+        if (!Number.isNaN(toTs) && joinedTs > toTs) return false;
+      }
+      return true;
+    })();
+
+    return matchesJoinedDate;
+  });
+
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredStudents.length / ITEMS_PER_PAGE));
+  const paginatedStudents = filteredStudents.slice(
+    (page - 1) * ITEMS_PER_PAGE,
+    page * ITEMS_PER_PAGE,
   );
+  const STUDENT_ROW_HEIGHT = 56;
+  const STUDENT_TABLE_HEADER_HEIGHT = 48;
+  const STUDENT_TABLE_MIN_HEIGHT =
+    ITEMS_PER_PAGE * STUDENT_ROW_HEIGHT + STUDENT_TABLE_HEADER_HEIGHT;
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
+  };
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setPage(1);
+  };
+  const clearFilters = () => {
+    const emptyFilters: FilterValues = {
+      status: "all",
+      joinedAt: { from: undefined, to: undefined },
+      studentCode: { value: "", operator: "contains" },
+    };
+    setDraftFilters(emptyFilters);
+    setAppliedFilters(emptyFilters);
+    setSearchInput("");
+    setAppliedSearch("");
+    setPage(1);
+  };
+  const removeFilter = (key: string) => {
+    const emptyFilters: FilterValues = {
+      status: "all",
+      joinedAt: { from: undefined, to: undefined },
+      studentCode: { value: "", operator: "contains" },
+    };
+    const next = { ...appliedFilters, [key]: emptyFilters[key] };
+    setAppliedFilters(next);
+    setDraftFilters(next);
+    setPage(1);
+  };
+
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    studentFilterDefinitions,
+  );
+  const activeFilterChips = getFilterChips(appliedFilters, studentFilterDefinitions);
 
   const handleAddManual = async () => {
     if (!resolvedCourseId) return;
@@ -290,29 +434,135 @@ export default function CourseDetail() {
         {/* <BackToDashboardButton to={basePath} className="-ml-2" /> */}
 
         {/* Header */}
-        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-          <div>
-            <Button
-              variant="ghost"
-              className="pl-0 gap-2 mb-2 text-muted-foreground hover:text-foreground"
-              onClick={() =>
-                navigate(
-                  basePath === "/admin"
-                    ? "/admin/courses"
-                    : "/lecturer/create-course",
-                )
-              }
-            >
-              <ArrowLeft className="h-4 w-4" /> Back to Courses
-            </Button>
-            <h1 className="text-3xl font-bold tracking-tight">
-              {course?.name || "Course Details"}
-              {course?.code ? ` (${course.code})` : ""}
-            </h1>
-            <p className="text-muted-foreground">
-              {course?.semester || "Semester unknown"} • {students.length}{" "}
-              Students Enrolled
-            </p>
+        <div>
+          <Button
+            variant="ghost"
+            className="pl-0 gap-2 mb-2 text-muted-foreground hover:text-foreground"
+            onClick={() =>
+              navigate(
+                basePath === "/admin"
+                  ? "/admin/courses"
+                  : "/lecturer/courses",
+              )
+            }
+          >
+            <ArrowLeft className="h-4 w-4" /> Back to Courses
+          </Button>
+          <ListPageHeader
+            title={`${course?.name || "Course Details"}${course?.code ? ` (${course.code})` : ""}`}
+            actions={
+              <div className="flex gap-2">
+                <Button variant="outline" className="gap-2">
+                  <Download className="h-4 w-4" /> Export List
+                </Button>
+                <Dialog>
+                  <DialogTrigger asChild>
+                    <Button className="gap-2">
+                      <UserPlus className="h-4 w-4" /> Add Students
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[500px]">
+                    <DialogHeader>
+                      <DialogTitle>Add Students to Course</DialogTitle>
+                      <DialogDescription>
+                        Add students manually or import from a CSV file.
+                      </DialogDescription>
+                    </DialogHeader>
+
+                    <Tabs defaultValue="manual" className="w-full">
+                      <TabsList className="grid w-full grid-cols-2">
+                        <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+                        <TabsTrigger value="import">Import CSV</TabsTrigger>
+                      </TabsList>
+
+                      {/* Manual Entry Tab */}
+                      <TabsContent value="manual" className="space-y-4 py-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="sid">
+                            Student Email / Student ID{" "}
+                            <span className="text-destructive">*</span>
+                          </Label>
+                          <Input
+                            id="sid"
+                            placeholder="e.g. student@university.edu or 20120001"
+                            value={newStudent.id}
+                            onChange={(e) =>
+                              setNewStudent({ ...newStudent, id: e.target.value })
+                            }
+                          />
+                        </div>
+                        <Button
+                          onClick={handleAddManual}
+                          className="w-full mt-2"
+                          disabled={!newStudent.id || isAdding}
+                        >
+                          {isAdding ? (
+                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                          ) : null}
+                          Add Student
+                        </Button>
+                      </TabsContent>
+
+                      {/* Import CSV Tab */}
+                      <TabsContent value="import" className="space-y-4 py-4">
+                        <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/20">
+                          <FileSpreadsheet className="h-10 w-10 text-muted-foreground mb-3" />
+                          <p className="text-sm font-medium">
+                            Drag & drop CSV file here
+                          </p>
+                          <p className="text-xs text-muted-foreground my-2">or</p>
+                          <Button
+                            variant="secondary"
+                            size="sm"
+                            className="relative"
+                          >
+                            Browse File
+                            <input
+                              type="file"
+                              className="absolute inset-0 opacity-0 cursor-pointer"
+                              accept=".csv"
+                              onChange={(e) =>
+                                setImportFile(e.target.files?.[0] || null)
+                              }
+                            />
+                          </Button>
+                          {importFile && (
+                            <div className="mt-4 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
+                              <CheckCircle2 className="h-4 w-4" />
+                              {importFile.name}
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-xs text-muted-foreground space-y-1">
+                          <p className="font-medium">Required CSV Format:</p>
+                          <p className="font-mono bg-muted p-1 rounded">Email</p>
+                        </div>
+                        <Button
+                          onClick={handleImportCSV}
+                          className="w-full"
+                          disabled={!importFile || isImporting}
+                        >
+                          {isImporting ? (
+                            <>
+                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
+                              Importing...
+                            </>
+                          ) : (
+                            <>
+                              <Upload className="mr-2 h-4 w-4" /> Import Students
+                            </>
+                          )}
+                        </Button>
+                      </TabsContent>
+                    </Tabs>
+                  </DialogContent>
+                </Dialog>
+              </div>
+            }
+          />
+          <p className="text-muted-foreground">
+            {course?.semester || "Semester unknown"} • {students.length} Students Enrolled
+          </p>
             {typeof window !== "undefined" &&
               window.location.hostname.includes("localhost") && (
                 <div className="mt-3 p-3 rounded-md bg-muted/30 text-sm text-muted-foreground">
@@ -341,194 +591,115 @@ export default function CourseDetail() {
                   </details>
                 </div>
               )}
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" className="gap-2">
-              <Download className="h-4 w-4" /> Export List
-            </Button>
-            <Dialog>
-              <DialogTrigger asChild>
-                <Button className="gap-2">
-                  <UserPlus className="h-4 w-4" /> Add Students
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-[500px]">
-                <DialogHeader>
-                  <DialogTitle>Add Students to Course</DialogTitle>
-                  <DialogDescription>
-                    Add students manually or import from a CSV file.
-                  </DialogDescription>
-                </DialogHeader>
-
-                <Tabs defaultValue="manual" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="manual">Manual Entry</TabsTrigger>
-                    <TabsTrigger value="import">Import CSV</TabsTrigger>
-                  </TabsList>
-
-                  {/* Manual Entry Tab */}
-                  <TabsContent value="manual" className="space-y-4 py-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="sid">
-                        Student Email / Student ID{" "}
-                        <span className="text-destructive">*</span>
-                      </Label>
-                      <Input
-                        id="sid"
-                        placeholder="e.g. student@university.edu or 20120001"
-                        value={newStudent.id}
-                        onChange={(e) =>
-                          setNewStudent({ ...newStudent, id: e.target.value })
-                        }
-                      />
-                    </div>
-                    <Button
-                      onClick={handleAddManual}
-                      className="w-full mt-2"
-                      disabled={!newStudent.id || isAdding}
-                    >
-                      {isAdding ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : null}
-                      Add Student
-                    </Button>
-                  </TabsContent>
-
-                  {/* Import CSV Tab */}
-                  <TabsContent value="import" className="space-y-4 py-4">
-                    <div className="border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center text-center hover:bg-muted/50 transition-colors cursor-pointer bg-muted/20">
-                      <FileSpreadsheet className="h-10 w-10 text-muted-foreground mb-3" />
-                      <p className="text-sm font-medium">
-                        Drag & drop CSV file here
-                      </p>
-                      <p className="text-xs text-muted-foreground my-2">or</p>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        className="relative"
-                      >
-                        Browse File
-                        <input
-                          type="file"
-                          className="absolute inset-0 opacity-0 cursor-pointer"
-                          accept=".csv"
-                          onChange={(e) =>
-                            setImportFile(e.target.files?.[0] || null)
-                          }
-                        />
-                      </Button>
-                      {importFile && (
-                        <div className="mt-4 flex items-center gap-2 text-sm text-green-600 bg-green-50 px-3 py-1 rounded-full">
-                          <CheckCircle2 className="h-4 w-4" />
-                          {importFile.name}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-xs text-muted-foreground space-y-1">
-                      <p className="font-medium">Required CSV Format:</p>
-                      <p className="font-mono bg-muted p-1 rounded">Email</p>
-                    </div>
-                    <Button
-                      onClick={handleImportCSV}
-                      className="w-full"
-                      disabled={!importFile || isImporting}
-                    >
-                      {isImporting ? (
-                        <>
-                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />{" "}
-                          Importing...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="mr-2 h-4 w-4" /> Import Students
-                        </>
-                      )}
-                    </Button>
-                  </TabsContent>
-                </Tabs>
-              </DialogContent>
-            </Dialog>
-          </div>
         </div>
 
         {/* Filters */}
-        <div className="flex items-center gap-4">
-          <div className="relative flex-1 max-w-sm">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search by name, ID or email..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-white pl-9"
+        <div className="space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search by name, ID, email"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="Student filters"
+              description="Filter by status, joined date, and student ID."
+              filters={studentFilterDefinitions}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
             />
           </div>
-          <div className="flex-1" /> {/* Spacer */}
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
         </div>
 
         {/* Student List */}
         <Card>
           <CardContent className="p-0">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Student ID</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Joined Date</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredStudents.length > 0 ? (
-                  filteredStudents.map((student) => (
-                    <TableRow key={student.enrollmentId}>
-                      <TableCell className="font-mono font-medium">
-                        {student.studentCode}
-                      </TableCell>
-                      <TableCell>{student.name}</TableCell>
-                      <TableCell className="text-muted-foreground">
-                        <div className="flex items-center gap-2">
-                          <Mail className="h-3 w-3 flex-shrink-0" />
-                          <span>{student.email}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge
-                          variant={
-                            student.status === "active"
-                              ? "default"
-                              : "secondary"
-                          }
-                        >
-                          {student.status}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>{student.joinedAt}</TableCell>
-                      <TableCell className="text-right">
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="text-muted-foreground hover:text-destructive"
-                          onClick={() => handleDelete(student.enrollmentId)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+            <div
+              className="overflow-hidden"
+              style={{ minHeight: STUDENT_TABLE_MIN_HEIGHT }}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Student ID</TableHead>
+                    <TableHead>Name</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Joined Date</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedStudents.length > 0 ? (
+                    paginatedStudents.map((student) => (
+                      <TableRow key={student.enrollmentId}>
+                        <TableCell className="font-mono font-medium">
+                          {student.studentCode}
+                        </TableCell>
+                        <TableCell>{student.name}</TableCell>
+                        <TableCell className="text-muted-foreground">
+                          <div className="flex items-center gap-2">
+                            <Mail className="h-3 w-3 flex-shrink-0" />
+                            <span>{student.email}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge
+                            variant={
+                              student.status === "active"
+                                ? "default"
+                                : "secondary"
+                            }
+                          >
+                            {student.status}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>{student.joinedAt}</TableCell>
+                        <TableCell className="text-right">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="text-muted-foreground hover:text-destructive"
+                            onClick={() => handleDelete(student.enrollmentId)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={6}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        No students found matching your search.
                       </TableCell>
                     </TableRow>
-                  ))
-                ) : (
-                  <TableRow>
-                    <TableCell
-                      colSpan={6}
-                      className="text-center py-8 text-muted-foreground"
-                    >
-                      No students found matching your search.
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredStudents.length}
+              onPageChange={setPage}
+              itemLabel="students"
+              syncUrl={false}
+            />
           </CardContent>
         </Card>
       </div>

@@ -1,8 +1,22 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { DataPagination } from "@/components/common/DataPagination";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import {
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 import {
   Card,
   CardContent,
@@ -121,12 +135,23 @@ const buildToken = (value: string, maxLength: number, fallback: string) => {
   return (compact.slice(0, maxLength) || fallback).toUpperCase();
 };
 
+const EMPTY_FILTERS: FilterValues = {
+  status: "all",
+  semester: { value: "", operator: "contains" },
+  students: { min: undefined, max: undefined },
+};
+
 export default function CreateCourse() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [courses, setCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] =
+    useState<FilterValues>(EMPTY_FILTERS);
+  const [page, setPage] = useState(1);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
@@ -213,11 +238,131 @@ export default function CreateCourse() {
     fetchCourses();
   }, []);
 
-  const filteredCourses = courses.filter(
-    (c) =>
-      c.name.toLowerCase().includes(search.toLowerCase()) ||
-      c.code.toLowerCase().includes(search.toLowerCase()),
+  const courseFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        allLabel: "All Status",
+        options: [
+          { label: "Draft", value: "draft" },
+          { label: "Active", value: "active" },
+          { label: "Archived", value: "archived" },
+        ],
+      },
+      {
+        key: "semester",
+        label: "Semester",
+        type: "text",
+        placeholder: "Filter by semester",
+        operators: ["contains", "startsWith", "equals"],
+      },
+      {
+        key: "students",
+        label: "Students",
+        type: "number-range",
+        min: 0,
+        max: 500,
+        step: 1,
+      },
+    ],
+    [],
   );
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+  const filteredCourses = useMemo(() => {
+    const statusFilter = appliedFilters.status as string | undefined;
+    const semesterFilter = appliedFilters.semester as TextFilterValue | undefined;
+    const studentsFilter = appliedFilters.students as
+      | { min?: number; max?: number }
+      | undefined;
+
+    const matchesText = (source: string | undefined, filter?: TextFilterValue) => {
+      if (!filter || !filter.value.trim()) return true;
+      const sourceValue = (source || "").toLowerCase();
+      const filterValue = filter.value.trim().toLowerCase();
+      if (filter.operator === "startsWith") return sourceValue.startsWith(filterValue);
+      if (filter.operator === "equals") return sourceValue === filterValue;
+      return sourceValue.includes(filterValue);
+    };
+
+    return courses.filter((course) => {
+      const matchesSearch = !normalizedSearch
+        ? true
+        : [course.code, course.name, course.semester]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+      if (!matchesSearch) return false;
+
+      if (statusFilter && statusFilter !== "all" && course.status !== statusFilter) {
+        return false;
+      }
+
+      if (!matchesText(course.semester, semesterFilter)) return false;
+
+      if (
+        studentsFilter &&
+        (studentsFilter.min !== undefined || studentsFilter.max !== undefined)
+      ) {
+        if (studentsFilter.min !== undefined && course.students < studentsFilter.min) {
+          return false;
+        }
+        if (studentsFilter.max !== undefined && course.students > studentsFilter.max) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [appliedFilters, courses, normalizedSearch]);
+
+  const ITEMS_PER_PAGE = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredCourses.length / ITEMS_PER_PAGE));
+  const displayedCourses = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return filteredCourses.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredCourses, page]);
+  const COURSE_ROW_HEIGHT = 72;
+  const COURSE_TABLE_HEADER_HEIGHT = 48;
+  const COURSE_TABLE_MIN_HEIGHT =
+    ITEMS_PER_PAGE * COURSE_ROW_HEIGHT + COURSE_TABLE_HEADER_HEIGHT;
+
+  useEffect(() => {
+    setPage((current) => Math.min(current, totalPages));
+  }, [totalPages]);
+
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
+  };
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setPage(1);
+  };
+  const clearFilters = () => {
+    setDraftFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setSearchInput("");
+    setAppliedSearch("");
+    setPage(1);
+  };
+  const removeFilter = (key: string) => {
+    const next = {
+      ...appliedFilters,
+      [key]: EMPTY_FILTERS[key as keyof typeof EMPTY_FILTERS],
+    };
+    setAppliedFilters(next);
+    setDraftFilters(next);
+    setPage(1);
+  };
+
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    courseFilterDefinitions,
+  );
+  const activeFilterChips = getFilterChips(appliedFilters, courseFilterDefinitions);
 
   // Search students by name or email
   const handleStudentSearch = useCallback(
@@ -548,15 +693,11 @@ export default function CreateCourse() {
   return (
     <DashboardLayout>
       <AdminPageShell backTo="/lecturer">
-        <div className="flex items-start justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-semibold text-foreground mb-1">
-              Course Management
-            </h1>
-            <p className="text-muted-foreground">
-              Create and manage your courses
-            </p>
-          </div>
+        <ListPageHeader
+          title="Course Management"
+          className="mb-6"
+          actions={
+          <>
           <Dialog
             open={showCreateDialog}
             onOpenChange={(open) => {
@@ -1166,7 +1307,9 @@ export default function CreateCourse() {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+          </>
+          }
+        />
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
@@ -1192,111 +1335,142 @@ export default function CreateCourse() {
           />
         </div>
 
+        <div className="mb-6 space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search by code, name, semester"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="Course filters"
+              description="Filter by status, semester, and student range."
+              filters={courseFilterDefinitions}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
+            />
+          </div>
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
+        </div>
+
         {/* Course List */}
         <Card>
           <CardHeader>
-            <div className="flex items-center justify-between">
-              <div>
-                <CardTitle className="text-lg">Your Courses</CardTitle>
-                <CardDescription>
-                  Manage courses and associated exams
-                </CardDescription>
-              </div>
-              <div className="relative w-64">
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Search courses..."
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  className="bg-white pl-9"
-                />
-              </div>
+            <div>
+              <CardTitle className="text-lg">Your Courses</CardTitle>
+              <CardDescription>
+                Manage courses and associated exams
+              </CardDescription>
             </div>
           </CardHeader>
           <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Code</TableHead>
-                  <TableHead>Course Name</TableHead>
-                  <TableHead>Semester</TableHead>
-                  <TableHead className="text-center">Students</TableHead>
-                  <TableHead className="text-center">Exams</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredCourses.map((course) => (
-                  <TableRow key={course.id}>
-                    <TableCell className="font-mono font-medium">
-                      {course.code}
-                    </TableCell>
-                    <TableCell className="font-medium">{course.name}</TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {course.semester}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {course.students}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {course.exams}
-                    </TableCell>
-                    <TableCell>
-                      <StatusBadge variant={statusVariant(course.status)}>
-                        {course.status}
-                      </StatusBadge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() =>
-                            navigate(`/lecturer/course/${course.id}`)
-                          }
-                          title="Manage Course & Students"
-                        >
-                          <Users className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEditDialog(course)}
-                        >
-                          <Edit2 className="h-4 w-4" />
-                        </Button>
-                        <ConfirmActionDialog
-                          title="Delete course"
-                          description="This action cannot be undone. The course will be deleted if no dependent data blocks deletion."
-                          confirmText="Delete"
-                          destructive
-                          onConfirm={() => handleDelete(course.id)}
-                        >
+            <div
+              className="overflow-hidden"
+              style={{ minHeight: COURSE_TABLE_MIN_HEIGHT }}
+            >
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Code</TableHead>
+                    <TableHead>Course Name</TableHead>
+                    <TableHead>Semester</TableHead>
+                    <TableHead className="text-center">Students</TableHead>
+                    <TableHead className="text-center">Exams</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="text-right">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {displayedCourses.map((course) => (
+                    <TableRow key={course.id}>
+                      <TableCell className="font-mono font-medium">
+                        {course.code}
+                      </TableCell>
+                      <TableCell className="font-medium">{course.name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {course.semester}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {course.students}
+                      </TableCell>
+                      <TableCell className="text-center">
+                        {course.exams}
+                      </TableCell>
+                      <TableCell>
+                        <StatusBadge variant={statusVariant(course.status)}>
+                          {course.status}
+                        </StatusBadge>
+                      </TableCell>
+                      <TableCell className="text-right">
+                        <div className="flex justify-end gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="text-destructive hover:text-destructive"
+                            onClick={() =>
+                              navigate(`/lecturer/course/${course.id}`)
+                            }
+                            title="Manage Course & Students"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Users className="h-4 w-4" />
                           </Button>
-                        </ConfirmActionDialog>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                ))}
-                {filteredCourses.length === 0 && (
-                  <TableRow>
-                    <TableCell
-                      colSpan={7}
-                      className="text-center py-8 text-muted-foreground"
-                    >
-                      No courses found
-                    </TableCell>
-                  </TableRow>
-                )}
-              </TableBody>
-            </Table>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => openEditDialog(course)}
+                          >
+                            <Edit2 className="h-4 w-4" />
+                          </Button>
+                          <ConfirmActionDialog
+                            title="Delete course"
+                            description="This action cannot be undone. The course will be deleted if no dependent data blocks deletion."
+                            confirmText="Delete"
+                            destructive
+                            onConfirm={() => handleDelete(course.id)}
+                          >
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-destructive hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </ConfirmActionDialog>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {filteredCourses.length === 0 && (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-8 text-muted-foreground"
+                      >
+                        No courses found
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredCourses.length}
+              onPageChange={setPage}
+              itemLabel="courses"
+              syncUrl={false}
+            />
           </CardContent>
         </Card>
       </AdminPageShell>

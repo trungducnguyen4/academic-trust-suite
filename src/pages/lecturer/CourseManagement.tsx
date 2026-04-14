@@ -3,6 +3,19 @@ import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
+import { ListPageHeader } from "@/components/common/list/ListPageHeader";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import {
+  FilterDefinition,
+  FilterValues,
+  TextFilterValue,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 import {
   Card,
   CardContent,
@@ -54,6 +67,13 @@ interface GroupedCourses {
   [faculty: string]: Course[];
 }
 
+const EMPTY_FILTERS: FilterValues = {
+  faculty: "all",
+  examState: "all",
+  semester: { value: "", operator: "contains" },
+  students: { min: undefined, max: undefined },
+};
+
 const gradientClasses = [
   "bg-gradient-to-br from-pink-400 to-pink-600",
   "bg-gradient-to-br from-purple-400 to-indigo-600",
@@ -69,6 +89,11 @@ export default function CourseManagement() {
   const [recentCourses, setRecentCourses] = useState<Course[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<"card" | "list">("card");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
+  const [appliedFilters, setAppliedFilters] =
+    useState<FilterValues>(EMPTY_FILTERS);
 
   useEffect(() => {
     fetchCourses();
@@ -129,11 +154,117 @@ export default function CourseManagement() {
     return gradientClasses[index % gradientClasses.length];
   };
 
-  const groupedCourses = groupCoursesByFaculty(courses);
+  const courseFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "faculty",
+        label: "Faculty",
+        type: "select",
+        allLabel: "All Faculties",
+        options: Array.from(
+          new Set(courses.map((course) => course.faculty || "General")),
+        ).map((faculty) => ({
+          label: faculty,
+          value: faculty,
+        })),
+      },
+      {
+        key: "examState",
+        label: "Exam State",
+        type: "select",
+        allLabel: "All Courses",
+        options: [
+          { label: "Has Exams", value: "hasExams" },
+          { label: "No Exams", value: "noExams" },
+        ],
+      },
+      {
+        key: "semester",
+        label: "Semester",
+        type: "text",
+        operators: ["contains", "startsWith", "equals"],
+        placeholder: "Filter by semester",
+      },
+      {
+        key: "students",
+        label: "Students",
+        type: "number-range",
+        min: 0,
+        max: 500,
+        step: 1,
+      },
+    ],
+    [courses],
+  );
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+  const filteredCourses = useMemo(() => {
+    const facultyFilter = appliedFilters.faculty as string | undefined;
+    const examStateFilter = appliedFilters.examState as string | undefined;
+    const semesterFilter = appliedFilters.semester as
+      | TextFilterValue
+      | undefined;
+    const studentsFilter = appliedFilters.students as
+      | { min?: number; max?: number }
+      | undefined;
+
+    const matchText = (source: string | undefined, filter?: TextFilterValue) => {
+      if (!filter || !filter.value.trim()) return true;
+      const sourceValue = (source || "").toLowerCase();
+      const filterValue = filter.value.trim().toLowerCase();
+      if (filter.operator === "startsWith") return sourceValue.startsWith(filterValue);
+      if (filter.operator === "equals") return sourceValue === filterValue;
+      return sourceValue.includes(filterValue);
+    };
+
+    return courses.filter((course) => {
+      const searchMatched = !normalizedSearch
+        ? true
+        : [course.code, course.name, course.faculty, course.semester]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+      if (!searchMatched) return false;
+
+      if (
+        facultyFilter &&
+        facultyFilter !== "all" &&
+        (course.faculty || "General") !== facultyFilter
+      ) {
+        return false;
+      }
+
+      const courseExams = course._count?.exams || 0;
+      if (examStateFilter === "hasExams" && courseExams === 0) return false;
+      if (examStateFilter === "noExams" && courseExams > 0) return false;
+
+      if (!matchText(course.semester, semesterFilter)) return false;
+
+      if (
+        studentsFilter &&
+        (studentsFilter.min !== undefined || studentsFilter.max !== undefined)
+      ) {
+        const totalStudents = course._count?.enrollments || 0;
+        if (studentsFilter.min !== undefined && totalStudents < studentsFilter.min) {
+          return false;
+        }
+        if (studentsFilter.max !== undefined && totalStudents > studentsFilter.max) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [appliedFilters, courses, normalizedSearch]);
+
+  const groupedCourses = groupCoursesByFaculty(filteredCourses);
 
   const COURSES_PER_PAGE = 12;
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(courses.length / COURSES_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCourses.length / COURSES_PER_PAGE),
+  );
 
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
@@ -141,8 +272,8 @@ export default function CourseManagement() {
 
   const paginatedCourses = useMemo(() => {
     const start = (page - 1) * COURSES_PER_PAGE;
-    return courses.slice(start, start + COURSES_PER_PAGE);
-  }, [courses, page]);
+    return filteredCourses.slice(start, start + COURSES_PER_PAGE);
+  }, [filteredCourses, page]);
 
   const paginatedGrouped = groupCoursesByFaculty(paginatedCourses);
 
@@ -156,40 +287,57 @@ export default function CourseManagement() {
   );
   const facultiesCount = Object.keys(groupedCourses).length;
 
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    courseFilterDefinitions,
+  );
+  const activeFilterChips = getFilterChips(appliedFilters, courseFilterDefinitions);
+
+  const runSearch = () => setAppliedSearch(searchInput.trim());
+  const applyFilters = () => setAppliedFilters(draftFilters);
+  const clearFilters = () => {
+    setDraftFilters(EMPTY_FILTERS);
+    setAppliedFilters(EMPTY_FILTERS);
+    setSearchInput("");
+    setAppliedSearch("");
+  };
+  const removeFilter = (key: string) => {
+    const next = {
+      ...appliedFilters,
+      [key]: EMPTY_FILTERS[key as keyof typeof EMPTY_FILTERS],
+    };
+    setAppliedFilters(next);
+    setDraftFilters(next);
+  };
+
   return (
     <DashboardLayout>
       <AdminPageShell backTo="/lecturer">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-semibold text-foreground">
-              Course Management
-            </h1>
-            <p className="text-muted-foreground">
-              Manage your courses and track progress
-            </p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Select
-              value={viewMode}
-              onValueChange={(value: "card" | "list") => setViewMode(value)}
-            >
-              <SelectTrigger className="w-32">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="card">Card</SelectItem>
-                <SelectItem value="list">List</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button asChild className="gap-2">
-              <Link to="/lecturer/create-course">
-                <Plus className="h-4 w-4" />
-                Add Course
-              </Link>
-            </Button>
-          </div>
-        </div>
+        <ListPageHeader
+          title="Course Management"
+          actions={
+            <div className="flex items-center gap-3">
+              <Select
+                value={viewMode}
+                onValueChange={(value: "card" | "list") => setViewMode(value)}
+              >
+                <SelectTrigger className="w-32">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="list">List</SelectItem>
+                </SelectContent>
+              </Select>
+              <Button asChild className="gap-2">
+                <Link to="/lecturer/courses">
+                  <Plus className="h-4 w-4" />
+                  Add Course
+                </Link>
+              </Button>
+            </div>
+          }
+        />
 
         {/* Quick stats */}
         <section>
@@ -203,6 +351,35 @@ export default function CourseManagement() {
               label="Faculties"
             />
           </div>
+        </section>
+
+        <section className="space-y-3">
+          <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+            <SearchBar
+              value={searchInput}
+              onChange={setSearchInput}
+              onSearch={runSearch}
+              placeholder="Search by code, name, faculty, semester"
+              className="flex-1"
+            />
+            <FilterPanel
+              title="Course filters"
+              description="Filter by faculty, exam state, semester, and student range."
+              filters={courseFilterDefinitions}
+              value={draftFilters}
+              onValueChange={(key, nextValue) =>
+                setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+              }
+              onApply={applyFilters}
+              onClear={clearFilters}
+              activeCount={activeFilterCount}
+            />
+          </div>
+          <ActiveFilterChips
+            chips={activeFilterChips}
+            onRemove={removeFilter}
+            onClearAll={clearFilters}
+          />
         </section>
 
         {/* Recently Accessed Courses */}
@@ -426,12 +603,19 @@ export default function CourseManagement() {
                   </div>
                 ),
               )}
+              {filteredCourses.length === 0 && (
+                <Card>
+                  <CardContent className="py-12 text-center text-muted-foreground">
+                    No courses match current search/filter.
+                  </CardContent>
+                </Card>
+              )}
             </div>
           )}
           <DataPagination
             currentPage={page}
             totalPages={totalPages}
-            totalItems={courses.length}
+            totalItems={filteredCourses.length}
             onPageChange={setPage}
             itemLabel="courses"
             className="border-t-0 px-0"
