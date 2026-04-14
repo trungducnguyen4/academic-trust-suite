@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -812,33 +813,13 @@ export default function UserRoleManagement() {
               </Table>
             </div>
 
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-4 border-t border-border">
-                <p className="text-sm text-muted-foreground">
-                  Page {page} / {totalPages} ({filteredUsers.length} users)
-                </p>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((prev) => Math.max(1, prev - 1))}
-                  >
-                    Previous
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() =>
-                      setPage((prev) => Math.min(totalPages, prev + 1))
-                    }
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredUsers.length}
+              onPageChange={setPage}
+              itemLabel="users"
+            />
           </CardContent>
         </Card>
 

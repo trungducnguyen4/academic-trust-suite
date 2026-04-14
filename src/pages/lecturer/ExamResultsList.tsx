@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -360,30 +361,14 @@ export default function ExamResultsList() {
           </CardContent>
         </Card>
 
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-end gap-2 mt-4">
-            <div className="text-sm text-muted-foreground">
-              Page {page} of {totalPages}
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page <= 1}
-              onClick={() => setPage((p) => Math.max(1, p - 1))}
-            >
-              &lt;
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              disabled={page >= totalPages}
-              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-            >
-              &gt;
-            </Button>
-          </div>
-        )}
+        <DataPagination
+          currentPage={page}
+          totalPages={totalPages}
+          totalItems={submissions.length}
+          onPageChange={setPage}
+          itemLabel="submissions"
+          className="border-t-0 px-0"
+        />
       </div>
     </DashboardLayout>
   );

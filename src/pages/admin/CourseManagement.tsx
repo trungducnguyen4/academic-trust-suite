@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -276,11 +277,21 @@ export default function AdminCourseManagement() {
     });
   }, [courses, normalizedSearch, appliedFilters]);
 
-  const displayedCourses = useMemo(
-    () => filteredCourses.slice(0, 10),
-    [filteredCourses],
-  );
+  const [page, setPage] = useState(1);
   const COURSE_ROWS_PER_VIEW = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredCourses.length / COURSE_ROWS_PER_VIEW));
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const displayedCourses = useMemo(
+    () => {
+      const start = (page - 1) * COURSE_ROWS_PER_VIEW;
+      return filteredCourses.slice(start, start + COURSE_ROWS_PER_VIEW);
+    },
+    [filteredCourses, page],
+  );
   const COURSE_ROW_HEIGHT = 72;
   const COURSE_TABLE_HEADER_HEIGHT = 48;
   const COURSE_TABLE_MIN_HEIGHT =
@@ -297,15 +308,18 @@ export default function AdminCourseManagement() {
 
   const runSearch = () => {
     setAppliedSearch(searchInput.trim());
+    setPage(1);
   };
 
   const applyFilters = () => {
     setAppliedFilters(draftFilters);
+    setPage(1);
   };
 
   const clearFilters = () => {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
   };
 
   const removeFilter = (key: string) => {
@@ -738,6 +752,13 @@ export default function AdminCourseManagement() {
                 </TableBody>
               </Table>
             </div>
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredCourses.length}
+              onPageChange={setPage}
+              itemLabel="courses"
+            />
           </CardContent>
         </Card>
       </AdminPageShell>

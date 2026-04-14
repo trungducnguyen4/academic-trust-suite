@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -327,11 +328,21 @@ export default function AdminExamManagement() {
     });
   }, [exams, normalizedSearch, appliedFilters]);
 
-  const displayedExams = useMemo(
-    () => filteredExams.slice(0, 10),
-    [filteredExams],
-  );
+  const [page, setPage] = useState(1);
   const EXAM_ROWS_PER_VIEW = 10;
+  const totalPages = Math.max(1, Math.ceil(filteredExams.length / EXAM_ROWS_PER_VIEW));
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const displayedExams = useMemo(
+    () => {
+      const start = (page - 1) * EXAM_ROWS_PER_VIEW;
+      return filteredExams.slice(start, start + EXAM_ROWS_PER_VIEW);
+    },
+    [filteredExams, page],
+  );
   const EXAM_ROW_HEIGHT = 60;
   const EXAM_TABLE_HEADER_HEIGHT = 48;
   const EXAM_TABLE_MIN_HEIGHT =
@@ -348,15 +359,18 @@ export default function AdminExamManagement() {
 
   const runSearch = () => {
     setAppliedSearch(searchInput.trim());
+    setPage(1);
   };
 
   const applyFilters = () => {
     setAppliedFilters(draftFilters);
+    setPage(1);
   };
 
   const clearFilters = () => {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
   };
 
   const removeFilter = (key: string) => {
@@ -605,6 +619,13 @@ export default function AdminExamManagement() {
                 </Table>
               </div>
             )}
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredExams.length}
+              onPageChange={setPage}
+              itemLabel="exams"
+            />
           </CardContent>
         </Card>
       </AdminPageShell>

@@ -1,5 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -200,6 +201,19 @@ export default function ExamManagement() {
     return matchesSearch && matchesStatus;
   });
 
+  const ITEMS_PER_PAGE = 10;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(filteredExams.length / ITEMS_PER_PAGE));
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const paginatedExams = useMemo(() => {
+    const start = (page - 1) * ITEMS_PER_PAGE;
+    return filteredExams.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredExams, page]);
+
   const stats = {
     total: exams.length,
     published: exams.filter((e) => e.status === "PUBLISHED").length,
@@ -349,7 +363,7 @@ export default function ExamManagement() {
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {filteredExams.map((exam) => {
+                    {paginatedExams.map((exam) => {
                       const createdAgo = formatDistanceToNow(
                         new Date(exam.createdAt),
                         { addSuffix: true },
@@ -473,6 +487,13 @@ export default function ExamManagement() {
               </div>
             )}
           </CardContent>
+          <DataPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={filteredExams.length}
+            onPageChange={setPage}
+            itemLabel="exams"
+          />
         </Card>
       </AdminPageShell>
 

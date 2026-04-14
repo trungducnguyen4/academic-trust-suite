@@ -1,0 +1,173 @@
+import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { ChevronLeft, ChevronRight } from "lucide-react";
+import { cn } from "@/lib/utils";
+
+export interface DataPaginationProps {
+  /** Current active page (1-indexed) */
+  currentPage: number;
+  /** Total number of pages */
+  totalPages: number;
+  /** Total number of items (displayed in info text) */
+  totalItems?: number;
+  /** Called when user changes the page */
+  onPageChange: (page: number) => void;
+  /** Label for items, e.g. "users", "questions" */
+  itemLabel?: string;
+  /** Extra class names for the wrapper */
+  className?: string;
+  /** Whether to sync the page with URL ?page=N (default: true) */
+  syncUrl?: boolean;
+  /** URL search param key (default: "page") */
+  urlParamKey?: string;
+}
+
+/**
+ * Unified pagination controls used across all data-listing pages.
+ *
+ * Renders:  Page info  |  [Previous]  [ page input / totalPages ]  [Next]
+ *
+ * Supports:
+ * - Page jump via input field (press Enter or blur)
+ * - URL sync via ?page=N search param
+ * - Disabled states at boundary pages
+ */
+export function DataPagination({
+  currentPage,
+  totalPages,
+  totalItems,
+  onPageChange,
+  itemLabel = "items",
+  className,
+  syncUrl = true,
+  urlParamKey = "page",
+}: DataPaginationProps) {
+  const [searchParams, setSearchParams] = useSearchParams();
+  const [inputValue, setInputValue] = useState(String(currentPage));
+
+  // Keep input in sync with currentPage prop
+  useEffect(() => {
+    setInputValue(String(currentPage));
+  }, [currentPage]);
+
+  // On mount: read page from URL if syncUrl is enabled
+  useEffect(() => {
+    if (!syncUrl) return;
+    const urlPage = searchParams.get(urlParamKey);
+    if (urlPage) {
+      const parsed = Number(urlPage);
+      if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= totalPages && parsed !== currentPage) {
+        onPageChange(parsed);
+      }
+    }
+    // Only run on mount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const changePage = useCallback(
+    (newPage: number) => {
+      const clamped = Math.max(1, Math.min(totalPages, newPage));
+      onPageChange(clamped);
+
+      if (syncUrl) {
+        setSearchParams(
+          (prev) => {
+            const next = new URLSearchParams(prev);
+            if (clamped <= 1) {
+              next.delete(urlParamKey);
+            } else {
+              next.set(urlParamKey, String(clamped));
+            }
+            return next;
+          },
+          { replace: true },
+        );
+      }
+    },
+    [totalPages, onPageChange, syncUrl, setSearchParams, urlParamKey],
+  );
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter") {
+      const parsed = Number(inputValue);
+      if (!Number.isNaN(parsed)) {
+        changePage(parsed);
+      } else {
+        setInputValue(String(currentPage));
+      }
+    }
+  };
+
+  const handleInputBlur = () => {
+    const parsed = Number(inputValue);
+    if (!Number.isNaN(parsed) && parsed >= 1 && parsed <= totalPages) {
+      changePage(parsed);
+    } else {
+      setInputValue(String(currentPage));
+    }
+  };
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <div
+      className={cn(
+        "flex items-center justify-between px-4 py-4 border-t border-border",
+        className,
+      )}
+    >
+      {/* Left: page info */}
+      <p className="text-sm text-muted-foreground whitespace-nowrap">
+        Page {currentPage} / {totalPages}
+        {totalItems !== undefined && (
+          <span>
+            {" "}
+            ({totalItems} {itemLabel})
+          </span>
+        )}
+      </p>
+
+      {/* Right: controls */}
+      <div className="flex items-center gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={currentPage <= 1}
+          onClick={() => changePage(currentPage - 1)}
+          className="gap-1"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          Previous
+        </Button>
+
+        {/* Page jump input */}
+        <div className="flex items-center gap-1.5">
+          <Input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={inputValue}
+            onChange={(e) => setInputValue(e.target.value)}
+            onKeyDown={handleInputKeyDown}
+            onBlur={handleInputBlur}
+            className="h-8 w-16 text-center text-sm [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+          />
+          <span className="text-sm text-muted-foreground">/ {totalPages}</span>
+        </div>
+
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={currentPage >= totalPages}
+          onClick={() => changePage(currentPage + 1)}
+          className="gap-1"
+        >
+          Next
+          <ChevronRight className="h-4 w-4" />
+        </Button>
+      </div>
+    </div>
+  );
+}

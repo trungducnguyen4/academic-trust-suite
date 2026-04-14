@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -229,6 +230,7 @@ export default function IntegrityOverview() {
     null,
   );
   const [activeTab, setActiveTab] = useState("all");
+  const [page, setPage] = useState(1);
 
   const integrityFilters: FilterDefinition[] = [
     {
@@ -334,8 +336,17 @@ export default function IntegrityOverview() {
     );
   });
 
-  const displayedSubmissions = filteredSubmissions.slice(0, 10);
   const INTEGRITY_ROWS_PER_VIEW = 10;
+  const displayedSubmissions = filteredSubmissions.slice(
+    (page - 1) * INTEGRITY_ROWS_PER_VIEW,
+    page * INTEGRITY_ROWS_PER_VIEW,
+  );
+  const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / INTEGRITY_ROWS_PER_VIEW));
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
   const INTEGRITY_ROW_HEIGHT = 64;
   const INTEGRITY_TABLE_HEADER_HEIGHT = 48;
   const INTEGRITY_TABLE_MIN_HEIGHT =
@@ -348,11 +359,12 @@ export default function IntegrityOverview() {
   );
   const activeFilterChips = getFilterChips(appliedFilters, integrityFilters);
 
-  const runSearch = () => setAppliedSearch(searchInput.trim());
-  const applyFilters = () => setAppliedFilters(draftFilters);
+  const runSearch = () => { setAppliedSearch(searchInput.trim()); setPage(1); };
+  const applyFilters = () => { setAppliedFilters(draftFilters); setPage(1); };
   const clearFilters = () => {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
+    setPage(1);
   };
   const removeFilter = (key: string) => {
     const nextFilters = {
@@ -481,7 +493,7 @@ export default function IntegrityOverview() {
 
         <Card>
           <CardContent className="pt-6">
-            <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setPage(1); }}>
               <TabsList className="mb-4">
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="pending">Pending</TabsTrigger>
@@ -584,6 +596,13 @@ export default function IntegrityOverview() {
                 </div>
               </TabsContent>
             </Tabs>
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filteredSubmissions.length}
+              onPageChange={setPage}
+              itemLabel="flagged submissions"
+            />
           </CardContent>
         </Card>
 

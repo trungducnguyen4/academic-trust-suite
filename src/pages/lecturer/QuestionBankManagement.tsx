@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -153,6 +154,8 @@ export default function QuestionBankManagement() {
   const [totalPages, setTotalPages] = useState(1);
   const [total, setTotal] = useState(0);
   const ITEMS_PER_PAGE = 20;
+  const COURSES_PER_PAGE = 12;
+  const [coursePage, setCoursePage] = useState(1);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -577,81 +580,102 @@ export default function QuestionBankManagement() {
               />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {visibleCourses.map((course, index) => {
-                const courseQuestions = questions.filter(
-                  (q) => q.course?.code === course.code,
-                );
-                const questionTypes = [
-                  ...new Set(courseQuestions.map((q) => q.type)),
-                ];
-                const avgDiff =
-                  courseQuestions.length > 0
-                    ? courseQuestions.reduce(
-                        (s, q) => s + (q.difficulty || 1),
-                        0,
-                      ) / courseQuestions.length
-                    : 0;
-                const diffInfo = difficultyLabel(avgDiff);
-                return (
-                  <Card
-                    key={course.id}
-                    className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
-                    onClick={() => setSelectedCourse(course.code)}
-                  >
-                    <div className={`h-32 ${getGradientClass(index)} relative`}>
-                      <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
-                      <div className="absolute bottom-4 left-4 text-white">
-                        <p className="text-2xl font-bold">{course.code}</p>
-                        <p className="text-sm text-white/80 line-clamp-1">
-                          {course.name}
-                        </p>
-                      </div>
-                      <div className="absolute top-4 right-4">
-                        <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                          {courseQuestions.length} questions
-                        </span>
-                      </div>
-                    </div>
-                    <CardContent className="p-4">
-                      <div className="space-y-3">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Avg Difficulty
-                          </span>
-                          <span className={`font-medium ${diffInfo.color}`}>
-                            {diffInfo.text}
-                          </span>
-                        </div>
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="text-muted-foreground">
-                            Question Types
-                          </span>
-                          <span className="font-medium">
-                            {questionTypes.length}
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap gap-1 pt-1">
-                          {questionTypes.slice(0, 3).map((t) => (
-                            <span
-                              key={t}
-                              className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
-                            >
-                              {typeLabels[t] || t}
-                            </span>
-                          ))}
-                          {questionTypes.length > 3 && (
-                            <span className="text-[10px] text-muted-foreground">
-                              +{questionTypes.length - 3} more
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+            {/* Course Card Pagination */}
+            {(() => {
+              const courseTotalPages = Math.max(1, Math.ceil(visibleCourses.length / COURSES_PER_PAGE));
+              const paginatedCourses = visibleCourses.slice(
+                (coursePage - 1) * COURSES_PER_PAGE,
+                coursePage * COURSES_PER_PAGE,
+              );
+              return (
+                <>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                    {paginatedCourses.map((course, index) => {
+                      const courseQuestions = questions.filter(
+                        (q) => q.course?.code === course.code,
+                      );
+                      const questionTypes = [
+                        ...new Set(courseQuestions.map((q) => q.type)),
+                      ];
+                      const avgDiff =
+                        courseQuestions.length > 0
+                          ? courseQuestions.reduce(
+                              (s, q) => s + (q.difficulty || 1),
+                              0,
+                            ) / courseQuestions.length
+                          : 0;
+                      const diffInfo = difficultyLabel(avgDiff);
+                      return (
+                        <Card
+                          key={course.id}
+                          className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
+                          onClick={() => setSelectedCourse(course.code)}
+                        >
+                          <div className={`h-32 ${getGradientClass((coursePage - 1) * COURSES_PER_PAGE + index)} relative`}>
+                            <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
+                            <div className="absolute bottom-4 left-4 text-white">
+                              <p className="text-2xl font-bold">{course.code}</p>
+                              <p className="text-sm text-white/80 line-clamp-1">
+                                {course.name}
+                              </p>
+                            </div>
+                            <div className="absolute top-4 right-4">
+                              <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
+                                {courseQuestions.length} questions
+                              </span>
+                            </div>
+                          </div>
+                          <CardContent className="p-4">
+                            <div className="space-y-3">
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                  Avg Difficulty
+                                </span>
+                                <span className={`font-medium ${diffInfo.color}`}>
+                                  {diffInfo.text}
+                                </span>
+                              </div>
+                              <div className="flex items-center justify-between text-sm">
+                                <span className="text-muted-foreground">
+                                  Question Types
+                                </span>
+                                <span className="font-medium">
+                                  {questionTypes.length}
+                                </span>
+                              </div>
+                              <div className="flex flex-wrap gap-1 pt-1">
+                                {questionTypes.slice(0, 3).map((t) => (
+                                  <span
+                                    key={t}
+                                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
+                                  >
+                                    {typeLabels[t] || t}
+                                  </span>
+                                ))}
+                                {questionTypes.length > 3 && (
+                                  <span className="text-[10px] text-muted-foreground">
+                                    +{questionTypes.length - 3} more
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+                  <DataPagination
+                    currentPage={coursePage}
+                    totalPages={courseTotalPages}
+                    totalItems={visibleCourses.length}
+                    onPageChange={setCoursePage}
+                    itemLabel="courses"
+                    className="border-t-0 px-0 pt-2"
+                    syncUrl={false}
+                  />
+                </>
+              );
+            })()}
 
             {courses.length === 0 && (
               <div className="text-center py-16 text-muted-foreground">
@@ -867,51 +891,14 @@ export default function QuestionBankManagement() {
               </div>
             )}
 
-            {/* Pagination Controls */}
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between mt-6 px-2">
-                <p className="text-sm text-muted-foreground">
-                  Showing page {page} of {totalPages} ({total} total)
-                </p>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  >
-                    Previous
-                  </Button>
-                  {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-                    const start = Math.max(
-                      1,
-                      Math.min(page - 2, totalPages - 4),
-                    );
-                    const p = start + i;
-                    if (p > totalPages) return null;
-                    return (
-                      <Button
-                        key={p}
-                        variant={p === page ? "default" : "outline"}
-                        size="sm"
-                        className="w-8 h-8 p-0"
-                        onClick={() => setPage(p)}
-                      >
-                        {p}
-                      </Button>
-                    );
-                  })}
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-                  >
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={total}
+              onPageChange={setPage}
+              itemLabel="questions"
+              className="border-t-0 px-0 pt-2"
+            />
           </>
         )}
 

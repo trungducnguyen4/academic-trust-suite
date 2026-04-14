@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -38,8 +39,6 @@ import {
   LogOut,
   AlertTriangle,
   Info,
-  ChevronLeft,
-  ChevronRight,
 } from "lucide-react";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
@@ -520,31 +519,13 @@ export default function AuditLogViewer() {
                 </TableBody>
               </Table>
             </div>
-            {totalPages > 1 && (
-              <div className="flex items-center justify-between px-4 py-3 border-t">
-                <span className="text-sm text-muted-foreground">
-                  Page {page} of {totalPages}
-                </span>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page <= 1}
-                    onClick={() => setPage(page - 1)}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    disabled={page >= totalPages}
-                    onClick={() => setPage(page + 1)}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={filtered.length}
+              onPageChange={setPage}
+              itemLabel="entries"
+            />
           </CardContent>
         </Card>
 

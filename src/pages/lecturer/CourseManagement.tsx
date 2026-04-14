@@ -1,4 +1,5 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
@@ -129,6 +130,22 @@ export default function CourseManagement() {
   };
 
   const groupedCourses = groupCoursesByFaculty(courses);
+
+  const COURSES_PER_PAGE = 12;
+  const [page, setPage] = useState(1);
+  const totalPages = Math.max(1, Math.ceil(courses.length / COURSES_PER_PAGE));
+
+  useEffect(() => {
+    setPage((p) => Math.min(p, totalPages));
+  }, [totalPages]);
+
+  const paginatedCourses = useMemo(() => {
+    const start = (page - 1) * COURSES_PER_PAGE;
+    return courses.slice(start, start + COURSES_PER_PAGE);
+  }, [courses, page]);
+
+  const paginatedGrouped = groupCoursesByFaculty(paginatedCourses);
+
   const totalStudents = courses.reduce(
     (sum, course) => sum + (course._count?.enrollments ?? 0),
     0,
@@ -309,7 +326,7 @@ export default function CourseManagement() {
             </div>
           ) : (
             <div className="space-y-8">
-              {Object.entries(groupedCourses).map(
+              {Object.entries(paginatedGrouped).map(
                 ([faculty, facultyCourses]) => (
                   <div key={faculty}>
                     <h3 className="text-lg font-medium mb-4 text-foreground">
@@ -411,6 +428,15 @@ export default function CourseManagement() {
               )}
             </div>
           )}
+          <DataPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={courses.length}
+            onPageChange={setPage}
+            itemLabel="courses"
+            className="border-t-0 px-0"
+            syncUrl={false}
+          />
         </section>
       </AdminPageShell>
     </DashboardLayout>
