@@ -25,6 +25,7 @@ import {
   FileText,
   Users,
   Clock,
+  CalendarClock,
   Eye,
   Trash2,
   BarChart3,
@@ -49,6 +50,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
@@ -120,7 +131,33 @@ export default function AdminExamManagement() {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [rescheduleForm, setRescheduleForm] = useState({
+    startTime: "",
+    endTime: "",
+  });
   const [courses, setCourses] = useState<any[]>([]);
+
+  const toDatetimeLocalValue = (isoDate?: string) => {
+    if (!isoDate) return "";
+    const parsed = new Date(isoDate);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const localDate = new Date(
+      parsed.getTime() - parsed.getTimezoneOffset() * 60000,
+    );
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const formatExamMetadata = (exam: Exam) => {
+    const parts = [];
+    if (exam.duration) parts.push(`${exam.duration} min`);
+    if (exam._count?.examQuestions) parts.push(`${exam._count.examQuestions} Q`);
+    if (exam._count?.submissions) parts.push(`${exam._count.submissions} submissions`);
+    const createdAgo = formatDistanceToNow(new Date(exam.createdAt), { addSuffix: false });
+    if (createdAgo) parts.push(`created ${createdAgo} ago`);
+    return parts.join(" • ");
+  };
 
   useEffect(() => {
     fetchData();
@@ -399,6 +436,71 @@ export default function AdminExamManagement() {
     }
   };
 
+  const handleOpenRescheduleDialog = (exam: Exam) => {
+    setSelectedExam(exam);
+    setRescheduleForm({
+      startTime: toDatetimeLocalValue(exam.startTime),
+      endTime: toDatetimeLocalValue(exam.endTime),
+    });
+    setShowRescheduleDialog(true);
+  };
+
+  const handleSaveReschedule = async () => {
+    if (!selectedExam) return;
+
+    if (!rescheduleForm.startTime || !rescheduleForm.endTime) {
+      toast.error("Please provide both start and end time");
+      return;
+    }
+
+    const startTime = new Date(rescheduleForm.startTime);
+    const endTime = new Date(rescheduleForm.endTime);
+
+    if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
+      toast.error("Invalid schedule date/time");
+      return;
+    }
+
+    if (endTime <= startTime) {
+      toast.error("End time must be after start time");
+      return;
+    }
+
+    if ((endTime.getTime() - startTime.getTime()) / 60000 < selectedExam.duration) {
+      toast.error(`Schedule window must be at least ${selectedExam.duration} minutes`);
+      return;
+    }
+
+    try {
+      setIsRescheduling(true);
+      await api.rescheduleExam(selectedExam.id, {
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+      });
+
+      setExams((prev) =>
+        prev.map((exam) =>
+          exam.id === selectedExam.id
+            ? {
+                ...exam,
+                startTime: startTime.toISOString(),
+                endTime: endTime.toISOString(),
+              }
+            : exam,
+        ),
+      );
+
+      toast.success("Exam schedule updated successfully");
+      setShowRescheduleDialog(false);
+      setSelectedExam(null);
+    } catch (error) {
+      console.error("Failed to reschedule exam:", error);
+      toast.error("Failed to reschedule exam");
+    } finally {
+      setIsRescheduling(false);
+    }
+  };
+
   const stats = {
     total: exams.length,
     published: exams.filter((e) => e.status === "PUBLISHED").length,
@@ -514,14 +616,11 @@ export default function AdminExamManagement() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Title</TableHead>
+                      <TableHead className="max-w-sm">Title</TableHead>
                       <TableHead>Course</TableHead>
                       <TableHead>Lecturer</TableHead>
-                      <TableHead className="text-center">Duration</TableHead>
-                      <TableHead className="text-center">Questions</TableHead>
-                      <TableHead className="text-center">Submissions</TableHead>
+                      <TableHead>Schedule</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -533,8 +632,13 @@ export default function AdminExamManagement() {
                       );
                       return (
                         <TableRow key={exam.id} className="hover:bg-muted/50">
-                          <TableCell className="font-medium max-w-xs truncate">
-                            {exam.title}
+                          <TableCell className="font-medium">
+                            <div>
+                              <div className="truncate">{exam.title}</div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {formatExamMetadata(exam)}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
@@ -549,16 +653,25 @@ export default function AdminExamManagement() {
                           <TableCell className="text-sm">
                             {exam.creator.fullName}
                           </TableCell>
-                          <TableCell className="text-center">
-                            {exam.duration} min
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline">
-                              {exam._count?.examQuestions || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center text-sm font-medium">
-                            {exam._count?.submissions || 0}
+                          <TableCell className="max-w-[14rem]">
+                            <div className="text-xs text-muted-foreground leading-5">
+                              {exam.startTime ? (
+                                <div className="truncate">
+                                  <span className="font-medium">Start:</span>{" "}
+                                  {new Date(exam.startTime).toLocaleString()}
+                                </div>
+                              ) : (
+                                <div className="truncate">Start: Not scheduled</div>
+                              )}
+                              {exam.endTime ? (
+                                <div className="truncate">
+                                  <span className="font-medium">End:</span>{" "}
+                                  {new Date(exam.endTime).toLocaleString()}
+                                </div>
+                              ) : (
+                                <div className="truncate">End: Not scheduled</div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -569,9 +682,6 @@ export default function AdminExamManagement() {
                             >
                               {statusConfig[exam.status]?.label || exam.status}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            {createdAgo}
                           </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
@@ -597,6 +707,16 @@ export default function AdminExamManagement() {
                                   <DropdownMenuItem className="gap-2 text-xs">
                                     <BarChart3 className="h-4 w-4" />
                                     Results
+                                  </DropdownMenuItem>
+                                )}
+                                {(exam.status === "DRAFT" ||
+                                  exam.status === "PUBLISHED") && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenRescheduleDialog(exam)}
+                                    className="gap-2 text-xs"
+                                  >
+                                    <CalendarClock className="h-4 w-4" />
+                                    Reschedule
                                   </DropdownMenuItem>
                                 )}
                                 <DropdownMenuItem
@@ -629,6 +749,64 @@ export default function AdminExamManagement() {
           </CardContent>
         </Card>
       </AdminPageShell>
+
+      <Dialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Exam</DialogTitle>
+            <DialogDescription>
+              Update start and end time for "{selectedExam?.title}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="adminRescheduleStartTime">Start time</Label>
+              <Input
+                id="adminRescheduleStartTime"
+                type="datetime-local"
+                value={rescheduleForm.startTime}
+                onChange={(e) =>
+                  setRescheduleForm((prev) => ({
+                    ...prev,
+                    startTime: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="adminRescheduleEndTime">End time</Label>
+              <Input
+                id="adminRescheduleEndTime"
+                type="datetime-local"
+                value={rescheduleForm.endTime}
+                onChange={(e) =>
+                  setRescheduleForm((prev) => ({
+                    ...prev,
+                    endTime: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The exam window must be at least the configured duration.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowRescheduleDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveReschedule} disabled={isRescheduling}>
+              {isRescheduling ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Save Schedule
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Delete Dialog */}
       <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>

@@ -14,7 +14,7 @@ import { ExamsService } from './exams.service';
 import { MailerService } from '../mailer/mailer.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { IsArray, IsEmail, IsOptional } from 'class-validator';
-import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto, ShareExamDto } from './dto/exam.dto';
+import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto, ShareExamDto, RescheduleExamDto } from './dto/exam.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -153,6 +153,13 @@ export class ExamsController {
   @Roles('LECTURER', 'ADMIN')
   update(@Param('id') id: string, @Body() updateExamDto: UpdateExamDto) {
     return this.examsService.update(id, updateExamDto);
+  }
+
+  @Patch(':id/reschedule')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  reschedule(@Param('id') id: string, @Body() rescheduleExamDto: RescheduleExamDto) {
+    return this.examsService.reschedule(id, rescheduleExamDto);
   }
 
   @Post(':id/publish')

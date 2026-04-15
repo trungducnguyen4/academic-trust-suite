@@ -145,6 +145,7 @@ Authorization: Bearer <token>
 | GET | `/api/exams/:id/stats` | Exam statistics | LECTURER, ADMIN |
 | POST | `/api/exams` | Create exam | LECTURER, ADMIN |
 | PATCH | `/api/exams/:id` | Update exam | LECTURER, ADMIN |
+| PATCH | `/api/exams/:id/reschedule` | Reschedule exam window | LECTURER, ADMIN |
 | POST | `/api/exams/:id/publish` | Publish exam | LECTURER, ADMIN |
 | POST | `/api/exams/:id/questions` | Add questions | LECTURER, ADMIN |
 | PATCH | `/api/exams/:id/questions/:questionId` | Update exam question | LECTURER, ADMIN |

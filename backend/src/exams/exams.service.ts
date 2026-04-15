@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto } from './dto/exam.dto';
+import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto, RescheduleExamDto } from './dto/exam.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -365,6 +365,102 @@ export class ExamsService {
       });
     } catch {
       // Notification failures must not block exam update.
+    }
+
+    return updatedExam;
+  }
+
+  async reschedule(id: string, rescheduleExamDto: RescheduleExamDto) {
+    const exam = await this.prisma.exam.findUnique({
+      where: { id },
+      include: {
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        _count: {
+          select: {
+            submissions: true,
+          },
+        },
+      },
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    if (exam.status === 'ONGOING') {
+      throw new BadRequestException('Cannot reschedule an ongoing exam');
+    }
+
+    if (exam.status === 'COMPLETED' || exam.status === 'ARCHIVED') {
+      throw new BadRequestException(`Cannot reschedule exam with status ${exam.status}`);
+    }
+
+    if (exam._count.submissions > 0) {
+      throw new BadRequestException('Cannot reschedule exam that already has submissions');
+    }
+
+    if (exam.startTime && exam.startTime.getTime() <= Date.now()) {
+      throw new BadRequestException('Cannot reschedule an exam that has already started');
+    }
+
+    const startTime = new Date(rescheduleExamDto.startTime);
+    const endTime = new Date(rescheduleExamDto.endTime);
+
+    if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
+      throw new BadRequestException('Invalid startTime or endTime');
+    }
+
+    if (endTime <= startTime) {
+      throw new BadRequestException('endTime must be after startTime');
+    }
+
+    const availableWindowMinutes = (endTime.getTime() - startTime.getTime()) / 60000;
+    if (availableWindowMinutes < exam.duration) {
+      throw new BadRequestException(
+        `Exam duration (${exam.duration} minutes) exceeds the scheduled window`,
+      );
+    }
+
+    const updatedExam = await this.prisma.exam.update({
+      where: { id },
+      data: {
+        startTime,
+        endTime,
+      },
+      include: {
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+      },
+    });
+
+    try {
+      const studentIds = await this.getCourseRecipientIds(updatedExam.course.id);
+      await this.notificationsService.createForUsers(studentIds, {
+        kind: 'EXAM_UPDATED',
+        title: 'Exam rescheduled',
+        message: `Exam "${updatedExam.title}" has a new schedule. Please check the updated exam time.`,
+        link: '/student/exams',
+        priority: 'high',
+        metadata: {
+          examId: updatedExam.id,
+          courseId: updatedExam.course.id,
+          startTime: updatedExam.startTime,
+          endTime: updatedExam.endTime,
+        },
+      });
+    } catch {
+      // Notification failures must not block exam reschedule.
     }
 
     return updatedExam;

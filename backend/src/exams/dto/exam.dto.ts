@@ -83,6 +83,14 @@ export class UpdateExamDto {
   status?: string;
 }
 
+export class RescheduleExamDto {
+  @IsDateString()
+  startTime: string;
+
+  @IsDateString()
+  endTime: string;
+}
+
 export class AddQuestionsToExamDto {
   @IsArray()
   @IsString({ each: true })

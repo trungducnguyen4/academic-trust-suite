@@ -361,6 +361,13 @@ class ApiClient {
     });
   }
 
+  async rescheduleExam(id: string, data: { startTime: string; endTime: string }) {
+    return this.request<any>(`/exams/${id}/reschedule`, {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
   async publishExam(id: string) {
     return this.request<any>(`/exams/${id}/publish`, { method: 'POST' });
   }

@@ -40,6 +40,7 @@ import {
   Plus,
   FileText,
   Clock,
+  CalendarClock,
   Eye,
   Edit2,
   Trash2,
@@ -126,11 +127,35 @@ export default function ExamManagement() {
   const [isDeleting, setIsDeleting] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
+  const [showRescheduleDialog, setShowRescheduleDialog] = useState(false);
+  const [isRescheduling, setIsRescheduling] = useState(false);
   const [editForm, setEditForm] = useState({
     title: "",
     description: "",
     passingScore: "",
   });
+  const [rescheduleForm, setRescheduleForm] = useState({
+    startTime: "",
+    endTime: "",
+  });
+
+  const toDatetimeLocalValue = (isoDate?: string) => {
+    if (!isoDate) return "";
+    const parsed = new Date(isoDate);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const localDate = new Date(parsed.getTime() - parsed.getTimezoneOffset() * 60000);
+    return localDate.toISOString().slice(0, 16);
+  };
+
+  const formatExamMetadata = (exam: Exam) => {
+    const parts = [];
+    if (exam.duration) parts.push(`${exam.duration} min`);
+    if (exam._count?.examQuestions) parts.push(`${exam._count.examQuestions} Q`);
+    if (exam._count?.submissions) parts.push(`${exam._count.submissions} submissions`);
+    const createdAgo = formatDistanceToNow(new Date(exam.createdAt), { addSuffix: false });
+    if (createdAgo) parts.push(`created ${createdAgo} ago`);
+    return parts.join(" • ");
+  };
 
   useEffect(() => {
     fetchExams();
@@ -212,6 +237,73 @@ export default function ExamManagement() {
       toast.error("Failed to update exam");
     } finally {
       setIsUpdating(false);
+    }
+  };
+
+  const handleOpenRescheduleDialog = (exam: Exam) => {
+    setSelectedExam(exam);
+    setRescheduleForm({
+      startTime: toDatetimeLocalValue(exam.startTime),
+      endTime: toDatetimeLocalValue(exam.endTime),
+    });
+    setShowRescheduleDialog(true);
+  };
+
+  const handleSaveReschedule = async () => {
+    if (!selectedExam) return;
+
+    if (!rescheduleForm.startTime || !rescheduleForm.endTime) {
+      toast.error("Please provide both start and end time");
+      return;
+    }
+
+    const startTime = new Date(rescheduleForm.startTime);
+    const endTime = new Date(rescheduleForm.endTime);
+
+    if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime())) {
+      toast.error("Invalid schedule date/time");
+      return;
+    }
+
+    if (endTime <= startTime) {
+      toast.error("End time must be after start time");
+      return;
+    }
+
+    if ((endTime.getTime() - startTime.getTime()) / 60000 < selectedExam.duration) {
+      toast.error(
+        `Schedule window must be at least ${selectedExam.duration} minutes`,
+      );
+      return;
+    }
+
+    try {
+      setIsRescheduling(true);
+      await api.rescheduleExam(selectedExam.id, {
+        startTime: startTime.toISOString(),
+        endTime: endTime.toISOString(),
+      });
+
+      setExams((prev) =>
+        prev.map((exam) =>
+          exam.id === selectedExam.id
+            ? {
+                ...exam,
+                startTime: startTime.toISOString(),
+                endTime: endTime.toISOString(),
+              }
+            : exam,
+        ),
+      );
+
+      toast.success("Exam schedule updated successfully");
+      setShowRescheduleDialog(false);
+      setSelectedExam(null);
+    } catch (error) {
+      console.error("Failed to reschedule exam:", error);
+      toast.error("Failed to reschedule exam");
+    } finally {
+      setIsRescheduling(false);
     }
   };
 
@@ -537,13 +629,10 @@ export default function ExamManagement() {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Title</TableHead>
+                      <TableHead className="max-w-sm">Title</TableHead>
                       <TableHead>Course</TableHead>
-                      <TableHead className="text-center">Duration</TableHead>
-                      <TableHead className="text-center">Questions</TableHead>
-                      <TableHead className="text-center">Submissions</TableHead>
+                      <TableHead>Schedule</TableHead>
                       <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Created</TableHead>
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -556,7 +645,12 @@ export default function ExamManagement() {
                       return (
                         <TableRow key={exam.id} className="hover:bg-muted/50">
                           <TableCell className="font-medium">
-                            {exam.title}
+                            <div>
+                              <div className="truncate">{exam.title}</div>
+                              <div className="text-xs text-muted-foreground mt-1">
+                                {formatExamMetadata(exam)}
+                              </div>
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="text-sm">
@@ -569,16 +663,25 @@ export default function ExamManagement() {
                               </div>
                             </div>
                           </TableCell>
-                          <TableCell className="text-center">
-                            {exam.duration} min
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant="outline">
-                              {exam._count?.examQuestions || 0}
-                            </Badge>
-                          </TableCell>
-                          <TableCell className="text-center text-sm">
-                            {exam._count?.submissions || 0}
+                          <TableCell className="max-w-[14rem]">
+                            <div className="text-xs text-muted-foreground leading-5">
+                              {exam.startTime ? (
+                                <div className="truncate">
+                                  <span className="font-medium">Start:</span>{" "}
+                                  {new Date(exam.startTime).toLocaleString()}
+                                </div>
+                              ) : (
+                                <div className="truncate">Start: Not scheduled</div>
+                              )}
+                              {exam.endTime ? (
+                                <div className="truncate">
+                                  <span className="font-medium">End:</span>{" "}
+                                  {new Date(exam.endTime).toLocaleString()}
+                                </div>
+                              ) : (
+                                <div className="truncate">End: Not scheduled</div>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <Badge
@@ -589,9 +692,6 @@ export default function ExamManagement() {
                             >
                               {statusConfig[exam.status]?.label || exam.status}
                             </Badge>
-                          </TableCell>
-                          <TableCell className="text-right text-xs text-muted-foreground">
-                            {createdAgo}
                           </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>
@@ -638,6 +738,16 @@ export default function ExamManagement() {
                                   >
                                     <BarChart3 className="h-4 w-4" />
                                     Results
+                                  </DropdownMenuItem>
+                                )}
+                                {(exam.status === "DRAFT" ||
+                                  exam.status === "PUBLISHED") && (
+                                  <DropdownMenuItem
+                                    onClick={() => handleOpenRescheduleDialog(exam)}
+                                    className="gap-2"
+                                  >
+                                    <CalendarClock className="h-4 w-4" />
+                                    Reschedule
                                   </DropdownMenuItem>
                                 )}
                                 {exam.status === "DRAFT" && (
@@ -743,6 +853,65 @@ export default function ExamManagement() {
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : null}
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reschedule Dialog */}
+      <Dialog open={showRescheduleDialog} onOpenChange={setShowRescheduleDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reschedule Exam</DialogTitle>
+            <DialogDescription>
+              Update the start and end time for "{selectedExam?.title}".
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="rescheduleStartTime">Start time</Label>
+              <Input
+                id="rescheduleStartTime"
+                type="datetime-local"
+                value={rescheduleForm.startTime}
+                onChange={(e) =>
+                  setRescheduleForm((prev) => ({
+                    ...prev,
+                    startTime: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rescheduleEndTime">End time</Label>
+              <Input
+                id="rescheduleEndTime"
+                type="datetime-local"
+                value={rescheduleForm.endTime}
+                onChange={(e) =>
+                  setRescheduleForm((prev) => ({
+                    ...prev,
+                    endTime: e.target.value,
+                  }))
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              The exam window must be at least the configured duration.
+            </p>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowRescheduleDialog(false)}
+            >
+              Cancel
+            </Button>
+            <Button onClick={handleSaveReschedule} disabled={isRescheduling}>
+              {isRescheduling ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : null}
+              Save Schedule
             </Button>
           </DialogFooter>
         </DialogContent>
