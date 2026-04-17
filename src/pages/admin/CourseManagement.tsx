@@ -57,6 +57,13 @@ import {
   Users,
 } from "lucide-react";
 import api, { unwrapPaginatedData } from "@/lib/api";
+import {
+  COURSE_TERM_OPTIONS,
+  CourseTerm,
+  formatCourseTerm,
+  getAcademicYearOptions,
+  getDefaultAcademicYear,
+} from "@/lib/course-term";
 import { toast } from "sonner";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,6 +78,8 @@ interface CourseItem {
   id: string;
   code: string;
   name: string;
+  academicYear?: string;
+  term?: CourseTerm;
   semester?: string;
   description?: string;
   credits?: number;
@@ -85,15 +94,20 @@ interface CourseItem {
 
 interface CourseForm {
   name: string;
-  semester: string;
+  academicYear: string;
+  term: CourseTerm;
   description: string;
   credits: string;
   lecturerId: string;
 }
 
+const defaultTerm: CourseTerm = "TERM_2";
+const academicYearOptions = getAcademicYearOptions();
+
 const defaultForm: CourseForm = {
   name: "",
-  semester: "",
+  academicYear: getDefaultAcademicYear(),
+  term: defaultTerm,
   description: "",
   credits: "",
   lecturerId: "unassigned",
@@ -114,7 +128,8 @@ const buildToken = (value: string, maxLength: number, fallback: string) => {
 const EMPTY_FILTERS: FilterValues = {
   status: "all",
   lecturerId: "all",
-  semester: { value: "", operator: "contains" },
+  academicYear: { value: "", operator: "contains" },
+  term: "all",
   credits: { min: undefined, max: undefined },
 };
 
@@ -186,12 +201,22 @@ export default function AdminCourseManagement() {
         })),
       },
       {
-        key: "semester",
-        label: "Semester",
+        key: "academicYear",
+        label: "Academic year",
         type: "text",
-        placeholder: "Filter by semester",
+        placeholder: "Filter by academic year",
         operators: ["contains", "startsWith", "equals"],
         defaultOperator: "contains",
+      },
+      {
+        key: "term",
+        label: "Term",
+        type: "select",
+        allLabel: "All Terms",
+        options: COURSE_TERM_OPTIONS.map((option) => ({
+          label: option.label,
+          value: option.value,
+        })),
       },
       {
         key: "credits",
@@ -208,9 +233,10 @@ export default function AdminCourseManagement() {
   const normalizedSearch = appliedSearch.trim().toLowerCase();
 
   const filteredCourses = useMemo(() => {
-    const semesterFilter = appliedFilters.semester as
+    const academicYearFilter = appliedFilters.academicYear as
       | TextFilterValue
       | undefined;
+    const termFilter = appliedFilters.term as string | undefined;
     const creditsFilter = appliedFilters.credits as
       | { min?: number; max?: number }
       | undefined;
@@ -231,12 +257,17 @@ export default function AdminCourseManagement() {
     };
 
     return courses.filter((course) => {
+      const termLabel = formatCourseTerm(
+        course.academicYear,
+        course.term,
+        course.semester,
+      );
       const matchesSearch = !normalizedSearch
         ? true
         : [
             course.code,
             course.name,
-            course.semester || "",
+            termLabel,
             course.lecturer?.fullName || "",
           ]
             .join(" ")
@@ -251,7 +282,12 @@ export default function AdminCourseManagement() {
         !lecturerValue ||
         lecturerValue === "all" ||
         course.lecturerId === lecturerValue;
-      const matchesSemester = matchesText(course.semester, semesterFilter);
+      const matchesAcademicYear = matchesText(
+        course.academicYear,
+        academicYearFilter,
+      );
+      const matchesTerm =
+        !termFilter || termFilter === "all" || course.term === termFilter;
       const matchesCredits = (() => {
         if (
           !creditsFilter ||
@@ -271,7 +307,8 @@ export default function AdminCourseManagement() {
         matchesSearch &&
         matchesStatus &&
         matchesLecturer &&
-        matchesSemester &&
+        matchesAcademicYear &&
+        matchesTerm &&
         matchesCredits
       );
     });
@@ -354,7 +391,8 @@ export default function AdminCourseManagement() {
 
   const toPayload = (form: CourseForm, allowUnassign = false) => ({
     name: form.name.trim(),
-    semester: form.semester.trim() || undefined,
+    academicYear: form.academicYear.trim() || undefined,
+    term: form.term || undefined,
     description: form.description.trim() || undefined,
     credits: form.credits ? Number(form.credits) : undefined,
     lecturerId:
@@ -397,7 +435,8 @@ export default function AdminCourseManagement() {
     setEditingCourseId(course.id);
     setEditForm({
       name: course.name,
-      semester: course.semester || "",
+      academicYear: course.academicYear || getDefaultAcademicYear(),
+      term: course.term || defaultTerm,
       description: course.description || "",
       credits: course.credits ? String(course.credits) : "",
       lecturerId: course.lecturerId || "unassigned",
@@ -469,13 +508,22 @@ export default function AdminCourseManagement() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="semester">Semester</Label>
-          <Input
-            id="semester"
-            value={form.semester}
-            onChange={(e) => onChange({ semester: e.target.value })}
-            placeholder="e.g. 2025-2026/2"
-          />
+          <Label htmlFor="academicYear">Academic year</Label>
+          <Select
+            value={form.academicYear}
+            onValueChange={(value) => onChange({ academicYear: value })}
+          >
+            <SelectTrigger id="academicYear">
+              <SelectValue placeholder="Select academic year" />
+            </SelectTrigger>
+            <SelectContent>
+              {academicYearOptions.map((year) => (
+                <SelectItem key={year} value={year}>
+                  {year}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
       </div>
 
@@ -489,16 +537,37 @@ export default function AdminCourseManagement() {
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="credits">Credits</Label>
-          <Input
-            id="credits"
-            type="number"
-            min={1}
-            max={10}
-            value={form.credits}
-            onChange={(e) => onChange({ credits: e.target.value })}
-          />
+          <Label htmlFor="term">Term</Label>
+          <Select
+            value={form.term}
+            onValueChange={(value) =>
+              onChange({ term: value as CourseTerm })
+            }
+          >
+            <SelectTrigger id="term">
+              <SelectValue placeholder="Select term" />
+            </SelectTrigger>
+            <SelectContent>
+              {COURSE_TERM_OPTIONS.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {option.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
+      </div>
+
+      <div className="space-y-2">
+        <Label htmlFor="credits">Credits</Label>
+        <Input
+          id="credits"
+          type="number"
+          min={1}
+          max={10}
+          value={form.credits}
+          onChange={(e) => onChange({ credits: e.target.value })}
+        />
       </div>
 
       <div className="space-y-2">
@@ -567,7 +636,12 @@ export default function AdminCourseManagement() {
                   </Button>
                   <Button
                     onClick={handleCreate}
-                    disabled={saving || !createForm.name.trim()}
+                    disabled={
+                      saving ||
+                      !createForm.name.trim() ||
+                      !createForm.academicYear.trim() ||
+                      !createForm.term
+                    }
                   >
                     {saving ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -618,12 +692,12 @@ export default function AdminCourseManagement() {
               value={searchInput}
               onChange={setSearchInput}
               onSearch={runSearch}
-              placeholder="Search by code, name, semester, or lecturer"
+              placeholder="Search by code, name, academic year, term, or lecturer"
               className="flex-1"
             />
             <FilterPanel
               title="Course filters"
-              description="Filter courses by status, lecturer, semester, and credits."
+              description="Filter courses by status, lecturer, academic year, term, and credits."
               filters={courseFilterDefinitions}
               value={draftFilters}
               onValueChange={(key, nextValue) =>
@@ -652,7 +726,7 @@ export default function AdminCourseManagement() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Course Name</TableHead>
-                    <TableHead>Semester</TableHead>
+                    <TableHead>Term</TableHead>
                     <TableHead>Lecturer</TableHead>
                     <TableHead className="text-center min-w-20">
                       Students
@@ -674,7 +748,13 @@ export default function AdminCourseManagement() {
                         <TableCell className="font-medium">
                           {course.name}
                         </TableCell>
-                        <TableCell>{course.semester || "N/A"}</TableCell>
+                        <TableCell>
+                          {formatCourseTerm(
+                            course.academicYear,
+                            course.term,
+                            course.semester,
+                          )}
+                        </TableCell>
                         <TableCell>
                           {course.lecturer ? (
                             <div className="text-sm">
@@ -782,7 +862,12 @@ export default function AdminCourseManagement() {
             </Button>
             <Button
               onClick={handleUpdate}
-              disabled={saving || !editForm.name.trim()}
+              disabled={
+                saving ||
+                !editForm.name.trim() ||
+                !editForm.academicYear.trim() ||
+                !editForm.term
+              }
             >
               {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save"}
             </Button>

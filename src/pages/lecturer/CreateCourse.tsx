@@ -78,12 +78,21 @@ import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { useAuth } from "@/contexts/AuthContext";
+import {
+  COURSE_TERM_OPTIONS,
+  CourseTerm,
+  formatCourseTerm,
+  getAcademicYearOptions,
+  getDefaultAcademicYear,
+} from "@/lib/course-term";
 
 interface Course {
   id: string;
   code: string;
   name: string;
-  semester: string;
+  academicYear?: string;
+  term?: CourseTerm;
+  semester?: string;
   description?: string;
   credits?: number;
   students: number;
@@ -97,6 +106,8 @@ interface APICourse {
   code: string;
   name: string;
   description?: string;
+  academicYear?: string;
+  term?: CourseTerm;
   semester?: string;
   credits?: number;
   status?: string;
@@ -135,9 +146,14 @@ const buildToken = (value: string, maxLength: number, fallback: string) => {
   return (compact.slice(0, maxLength) || fallback).toUpperCase();
 };
 
+const academicYearOptions = getAcademicYearOptions();
+const defaultAcademicYear = getDefaultAcademicYear();
+const defaultTerm: CourseTerm = "TERM_2";
+
 const EMPTY_FILTERS: FilterValues = {
   status: "all",
-  semester: { value: "", operator: "contains" },
+  academicYear: { value: "", operator: "contains" },
+  term: "all",
   students: { min: undefined, max: undefined },
 };
 
@@ -166,7 +182,8 @@ export default function CreateCourse() {
   // Form state
   const [newCourse, setNewCourse] = useState({
     name: "",
-    semester: "2025-2026/2",
+    academicYear: defaultAcademicYear,
+    term: defaultTerm,
     description: "",
     credits: "",
   });
@@ -174,7 +191,8 @@ export default function CreateCourse() {
   const [editCourse, setEditCourse] = useState({
     code: "",
     name: "",
-    semester: "",
+    academicYear: defaultAcademicYear,
+    term: defaultTerm,
     description: "",
     credits: "",
   });
@@ -212,7 +230,9 @@ export default function CreateCourse() {
           id: c.id,
           code: c.code,
           name: c.name,
-          semester: c.semester || "N/A",
+          academicYear: c.academicYear || undefined,
+          term: c.term || undefined,
+          semester: c.semester || undefined,
           description: c.description,
           credits: c.credits,
           // Accept multiple possible shapes returned by the backend:
@@ -252,11 +272,21 @@ export default function CreateCourse() {
         ],
       },
       {
-        key: "semester",
-        label: "Semester",
+        key: "academicYear",
+        label: "Academic year",
         type: "text",
-        placeholder: "Filter by semester",
+        placeholder: "Filter by academic year",
         operators: ["contains", "startsWith", "equals"],
+      },
+      {
+        key: "term",
+        label: "Term",
+        type: "select",
+        allLabel: "All Terms",
+        options: COURSE_TERM_OPTIONS.map((option) => ({
+          label: option.label,
+          value: option.value,
+        })),
       },
       {
         key: "students",
@@ -273,7 +303,8 @@ export default function CreateCourse() {
   const normalizedSearch = appliedSearch.trim().toLowerCase();
   const filteredCourses = useMemo(() => {
     const statusFilter = appliedFilters.status as string | undefined;
-    const semesterFilter = appliedFilters.semester as TextFilterValue | undefined;
+    const academicYearFilter = appliedFilters.academicYear as TextFilterValue | undefined;
+    const termFilter = appliedFilters.term as string | undefined;
     const studentsFilter = appliedFilters.students as
       | { min?: number; max?: number }
       | undefined;
@@ -288,9 +319,14 @@ export default function CreateCourse() {
     };
 
     return courses.filter((course) => {
+      const termLabel = formatCourseTerm(
+        course.academicYear,
+        course.term,
+        course.semester,
+      );
       const matchesSearch = !normalizedSearch
         ? true
-        : [course.code, course.name, course.semester]
+        : [course.code, course.name, termLabel]
             .join(" ")
             .toLowerCase()
             .includes(normalizedSearch);
@@ -300,7 +336,11 @@ export default function CreateCourse() {
         return false;
       }
 
-      if (!matchesText(course.semester, semesterFilter)) return false;
+      if (!matchesText(course.academicYear, academicYearFilter)) return false;
+
+      if (termFilter && termFilter !== "all" && course.term !== termFilter) {
+        return false;
+      }
 
       if (
         studentsFilter &&
@@ -462,13 +502,15 @@ export default function CreateCourse() {
         name: newCourse.name,
         description: newCourse.description || undefined,
         credits: newCourse.credits ? parseInt(newCourse.credits) : undefined,
-        semester: newCourse.semester,
+        academicYear: newCourse.academicYear,
+        term: newCourse.term,
       });
       const mapped: Course = {
         id: created.id,
         code: created.code,
         name: created.name,
-        semester: newCourse.semester,
+        academicYear: newCourse.academicYear,
+        term: newCourse.term,
         students: 0,
         exams: 0,
         status: "active",
@@ -501,7 +543,8 @@ export default function CreateCourse() {
     setEditCourse({
       code: course.code,
       name: course.name,
-      semester: course.semester || "",
+      academicYear: course.academicYear || defaultAcademicYear,
+      term: course.term || defaultTerm,
       description: course.description || "",
       credits: course.credits ? String(course.credits) : "",
     });
@@ -515,7 +558,8 @@ export default function CreateCourse() {
     try {
       const updated = await api.updateCourse(editingCourseId, {
         name: editCourse.name,
-        semester: editCourse.semester || undefined,
+        academicYear: editCourse.academicYear || undefined,
+        term: editCourse.term || undefined,
         description: editCourse.description || undefined,
         credits: editCourse.credits ? Number(editCourse.credits) : undefined,
       });
@@ -527,6 +571,8 @@ export default function CreateCourse() {
                 ...course,
                 code: updated.code,
                 name: updated.name,
+                academicYear: updated.academicYear || course.academicYear,
+                term: updated.term || course.term,
                 semester: updated.semester || course.semester,
                 description: updated.description,
                 credits: updated.credits,
@@ -628,7 +674,8 @@ export default function CreateCourse() {
       setCreatedCourseCode("");
       setNewCourse({
         name: "",
-        semester: "2025-2026/2",
+        academicYear: defaultAcademicYear,
+        term: defaultTerm,
         description: "",
         credits: "",
       });
@@ -643,6 +690,14 @@ export default function CreateCourse() {
       setEnrollTab("manual");
     }, 200);
   };
+
+  const handleDialogInteractOutside = useCallback((event: Event) => {
+    const target = event.target as HTMLElement | null;
+    if (!target) return;
+    if (target.closest("[data-radix-popper-content-wrapper]")) {
+      event.preventDefault();
+    }
+  }, []);
 
   const handleDelete = async (id: string) => {
     try {
@@ -711,7 +766,10 @@ export default function CreateCourse() {
                 Create Course
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+            <DialogContent
+              className="max-w-3xl max-h-[90vh] overflow-y-auto"
+              onInteractOutside={handleDialogInteractOutside}
+            >
               {/* Step indicator */}
               <div className="flex items-center gap-3 mb-2">
                 <div
@@ -759,26 +817,22 @@ export default function CreateCourse() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="semester">Semester</Label>
+                        <Label htmlFor="academicYear">Academic year</Label>
                         <Select
-                          value={newCourse.semester}
+                          value={newCourse.academicYear}
                           onValueChange={(v) =>
-                            setNewCourse({ ...newCourse, semester: v })
+                            setNewCourse({ ...newCourse, academicYear: v })
                           }
                         >
                           <SelectTrigger>
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
-                            <SelectItem value="2025-2026/2">
-                              2025-2026 / Semester 2
-                            </SelectItem>
-                            <SelectItem value="2025-2026/1">
-                              2025-2026 / Semester 1
-                            </SelectItem>
-                            <SelectItem value="2026-2027/1">
-                              2026-2027 / Semester 1
-                            </SelectItem>
+                            {academicYearOptions.map((year) => (
+                              <SelectItem key={year} value={year}>
+                                {year}
+                              </SelectItem>
+                            ))}
                           </SelectContent>
                         </Select>
                       </div>
@@ -796,20 +850,46 @@ export default function CreateCourse() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="credits">Credits</Label>
-                        <Input
-                          id="credits"
-                          type="number"
-                          placeholder="e.g., 3"
-                          value={newCourse.credits}
-                          onChange={(e) =>
+                        <Label htmlFor="term">Term</Label>
+                        <Select
+                          value={newCourse.term}
+                          onValueChange={(v) =>
                             setNewCourse({
                               ...newCourse,
-                              credits: e.target.value,
+                              term: v as CourseTerm,
                             })
                           }
-                        />
+                        >
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {COURSE_TERM_OPTIONS.map((option) => (
+                              <SelectItem
+                                key={option.value}
+                                value={option.value}
+                              >
+                                {option.label}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="credits">Credits</Label>
+                      <Input
+                        id="credits"
+                        type="number"
+                        placeholder="e.g., 3"
+                        value={newCourse.credits}
+                        onChange={(e) =>
+                          setNewCourse({
+                            ...newCourse,
+                            credits: e.target.value,
+                          })
+                        }
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="description">
@@ -835,7 +915,12 @@ export default function CreateCourse() {
                     </Button>
                     <Button
                       onClick={handleCreate}
-                      disabled={isCreating || !newCourse.name}
+                      disabled={
+                        isCreating ||
+                        !newCourse.name ||
+                        !newCourse.academicYear ||
+                        !newCourse.term
+                      }
                       className="gap-2"
                     >
                       {isCreating ? (
@@ -1204,7 +1289,10 @@ export default function CreateCourse() {
           </Dialog>
 
           <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
-            <DialogContent className="max-w-xl">
+            <DialogContent
+              className="max-w-xl"
+              onInteractOutside={handleDialogInteractOutside}
+            >
               <DialogHeader>
                 <DialogTitle>Edit Course</DialogTitle>
                 <DialogDescription>
@@ -1224,18 +1312,27 @@ export default function CreateCourse() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-semester">Semester</Label>
-                    <Input
-                      id="edit-semester"
-                      value={editCourse.semester}
-                      onChange={(e) =>
+                    <Label htmlFor="edit-academicYear">Academic year</Label>
+                    <Select
+                      value={editCourse.academicYear}
+                      onValueChange={(v) =>
                         setEditCourse((prev) => ({
                           ...prev,
-                          semester: e.target.value,
+                          academicYear: v,
                         }))
                       }
-                      placeholder="e.g. 2025-2026/2"
-                    />
+                    >
+                      <SelectTrigger id="edit-academicYear">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {academicYearOptions.map((year) => (
+                          <SelectItem key={year} value={year}>
+                            {year}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -1254,21 +1351,45 @@ export default function CreateCourse() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-credits">Credits</Label>
-                    <Input
-                      id="edit-credits"
-                      type="number"
-                      min={1}
-                      max={10}
-                      value={editCourse.credits}
-                      onChange={(e) =>
+                    <Label htmlFor="edit-term">Term</Label>
+                    <Select
+                      value={editCourse.term}
+                      onValueChange={(v) =>
                         setEditCourse((prev) => ({
                           ...prev,
-                          credits: e.target.value,
+                          term: v as CourseTerm,
                         }))
                       }
-                    />
+                    >
+                      <SelectTrigger id="edit-term">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {COURSE_TERM_OPTIONS.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="edit-credits">Credits</Label>
+                  <Input
+                    id="edit-credits"
+                    type="number"
+                    min={1}
+                    max={10}
+                    value={editCourse.credits}
+                    onChange={(e) =>
+                      setEditCourse((prev) => ({
+                        ...prev,
+                        credits: e.target.value,
+                      }))
+                    }
+                  />
                 </div>
 
                 <div className="space-y-2">
@@ -1296,7 +1417,12 @@ export default function CreateCourse() {
                 </Button>
                 <Button
                   onClick={handleUpdate}
-                  disabled={isUpdating || !editCourse.name}
+                  disabled={
+                    isUpdating ||
+                    !editCourse.name ||
+                    !editCourse.academicYear ||
+                    !editCourse.term
+                  }
                 >
                   {isUpdating ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
@@ -1341,12 +1467,12 @@ export default function CreateCourse() {
               value={searchInput}
               onChange={setSearchInput}
               onSearch={runSearch}
-              placeholder="Search by code, name, semester"
+              placeholder="Search by code, name, academic year, or term"
               className="flex-1"
             />
             <FilterPanel
               title="Course filters"
-              description="Filter by status, semester, and student range."
+              description="Filter by status, academic year, term, and student range."
               filters={courseFilterDefinitions}
               value={draftFilters}
               onValueChange={(key, nextValue) =>
@@ -1384,7 +1510,7 @@ export default function CreateCourse() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Course Name</TableHead>
-                    <TableHead>Semester</TableHead>
+                    <TableHead>Term</TableHead>
                     <TableHead className="text-center">Students</TableHead>
                     <TableHead className="text-center">Exams</TableHead>
                     <TableHead>Status</TableHead>
@@ -1399,7 +1525,11 @@ export default function CreateCourse() {
                       </TableCell>
                       <TableCell className="font-medium">{course.name}</TableCell>
                       <TableCell className="text-muted-foreground">
-                        {course.semester}
+                        {formatCourseTerm(
+                          course.academicYear,
+                          course.term,
+                          course.semester,
+                        )}
                       </TableCell>
                       <TableCell className="text-center">
                         {course.students}

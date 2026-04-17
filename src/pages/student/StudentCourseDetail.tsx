@@ -27,12 +27,15 @@ import {
 } from "@/components/ui/card";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { CourseTerm, formatCourseTerm } from "@/lib/course-term";
 
 type Course = {
   id: string;
   code?: string;
   name?: string;
   description?: string;
+  academicYear?: string;
+  term?: CourseTerm;
   semester?: string;
   credits?: number;
 };
@@ -235,7 +238,11 @@ export default function StudentCourseDetail() {
             <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-muted-foreground">
               <span className="flex items-center gap-1">
                 <BookOpen className="h-4 w-4" />
-                Semester: {course?.semester || "N/A"}
+                Term: {formatCourseTerm(
+                  course?.academicYear,
+                  course?.term,
+                  course?.semester,
+                )}
               </span>
               <span className="flex items-center gap-1">
                 <FileText className="h-4 w-4" />

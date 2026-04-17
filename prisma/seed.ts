@@ -1,4 +1,4 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, CourseTerm } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -161,7 +161,8 @@ async function main() {
     name: string;
     description: string;
     credits: number;
-    semester: string;
+    academicYear: string;
+    term: CourseTerm;
     lecturerId: string;
   }> = [];
 
@@ -175,7 +176,8 @@ async function main() {
         name: `Class ${code}`,
         description: `Generated class ${code}`,
         credits: 3,
-        semester: '2026-1',
+        academicYear: '2025-2026',
+        term: CourseTerm.TERM_2,
         lecturerId: lecturer.id,
       });
       courseIndex += 1;

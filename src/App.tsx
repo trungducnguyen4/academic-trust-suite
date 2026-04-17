@@ -16,6 +16,7 @@ import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import Profile from "./pages/Profile";
 import NotificationsPage from "./pages/Notifications";
+import Privacy from "./pages/Privacy";
 
 // Student
 import StudentDashboard from "./pages/student/StudentDashboard";
@@ -89,6 +90,7 @@ const App = () => {
               <Route path="/" element={<Index />} />
               <Route path="/login" element={<Login />} />
               <Route path="/reset-password" element={<ResetPassword />} />
+              <Route path="/privacy" element={<Privacy />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/notifications" element={<NotificationsPage />} />
 

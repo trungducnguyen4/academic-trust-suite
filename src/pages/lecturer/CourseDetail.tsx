@@ -64,6 +64,7 @@ import { toast } from "sonner";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import { BulkStudentImport } from "@/components/common/BulkStudentImport";
+import { CourseTerm, formatCourseTerm } from "@/lib/course-term";
 
 interface Student {
   enrollmentId: string;
@@ -90,6 +91,8 @@ interface Course {
   id: string;
   code?: string;
   name?: string;
+  academicYear?: string;
+  term?: CourseTerm;
   semester?: string;
 }
 
@@ -179,6 +182,8 @@ export default function CourseDetail() {
             id: courseRes.id,
             code: courseRes.code,
             name: courseRes.name,
+            academicYear: courseRes.academicYear,
+            term: courseRes.term,
             semester: courseRes.semester,
           });
           setResolvedCourseId(courseRes.id);
@@ -491,7 +496,11 @@ export default function CourseDetail() {
             }
           />
           <p className="text-muted-foreground">
-            {course?.semester || "Semester unknown"} • {students.length} Students Enrolled
+            {formatCourseTerm(
+              course?.academicYear,
+              course?.term,
+              course?.semester,
+            )} • {students.length} Students Enrolled
           </p>
             {typeof window !== "undefined" &&
               window.location.hostname.includes("localhost") && (

@@ -1,3 +1,5 @@
+import { CourseTerm } from './course-term';
+
 export const API_BASE_URL = 'http://localhost:3001/api';
 
 interface RequestOptions {
@@ -191,7 +193,8 @@ class ApiClient {
     name: string;
     description?: string;
     credits?: number;
-    semester?: string;
+    academicYear: string;
+    term: CourseTerm;
     lecturerId?: string;
   }) {
     return this.request<any>('/courses', {

@@ -23,6 +23,15 @@ async function bootstrap() {
   // API prefix
   app.setGlobalPrefix('api');
 
+  // If running behind a reverse proxy/load balancer, trust X-Forwarded-For
+  // so `req.ip` reflects the original client IP. Use the underlying Express
+  // instance to set this option (avoids TypeScript error on INestApplication).
+  const httpAdapter = app.getHttpAdapter();
+  const expressInstance = httpAdapter && (httpAdapter as any).getInstance ? (httpAdapter as any).getInstance() : null;
+  if (expressInstance && typeof expressInstance.set === 'function') {
+    expressInstance.set('trust proxy', true);
+  }
+
   // Swagger docs at /docs
   const swaggerConfig = new DocumentBuilder()
     .setTitle('ExamTrust API')
