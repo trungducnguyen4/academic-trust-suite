@@ -7,6 +7,7 @@ import {
   UnauthorizedException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isIpInAnyCidr, normalizeIp } from '../common/utils/ip.utils';
 import { GenerateExamLinkDto, JoinExamLinkDto, UpdateExamLinkDto } from './dto/exam-link.dto';
 import { createHash, randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -125,6 +126,7 @@ export class ExamLinksService {
             duration: true,
             startTime: true,
             endTime: true,
+            settings: true,
             status: true,
             course: { select: { code: true, name: true } },
           },
@@ -139,7 +141,7 @@ export class ExamLinksService {
     return link;
   }
 
-  private async validateEligibility(link: any, userId?: string) {
+  private async validateEligibility(link: any, userId?: string, ip?: string) {
     if (link.disabled) {
       throw new ForbiddenException('Link has been revoked');
     }
@@ -185,6 +187,22 @@ export class ExamLinksService {
         throw new ForbiddenException('You are not eligible for this exam link');
       }
     }
+
+    // Check optional IP restrictions defined on the exam settings
+    try {
+      const allowedCidrs = Array.isArray(link?.exam?.settings?.allowedIpCidrs)
+        ? link.exam.settings.allowedIpCidrs
+        : null;
+      if (allowedCidrs && allowedCidrs.length > 0) {
+        if (!ip) throw new ForbiddenException('Access restricted to approved IP ranges');
+        const allowed = isIpInAnyCidr(normalizeIp(ip), allowedCidrs as string[]);
+        if (!allowed) throw new ForbiddenException('Access denied: outside allowed lab network');
+      }
+    } catch (e) {
+      // If IP check fails due to malformed config, default to deny
+      if (e instanceof ForbiddenException) throw e;
+      throw new ForbiddenException('Access restricted by network policy');
+    }
   }
 
   async validateToken(token: string) {
@@ -222,7 +240,7 @@ export class ExamLinksService {
 
   async joinByToken(token: string, dto: JoinExamLinkDto, context: { userId?: string; ip?: string; userAgent?: string }) {
     const link = await this.getLinkByRawToken(token);
-    await this.validateEligibility(link, context.userId);
+    await this.validateEligibility(link, context.userId, context.ip);
 
     if (link.passwordHash) {
       const provided = dto.password || '';

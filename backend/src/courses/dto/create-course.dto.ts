@@ -1,4 +1,5 @@
-import { IsString, IsOptional, IsInt, Min, Max, IsUUID } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max, IsUUID, IsEnum, Matches } from 'class-validator';
+import { CourseTerm } from './course-term.enum';
 
 export class CreateCourseDto {
   @IsString()
@@ -14,9 +15,12 @@ export class CreateCourseDto {
   @Max(10)
   credits?: number;
 
-  @IsOptional()
   @IsString()
-  semester?: string;
+  @Matches(/^\d{4}-\d{4}$/, { message: 'academicYear must be in YYYY-YYYY format' })
+  academicYear: string;
+
+  @IsEnum(CourseTerm)
+  term: CourseTerm;
 
   @IsOptional()
   @IsUUID()

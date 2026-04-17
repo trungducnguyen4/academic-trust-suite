@@ -38,6 +38,7 @@ import {
 import { Link } from "react-router-dom";
 import { api, unwrapPaginatedData } from "@/lib/api";
 import { formatDistanceToNow } from "date-fns";
+import { CourseTerm, COURSE_TERM_OPTIONS, formatCourseTerm } from "@/lib/course-term";
 import {
   Select,
   SelectContent,
@@ -52,6 +53,8 @@ interface Course {
   name: string;
   department?: string;
   faculty?: string;
+  academicYear?: string;
+  term?: CourseTerm;
   semester?: string;
   enrolledStudents?: number;
   totalStudents?: number;
@@ -70,7 +73,8 @@ interface GroupedCourses {
 const EMPTY_FILTERS: FilterValues = {
   faculty: "all",
   examState: "all",
-  semester: { value: "", operator: "contains" },
+  academicYear: { value: "", operator: "contains" },
+  term: "all",
   students: { min: undefined, max: undefined },
 };
 
@@ -120,6 +124,8 @@ export default function CourseManagement() {
         name: c.name,
         faculty: c.faculty ?? c.department ?? "General",
         department: c.department,
+        academicYear: c.academicYear,
+        term: c.term,
         semester: c.semester,
         enrolledStudents: c.enrolledStudents ?? c._count?.enrollments ?? 0,
         totalStudents: c.totalStudents ?? c._count?.enrollments ?? 0,
@@ -179,11 +185,21 @@ export default function CourseManagement() {
         ],
       },
       {
-        key: "semester",
-        label: "Semester",
+        key: "academicYear",
+        label: "Academic year",
         type: "text",
         operators: ["contains", "startsWith", "equals"],
-        placeholder: "Filter by semester",
+        placeholder: "Filter by academic year",
+      },
+      {
+        key: "term",
+        label: "Term",
+        type: "select",
+        allLabel: "All Terms",
+        options: COURSE_TERM_OPTIONS.map((option) => ({
+          label: option.label,
+          value: option.value,
+        })),
       },
       {
         key: "students",
@@ -201,9 +217,10 @@ export default function CourseManagement() {
   const filteredCourses = useMemo(() => {
     const facultyFilter = appliedFilters.faculty as string | undefined;
     const examStateFilter = appliedFilters.examState as string | undefined;
-    const semesterFilter = appliedFilters.semester as
+    const academicYearFilter = appliedFilters.academicYear as
       | TextFilterValue
       | undefined;
+    const termFilter = appliedFilters.term as string | undefined;
     const studentsFilter = appliedFilters.students as
       | { min?: number; max?: number }
       | undefined;
@@ -218,9 +235,14 @@ export default function CourseManagement() {
     };
 
     return courses.filter((course) => {
+      const termLabel = formatCourseTerm(
+        course.academicYear,
+        course.term,
+        course.semester,
+      );
       const searchMatched = !normalizedSearch
         ? true
-        : [course.code, course.name, course.faculty, course.semester]
+        : [course.code, course.name, course.faculty, termLabel]
             .join(" ")
             .toLowerCase()
             .includes(normalizedSearch);
@@ -238,7 +260,11 @@ export default function CourseManagement() {
       if (examStateFilter === "hasExams" && courseExams === 0) return false;
       if (examStateFilter === "noExams" && courseExams > 0) return false;
 
-      if (!matchText(course.semester, semesterFilter)) return false;
+      if (!matchText(course.academicYear, academicYearFilter)) return false;
+
+      if (termFilter && termFilter !== "all" && course.term !== termFilter) {
+        return false;
+      }
 
       if (
         studentsFilter &&
@@ -359,12 +385,12 @@ export default function CourseManagement() {
               value={searchInput}
               onChange={setSearchInput}
               onSearch={runSearch}
-              placeholder="Search by code, name, faculty, semester"
+              placeholder="Search by code, name, faculty, academic year, or term"
               className="flex-1"
             />
             <FilterPanel
               title="Course filters"
-              description="Filter by faculty, exam state, semester, and student range."
+              description="Filter by faculty, exam state, academic year, term, and student range."
               filters={courseFilterDefinitions}
               value={draftFilters}
               onValueChange={(key, nextValue) =>

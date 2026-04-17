@@ -65,7 +65,10 @@ export class SubmissionsController {
   @Post('start')
   @UseGuards(JwtAuthGuard)
   startExam(@Body() startExamDto: StartExamDto, @Request() req) {
-    return this.submissionsService.startExam(startExamDto, req.user.id);
+    const ipHeader = req?.headers?.['x-forwarded-for'] || req?.ip || req?.socket?.remoteAddress;
+    const ip = Array.isArray(ipHeader) ? ipHeader[0] : ipHeader;
+    const userAgent = req?.headers?.['user-agent'] || undefined;
+    return this.submissionsService.startExam(startExamDto, req.user.id, { ip, userAgent });
   }
 
   @Post(':id/submit')

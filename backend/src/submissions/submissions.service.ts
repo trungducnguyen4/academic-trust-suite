@@ -1,5 +1,6 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { isIpInAnyCidr, normalizeIp } from '../common/utils/ip.utils';
 import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto } from './dto/submission.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
 import { SubmissionsEventsService } from './submissions-events.service';
@@ -54,7 +55,7 @@ export class SubmissionsService {
     }
   }
 
-  async startExam(startExamDto: StartExamDto, studentId: string): Promise<void> {
+  async startExam(startExamDto: StartExamDto, studentId: string, context?: { ip?: string; userAgent?: string }): Promise<void> {
     const exam = await this.prisma.exam.findUnique({
       where: { id: startExamDto.examId },
       include: {
@@ -91,6 +92,21 @@ export class SubmissionsService {
 
     if (exam.endTime && exam.endTime < now) {
       throw new ForbiddenException('Exam has ended');
+    }
+
+    // Check optional IP whitelist configured on exam.settings.allowedIpCidrs
+    try {
+      const allowedCidrs = Array.isArray((exam.settings || {})?.allowedIpCidrs)
+        ? (exam.settings || {})?.allowedIpCidrs
+        : null;
+      if (allowedCidrs && allowedCidrs.length > 0) {
+        if (!context?.ip) throw new ForbiddenException('Access restricted to approved IP ranges');
+        const allowed = isIpInAnyCidr(normalizeIp(context.ip), allowedCidrs as string[]);
+        if (!allowed) throw new ForbiddenException('Access denied: outside allowed lab network');
+      }
+    } catch (e) {
+      if (e instanceof ForbiddenException) throw e;
+      throw new ForbiddenException('Access restricted by network policy');
     }
 
     // Check for in-progress submission
@@ -145,6 +161,19 @@ export class SubmissionsService {
         },
       },
     });
+
+    // Create an initial proctoring session and record the client's IP (if provided)
+    try {
+      await this.prisma.proctoringSession.create({
+        data: {
+          submissionId: startedSubmission.id,
+          ipAddress: context?.ip ?? null,
+        },
+      });
+    } catch (e) {
+      // Non-fatal: proctoring session failure should not block exam start
+      // Log warning if needed in future
+    }
 
     try {
       await this.notificationsService.create({
@@ -668,6 +697,7 @@ export class SubmissionsService {
         },
         select: {
           id: true,
+          ipAddress: true,
           tabSwitchCount: true,
           mouseAnomalies: true,
           submission: {
@@ -988,7 +1018,10 @@ export class SubmissionsService {
           },
         },
         proctoring: {
-          include: {
+          select: {
+            ipAddress: true,
+            tabSwitchCount: true,
+            mouseAnomalies: true,
             logs: true,
           },
         },
