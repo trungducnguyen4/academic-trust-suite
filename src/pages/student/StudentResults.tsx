@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button";
 import { Loader2, Award } from "lucide-react";
 import api from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { getStatusBadgeLabel } from "@/components/ui/status-badge";
 
 export default function StudentResults() {
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -269,7 +270,7 @@ export default function StudentResults() {
                           {s.exam?.course?.code}
                         </p>
                         <p className="text-xs text-muted-foreground">
-                          {s.status} • {s.score !== null ? s.score : "—"}
+                          {getStatusBadgeLabel(s.status)} • {s.score !== null ? s.score : "—"}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

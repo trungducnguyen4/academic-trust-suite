@@ -25,6 +25,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { getStatusBadgeLabel } from "@/components/ui/status-badge";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import { CourseTerm, formatCourseTerm } from "@/lib/course-term";
@@ -343,7 +344,7 @@ export default function StudentCourseDetail() {
                               {exam.duration || 0} min
                             </span>
                             <Badge variant="outline">
-                              {statusLabel[exam.status] || exam.status}
+                              {statusLabel[exam.status] || getStatusBadgeLabel(exam.status)}
                             </Badge>
                           </div>
                         </div>

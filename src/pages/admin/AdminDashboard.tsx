@@ -267,7 +267,8 @@ export default function AdminDashboard() {
                           </p>
                         </div>
                         <StatusBadge
-                          variant={sub.score !== null ? "success" : "warning"}
+                          status={sub.score !== null ? "graded" : "pending"}
+                          domain="submission"
                         >
                           {sub.score !== null ? `${sub.score}%` : "Pending"}
                         </StatusBadge>

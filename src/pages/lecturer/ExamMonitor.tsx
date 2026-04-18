@@ -440,21 +440,6 @@ export default function ExamMonitor() {
     }
   };
 
-  const statusVariant = (status: StudentSession["status"]) => {
-    switch (status) {
-      case "in_progress":
-        return "info" as const;
-      case "submitted":
-        return "success" as const;
-      case "not_joined":
-        return "default" as const;
-      case "flagged":
-        return "destructive" as const;
-      case "disconnected":
-        return "warning" as const;
-    }
-  };
-
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
@@ -625,13 +610,8 @@ export default function ExamMonitor() {
                       {alert.time}
                     </span>
                     <StatusBadge
-                      variant={
-                        alert.severity === "critical"
-                          ? "destructive"
-                          : alert.severity === "warning"
-                            ? "warning"
-                            : "info"
-                      }
+                      status={alert.severity}
+                      domain="severity"
                     >
                       {alert.severity}
                     </StatusBadge>
@@ -742,7 +722,7 @@ export default function ExamMonitor() {
                         <TableCell>
                           <div className="flex items-center gap-1.5">
                             {statusIcon(s.status)}
-                            <StatusBadge variant={statusVariant(s.status)}>
+                            <StatusBadge status={s.status} domain="session">
                               {s.status.replace("_", " ")}
                             </StatusBadge>
                           </div>

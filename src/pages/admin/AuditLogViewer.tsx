@@ -4,7 +4,7 @@ import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Select,
   SelectContent,
@@ -225,20 +225,6 @@ const mockLogs: AuditLog[] = [
     details: 'Created course "Advanced Algorithms" (CS501)',
   },
 ];
-
-const SEVERITY_CONFIG = {
-  info: { variant: "secondary" as const, icon: Info, color: "text-blue-500" },
-  warning: {
-    variant: "outline" as const,
-    icon: AlertTriangle,
-    color: "text-amber-500",
-  },
-  critical: {
-    variant: "destructive" as const,
-    icon: Shield,
-    color: "text-red-500",
-  },
-};
 
 const ACTION_ICONS: Record<string, typeof User> = {
   Login: LogIn,
@@ -463,7 +449,6 @@ export default function AuditLogViewer() {
                     </TableRow>
                   ) : (
                     paginated.map((log) => {
-                      const sev = SEVERITY_CONFIG[log.severity];
                       const ActionIcon = ACTION_ICONS[log.action] || FileText;
                       return (
                         <TableRow
@@ -480,12 +465,13 @@ export default function AuditLogViewer() {
                           <TableCell>
                             <div className="flex items-center gap-2">
                               <span className="text-sm">{log.user}</span>
-                              <Badge
-                                variant="outline"
+                              <StatusBadge
+                                status={log.role}
+                                domain="role"
                                 className="text-[10px] px-1"
                               >
                                 {log.role}
-                              </Badge>
+                              </StatusBadge>
                             </div>
                           </TableCell>
                           <TableCell>
@@ -501,7 +487,12 @@ export default function AuditLogViewer() {
                             {log.ip}
                           </TableCell>
                           <TableCell>
-                            <Badge variant={sev.variant}>{log.severity}</Badge>
+                            <StatusBadge
+                              status={log.severity}
+                              domain="severity"
+                            >
+                              {log.severity}
+                            </StatusBadge>
                           </TableCell>
                           <TableCell>
                             <Button
@@ -545,11 +536,12 @@ export default function AuditLogViewer() {
                   <div>
                     <span className="text-muted-foreground">Severity</span>
                     <div className="mt-0.5">
-                      <Badge
-                        variant={SEVERITY_CONFIG[selectedLog.severity].variant}
+                      <StatusBadge
+                        status={selectedLog.severity}
+                        domain="severity"
                       >
                         {selectedLog.severity}
-                      </Badge>
+                      </StatusBadge>
                     </div>
                   </div>
                   <div>

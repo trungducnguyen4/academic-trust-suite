@@ -41,6 +41,7 @@ import {
 import { toast } from "sonner";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { getStatusBadgeLabel } from "@/components/ui/status-badge";
 
 interface ExamItem {
   id: string;
@@ -330,7 +331,7 @@ export default function GenerateExamLink() {
                     ? new Date(selectedExam.endTime).toLocaleString()
                     : "Not set"}
                 </p>
-                <p>Status: {selectedExam.status || "DRAFT"}</p>
+                <p>Status: {getStatusBadgeLabel(selectedExam.status || "DRAFT")}</p>
               </div>
             )}
 

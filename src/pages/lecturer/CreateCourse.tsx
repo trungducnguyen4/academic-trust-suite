@@ -712,17 +712,6 @@ export default function CreateCourse() {
     }
   };
 
-  const statusVariant = (status: Course["status"]) => {
-    switch (status) {
-      case "active":
-        return "success" as const;
-      case "archived":
-        return "default" as const;
-      case "draft":
-        return "warning" as const;
-    }
-  };
-
   const downloadTemplate = () => {
     const csvContent =
       "email\nstudent@examtrust.edu\nstudent2@examtrust.edu\nstudent3@examtrust.edu";
@@ -1538,7 +1527,7 @@ export default function CreateCourse() {
                         {course.exams}
                       </TableCell>
                       <TableCell>
-                        <StatusBadge variant={statusVariant(course.status)}>
+                        <StatusBadge status={course.status} domain="course">
                           {course.status}
                         </StatusBadge>
                       </TableCell>

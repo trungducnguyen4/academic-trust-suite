@@ -248,13 +248,10 @@ export default function ExamEventTimeline() {
             </p>
           </div>
           <StatusBadge
-            variant={
-              anomalyCount > 2
-                ? "destructive"
-                : anomalyCount > 0
-                  ? "warning"
-                  : "success"
+            status={
+              anomalyCount > 2 ? "critical" : anomalyCount > 0 ? "warning" : "none"
             }
+            domain="severity"
           >
             {anomalyCount} anomalies detected
           </StatusBadge>
@@ -336,12 +333,12 @@ export default function ExamEventTimeline() {
                               {event.time}
                             </span>
                             {event.severity === "warning" && (
-                              <StatusBadge variant="warning">
+                              <StatusBadge status="warning" domain="severity">
                                 Warning
                               </StatusBadge>
                             )}
                             {event.severity === "critical" && (
-                              <StatusBadge variant="destructive">
+                              <StatusBadge status="critical" domain="severity">
                                 Critical
                               </StatusBadge>
                             )}
@@ -455,13 +452,9 @@ export default function ExamEventTimeline() {
                             Question {note.question}
                           </span>
                           <StatusBadge
-                            variant={
-                              note.severity === "critical"
-                                ? "destructive"
-                                : note.severity === "warning"
-                                  ? "warning"
-                                  : "success"
-                            }
+                            status={note.severity}
+                            domain="severity"
+                            label={note.severity === "info" ? "Clean" : undefined}
                           >
                             {note.severity === "info" ? "Clean" : note.severity}
                           </StatusBadge>

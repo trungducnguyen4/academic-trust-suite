@@ -9,7 +9,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, getStatusBadgeLabel } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Calendar,
@@ -533,7 +533,7 @@ export default function StudentDashboard() {
                               status === "GRADED" ? "success" : "warning"
                             }
                           >
-                            {status.toLowerCase()}
+                            {getStatusBadgeLabel(status)}
                           </StatusBadge>
                           <Button size="sm" variant="outline" asChild>
                             <Link to={`/student/grading?examId=${exam.id}`}>

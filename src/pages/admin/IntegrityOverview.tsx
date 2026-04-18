@@ -375,38 +375,6 @@ export default function IntegrityOverview() {
     setDraftFilters(nextFilters);
   };
 
-  const getConfidenceBadgeVariant = (
-    confidence: string,
-  ): "destructive" | "warning" | "default" => {
-    switch (confidence) {
-      case "High":
-        return "destructive";
-      case "Medium":
-        return "warning";
-      case "Low":
-        return "default";
-      default:
-        return "default";
-    }
-  };
-
-  const getStatusBadgeVariant = (
-    status: string,
-  ): "warning" | "info" | "destructive" | "default" => {
-    switch (status) {
-      case "pending":
-        return "warning";
-      case "reviewed":
-        return "info";
-      case "confirmed":
-        return "destructive";
-      case "dismissed":
-        return "default";
-      default:
-        return "default";
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString("en-US", {
       month: "short",
@@ -555,21 +523,18 @@ export default function IntegrityOverview() {
                               </TableCell>
                               <TableCell>
                                 <StatusBadge
-                                  variant={getConfidenceBadgeVariant(
-                                    submission.confidence,
-                                  )}
+                                  status={submission.confidence}
+                                  domain="confidence"
                                 >
                                   {submission.confidence}
                                 </StatusBadge>
                               </TableCell>
                               <TableCell>
                                 <StatusBadge
-                                  variant={getStatusBadgeVariant(
-                                    submission.status,
-                                  )}
+                                  status={submission.status}
+                                  domain="integrity"
                                 >
-                                  {submission.status.charAt(0).toUpperCase() +
-                                    submission.status.slice(1)}
+                                  {submission.status}
                                 </StatusBadge>
                               </TableCell>
                               <TableCell>

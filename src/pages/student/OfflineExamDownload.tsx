@@ -201,18 +201,24 @@ export default function OfflineExamDownload() {
                         {pkg.title}
                       </h3>
                       {pkg.status === "downloaded" && (
-                        <StatusBadge variant="success">Downloaded</StatusBadge>
+                        <StatusBadge status="downloaded" domain="submission">
+                          Downloaded
+                        </StatusBadge>
                       )}
                       {pkg.status === "expired" && (
-                        <StatusBadge variant="destructive">Expired</StatusBadge>
+                        <StatusBadge status="expired" domain="submission">
+                          Expired
+                        </StatusBadge>
                       )}
                       {pkg.status === "downloading" && (
-                        <StatusBadge variant="warning">
+                        <StatusBadge status="downloading" domain="submission">
                           Downloading...
                         </StatusBadge>
                       )}
                       {pkg.status === "available" && (
-                        <StatusBadge variant="info">Available</StatusBadge>
+                        <StatusBadge status="available" domain="submission">
+                          Available
+                        </StatusBadge>
                       )}
                     </div>
                     <div className="flex items-center gap-4 text-sm text-muted-foreground mt-2">
@@ -280,7 +286,7 @@ export default function OfflineExamDownload() {
                       </div>
                     )}
                     {pkg.status === "expired" && (
-                      <StatusBadge variant="destructive">N/A</StatusBadge>
+                      <StatusBadge tone="danger">N/A</StatusBadge>
                     )}
                   </div>
                 </div>

@@ -82,16 +82,6 @@ const severityLabels: Record<SeverityLevel, string> = {
   high: "High",
 };
 
-const severityVariant: Record<
-  SeverityLevel,
-  "success" | "info" | "warning" | "destructive"
-> = {
-  none: "success",
-  low: "info",
-  medium: "warning",
-  high: "destructive",
-};
-
 const severityCardClass: Record<SeverityLevel, string> = {
   none: "border-success/30 bg-success/5",
   low: "border-info/30 bg-info/5",
@@ -481,7 +471,7 @@ export default function GradingBreakdown() {
             </CardHeader>
             <CardContent>
               <div className="flex flex-wrap items-center gap-2 mb-4">
-                <StatusBadge variant={severityVariant[overallSeverity]}>
+                <StatusBadge status={overallSeverity} domain="severity">
                   Severity: {severityLabels[overallSeverity]}
                 </StatusBadge>
                 <span className="text-xs text-muted-foreground">
@@ -496,7 +486,7 @@ export default function GradingBreakdown() {
                     <p className="text-xs text-muted-foreground">
                       Tab Switches
                     </p>
-                    <StatusBadge variant={severityVariant[tabSeverity]}>
+                    <StatusBadge status={tabSeverity} domain="severity">
                       {severityLabels[tabSeverity]}
                     </StatusBadge>
                   </div>
@@ -513,7 +503,7 @@ export default function GradingBreakdown() {
                     <p className="text-xs text-muted-foreground">
                       Mouse Anomalies
                     </p>
-                    <StatusBadge variant={severityVariant[mouseSeverity]}>
+                    <StatusBadge status={mouseSeverity} domain="severity">
                       {severityLabels[mouseSeverity]}
                     </StatusBadge>
                   </div>
@@ -530,7 +520,7 @@ export default function GradingBreakdown() {
                     <p className="text-xs text-muted-foreground">
                       Recorded Events
                     </p>
-                    <StatusBadge variant={severityVariant[logSeverity]}>
+                    <StatusBadge status={logSeverity} domain="severity">
                       {severityLabels[logSeverity]}
                     </StatusBadge>
                   </div>

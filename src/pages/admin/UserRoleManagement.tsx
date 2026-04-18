@@ -734,13 +734,8 @@ export default function UserRoleManagement() {
                       <TableCell>{item.department || "-"}</TableCell>
                       <TableCell>
                         <StatusBadge
-                          variant={
-                            item.status === "active"
-                              ? "success"
-                              : item.status === "suspended"
-                                ? "destructive"
-                                : "warning"
-                          }
+                          status={item.status}
+                          domain="user"
                         >
                           {item.status || "active"}
                         </StatusBadge>

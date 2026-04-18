@@ -5,7 +5,7 @@ import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Table,
   TableBody,
@@ -95,20 +95,6 @@ interface Exam {
     submissions: number;
   };
 }
-
-const statusConfig: Record<
-  string,
-  {
-    label: string;
-    variant: "default" | "secondary" | "outline" | "destructive";
-  }
-> = {
-  DRAFT: { label: "Draft", variant: "default" },
-  PUBLISHED: { label: "Published", variant: "secondary" },
-  ONGOING: { label: "Ongoing", variant: "outline" },
-  COMPLETED: { label: "Completed", variant: "secondary" },
-  ARCHIVED: { label: "Archived", variant: "destructive" },
-};
 
 const EMPTY_FILTERS: FilterValues = {
   status: "all",
@@ -674,14 +660,13 @@ export default function AdminExamManagement() {
                             </div>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant={
-                                statusConfig[exam.status]?.variant || "default"
-                              }
+                            <StatusBadge
+                              status={exam.status}
+                              domain="exam"
                               className="text-xs"
                             >
-                              {statusConfig[exam.status]?.label || exam.status}
-                            </Badge>
+                              {exam.status}
+                            </StatusBadge>
                           </TableCell>
                           <TableCell className="text-right">
                             <DropdownMenu>

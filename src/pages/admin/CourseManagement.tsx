@@ -46,7 +46,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   BookOpen,
   GraduationCap,
@@ -778,9 +778,10 @@ export default function AdminCourseManagement() {
                           {course._count?.exams || 0}
                         </TableCell>
                         <TableCell>
-                          <Badge variant="secondary">
-                            {(course.status || "draft").toLowerCase()}
-                          </Badge>
+                          <StatusBadge
+                            status={course.status || "draft"}
+                            domain="course"
+                          />
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="inline-flex items-center gap-1">

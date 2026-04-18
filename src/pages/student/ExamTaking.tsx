@@ -777,7 +777,7 @@ export default function ExamTaking() {
           <span className="font-semibold text-sm">Database Systems Quiz</span>
           <span className="font-semibold text-sm">{examTitle}</span>
           {violationCount > 0 && (
-            <StatusBadge variant="destructive">
+            <StatusBadge status="critical" domain="severity">
               {violationCount} violation{violationCount > 1 ? "s" : ""}
             </StatusBadge>
           )}
@@ -901,7 +901,9 @@ export default function ExamTaking() {
                     </span>
                   </div>
                   {flagged[q.id] && (
-                    <StatusBadge variant="warning">Flagged</StatusBadge>
+                    <StatusBadge status="flagged" domain="submission">
+                      Flagged
+                    </StatusBadge>
                   )}
                 </div>
                 <h2 className="text-lg font-semibold mt-2">{q.title}</h2>

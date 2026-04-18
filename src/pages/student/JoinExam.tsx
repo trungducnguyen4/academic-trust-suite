@@ -355,9 +355,11 @@ export default function JoinExam() {
                 .
               </p>
               <div className="flex items-center justify-center gap-3 mb-6">
-                <StatusBadge variant="success">Enrolled</StatusBadge>
-                <StatusBadge variant="info">{examInfo.course}</StatusBadge>
-                <StatusBadge variant="default">
+                <StatusBadge status="approved" domain="approval">
+                  Enrolled
+                </StatusBadge>
+                <StatusBadge tone="info">{examInfo.course}</StatusBadge>
+                <StatusBadge tone="neutral">
                   {examInfo.duration} min
                 </StatusBadge>
               </div>

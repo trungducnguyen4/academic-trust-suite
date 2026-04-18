@@ -45,7 +45,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import {
   ArrowLeft,
   Search,
@@ -595,15 +595,7 @@ export default function CourseDetail() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge
-                            variant={
-                              student.status === "active"
-                                ? "default"
-                                : "secondary"
-                            }
-                          >
-                            {student.status}
-                          </Badge>
+                          <StatusBadge status={student.status} domain="user" />
                         </TableCell>
                         <TableCell>{student.joinedAt}</TableCell>
                         <TableCell className="text-right">

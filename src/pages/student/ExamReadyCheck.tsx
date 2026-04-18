@@ -9,7 +9,7 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { StatusBadge } from "@/components/ui/status-badge";
+import { StatusBadge, getStatusBadgeLabel } from "@/components/ui/status-badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
@@ -283,7 +283,7 @@ export default function ExamReadyCheck() {
   const handleStartExam = async () => {
     if (blockedAttemptStatus) {
       toast.error(
-        `You already have a ${blockedAttemptStatus.toLowerCase()} attempt for this exam.`,
+        `You already have a ${getStatusBadgeLabel(blockedAttemptStatus)} attempt for this exam.`,
       );
       return;
     }
@@ -354,7 +354,7 @@ export default function ExamReadyCheck() {
                 <CardTitle className="text-xl mb-1">{examInfo.title}</CardTitle>
                 <CardDescription>{examInfo.course}</CardDescription>
               </div>
-              <StatusBadge variant="info">OFFICIAL SESSION</StatusBadge>
+              <StatusBadge tone="info">OFFICIAL SESSION</StatusBadge>
             </div>
           </CardHeader>
           <CardContent>
@@ -447,9 +447,13 @@ export default function ExamReadyCheck() {
                   </p>
                 </div>
                 {isDownloaded ? (
-                  <StatusBadge variant="success">Downloaded</StatusBadge>
+                  <StatusBadge status="downloaded" domain="submission">
+                    Downloaded
+                  </StatusBadge>
                 ) : (
-                  <StatusBadge variant="warning">Required</StatusBadge>
+                  <StatusBadge status="pending" domain="submission">
+                    Required
+                  </StatusBadge>
                 )}
               </div>
 
@@ -796,7 +800,7 @@ export default function ExamReadyCheck() {
                     )}
                     {blockedAttemptStatus && (
                       <p className="text-sm text-amber-700 mt-2">
-                        You already have a {blockedAttemptStatus.toLowerCase()}{" "}
+                        You already have a {getStatusBadgeLabel(blockedAttemptStatus)}{" "}
                         attempt for this exam.
                       </p>
                     )}

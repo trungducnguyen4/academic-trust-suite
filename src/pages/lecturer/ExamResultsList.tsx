@@ -18,6 +18,7 @@ import { Loader2, AlertTriangle, Activity } from "lucide-react";
 import api from "@/lib/api";
 import { unwrapPaginatedData } from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { getStatusBadgeLabel } from "@/components/ui/status-badge";
 import {
   ResponsiveContainer,
   BarChart,
@@ -351,7 +352,7 @@ export default function ExamResultsList() {
                         <TableCell>
                           {formatTimeSpent(s.startedAt, s.submittedAt)}
                         </TableCell>
-                        <TableCell>{s.status}</TableCell>
+                        <TableCell>{getStatusBadgeLabel(s.status)}</TableCell>
                       </TableRow>
                     ))
                   )}

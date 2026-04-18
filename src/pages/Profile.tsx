@@ -192,7 +192,7 @@ export default function Profile() {
                   <p className="text-sm text-muted-foreground break-all">
                     {user.email}
                   </p>
-                  <StatusBadge variant="info" className="mt-2">
+                  <StatusBadge status={user.role} domain="role" className="mt-2">
                     {roleLabel}
                   </StatusBadge>
                 </div>

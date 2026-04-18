@@ -511,7 +511,7 @@ export default function UploadDocAIGen() {
                             ? "Medium"
                             : "Hard"}
                       </StatusBadge>
-                      <StatusBadge variant="info">
+                      <StatusBadge tone="info">
                         {q.type === "multiple_choice" ? "MC" : "T/F"}
                       </StatusBadge>
                       <span className="text-xs text-muted-foreground">
@@ -540,10 +540,12 @@ export default function UploadDocAIGen() {
                         </>
                       )}
                       {q.approved === true && (
-                        <StatusBadge variant="success">Approved</StatusBadge>
+                        <StatusBadge status="approved" domain="approval">
+                          Approved
+                        </StatusBadge>
                       )}
                       {q.approved === false && (
-                        <StatusBadge variant="destructive">
+                        <StatusBadge status="rejected" domain="approval">
                           Rejected
                         </StatusBadge>
                       )}

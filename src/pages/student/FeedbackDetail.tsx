@@ -221,7 +221,7 @@ export default function FeedbackDetail() {
                           <span className="text-xs text-muted-foreground">
                             {s.questions} questions
                           </span>
-                          <StatusBadge variant="success">
+                          <StatusBadge tone="success">
                             {s.accuracy}%
                           </StatusBadge>
                         </div>
@@ -247,7 +247,7 @@ export default function FeedbackDetail() {
                           <span className="text-xs text-muted-foreground">
                             {w.questions} questions
                           </span>
-                          <StatusBadge variant="destructive">
+                          <StatusBadge tone="danger">
                             {w.accuracy}%
                           </StatusBadge>
                         </div>

@@ -58,19 +58,6 @@ export function IntegrityCaseDetail({ submission, onBack }: IntegrityCaseDetailP
     }
   };
 
-  const getConfidenceBadgeVariant = (confidence: string): 'destructive' | 'warning' | 'default' => {
-    switch (confidence) {
-      case 'High':
-        return 'destructive';
-      case 'Medium':
-        return 'warning';
-      case 'Low':
-        return 'default';
-      default:
-        return 'default';
-    }
-  };
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
       weekday: 'long',
@@ -98,7 +85,10 @@ export function IntegrityCaseDetail({ submission, onBack }: IntegrityCaseDetailP
                 <h1 className="text-2xl font-semibold text-foreground">
                   Integrity Case Review
                 </h1>
-                <StatusBadge variant={getConfidenceBadgeVariant(submission.confidence)}>
+                <StatusBadge
+                  status={submission.confidence}
+                  domain="confidence"
+                >
                   {submission.confidence} Confidence
                 </StatusBadge>
               </div>

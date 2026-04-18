@@ -48,17 +48,6 @@ interface CourseSummary {
   _count?: { enrollments?: number; exams?: number };
 }
 
-const statusConfig: Record<
-  string,
-  { label: string; variant: "default" | "success" | "warning" | "info" }
-> = {
-  DRAFT: { label: "Draft", variant: "default" },
-  PUBLISHED: { label: "Published", variant: "info" },
-  ONGOING: { label: "Ongoing", variant: "warning" },
-  COMPLETED: { label: "Completed", variant: "success" },
-  ARCHIVED: { label: "Archived", variant: "default" },
-};
-
 export default function LecturerDashboard() {
   const { user } = useAuth();
   const [exams, setExams] = useState<Exam[]>([]);
@@ -254,8 +243,6 @@ export default function LecturerDashboard() {
                     </div>
                   ) : (
                     exams.slice(0, 4).map((exam, i) => {
-                      const status =
-                        statusConfig[exam.status] || statusConfig.DRAFT;
                       const questionCount = exam._count?.examQuestions || 0;
                       const now = Date.now();
                       const start = exam.startTime
@@ -298,13 +285,11 @@ export default function LecturerDashboard() {
                                 {exam.title}
                               </h4>
                               {isExpired ? (
-                                <StatusBadge variant="destructive">
+                                <StatusBadge tone="danger">
                                   Expired
                                 </StatusBadge>
                               ) : (
-                                <StatusBadge variant={status.variant}>
-                                  {status.label}
-                                </StatusBadge>
+                                <StatusBadge status={exam.status} domain="exam" />
                               )}
                             </div>
                             <div className="flex items-center gap-4 text-sm text-muted-foreground">
