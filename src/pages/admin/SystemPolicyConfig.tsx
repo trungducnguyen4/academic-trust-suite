@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   RotateCcw,
 } from "lucide-react";
+import { getNumericInputError, sanitizeNumericInput } from "@/lib/number-input";
 
 export default function SystemPolicyConfig() {
   const [saving, setSaving] = useState(false);
@@ -51,15 +52,15 @@ export default function SystemPolicyConfig() {
   const [maxTabSwitchesGlobal, setMaxTabSwitchesGlobal] = useState([5]);
 
   // Scoring Policies
-  const [defaultPassingScore, setDefaultPassingScore] = useState(50);
+  const [defaultPassingScore, setDefaultPassingScore] = useState("50");
   const [allowNegativeMarking, setAllowNegativeMarking] = useState(false);
   const [scoreRoundingMethod, setScoreRoundingMethod] = useState("round");
   const [gradeScale, setGradeScale] = useState("10");
 
   // Access Policies
   const [passwordPolicy, setPasswordPolicy] = useState("strong");
-  const [sessionTimeout, setSessionTimeout] = useState(60);
-  const [maxLoginAttempts, setMaxLoginAttempts] = useState(5);
+  const [sessionTimeout, setSessionTimeout] = useState("60");
+  const [maxLoginAttempts, setMaxLoginAttempts] = useState("5");
   const [twoFactorEnabled, setTwoFactorEnabled] = useState(false);
   const [ipWhitelist, setIpWhitelist] = useState("");
 
@@ -71,13 +72,45 @@ export default function SystemPolicyConfig() {
   // Notification Policies
   const [emailNotifications, setEmailNotifications] = useState(true);
   const [integrityAlertEmail, setIntegrityAlertEmail] = useState(true);
-  const [examReminderHours, setExamReminderHours] = useState(24);
+  const [examReminderHours, setExamReminderHours] = useState("24");
+
+  const [numberErrors, setNumberErrors] = useState<Record<string, string>>({});
 
   // System Maintenance
   const [maintenanceMode, setMaintenanceMode] = useState(false);
   const [maintenanceMessage, setMaintenanceMessage] = useState("");
 
   const handleSave = async () => {
+    const nextErrors = {
+      defaultPassingScore:
+        getNumericInputError(defaultPassingScore, {
+          min: 0,
+          max: 100,
+          integer: true,
+        }) || "",
+      sessionTimeout:
+        getNumericInputError(sessionTimeout, {
+          min: 5,
+          max: 480,
+          integer: true,
+        }) || "",
+      maxLoginAttempts:
+        getNumericInputError(maxLoginAttempts, {
+          min: 1,
+          max: 20,
+          integer: true,
+        }) || "",
+      examReminderHours:
+        getNumericInputError(examReminderHours, {
+          min: 1,
+          max: 72,
+          integer: true,
+        }) || "",
+    };
+
+    setNumberErrors(nextErrors);
+    if (Object.values(nextErrors).some(Boolean)) return;
+
     setSaving(true);
     await new Promise((r) => setTimeout(r, 1000));
     setSaving(false);
@@ -91,7 +124,7 @@ export default function SystemPolicyConfig() {
     setAutoFlagEnabled(true);
     setRequireManualReview(true);
     setMaxTabSwitchesGlobal([5]);
-    setDefaultPassingScore(50);
+    setDefaultPassingScore("50");
     setAllowNegativeMarking(false);
   };
 
@@ -230,9 +263,27 @@ export default function SystemPolicyConfig() {
                     max={100}
                     value={defaultPassingScore}
                     onChange={(e) =>
-                      setDefaultPassingScore(Number(e.target.value))
+                      setDefaultPassingScore(
+                        sanitizeNumericInput(e.target.value),
+                      )
+                    }
+                    onBlur={(e) =>
+                      setNumberErrors((prev) => ({
+                        ...prev,
+                        defaultPassingScore:
+                          getNumericInputError(e.target.value, {
+                            min: 0,
+                            max: 100,
+                            integer: true,
+                          }) || "",
+                      }))
                     }
                   />
+                  {numberErrors.defaultPassingScore ? (
+                    <p className="text-xs text-destructive">
+                      {numberErrors.defaultPassingScore}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label>Grade Scale</Label>
@@ -317,8 +368,26 @@ export default function SystemPolicyConfig() {
                     min={5}
                     max={480}
                     value={sessionTimeout}
-                    onChange={(e) => setSessionTimeout(Number(e.target.value))}
+                    onChange={(e) =>
+                      setSessionTimeout(sanitizeNumericInput(e.target.value))
+                    }
+                    onBlur={(e) =>
+                      setNumberErrors((prev) => ({
+                        ...prev,
+                        sessionTimeout:
+                          getNumericInputError(e.target.value, {
+                            min: 5,
+                            max: 480,
+                            integer: true,
+                          }) || "",
+                      }))
+                    }
                   />
+                  {numberErrors.sessionTimeout ? (
+                    <p className="text-xs text-destructive">
+                      {numberErrors.sessionTimeout}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label>Max Login Attempts</Label>
@@ -328,9 +397,25 @@ export default function SystemPolicyConfig() {
                     max={20}
                     value={maxLoginAttempts}
                     onChange={(e) =>
-                      setMaxLoginAttempts(Number(e.target.value))
+                      setMaxLoginAttempts(sanitizeNumericInput(e.target.value))
+                    }
+                    onBlur={(e) =>
+                      setNumberErrors((prev) => ({
+                        ...prev,
+                        maxLoginAttempts:
+                          getNumericInputError(e.target.value, {
+                            min: 1,
+                            max: 20,
+                            integer: true,
+                          }) || "",
+                      }))
                     }
                   />
+                  {numberErrors.maxLoginAttempts ? (
+                    <p className="text-xs text-destructive">
+                      {numberErrors.maxLoginAttempts}
+                    </p>
+                  ) : null}
                 </div>
               </div>
               <div className="flex items-center justify-between">
@@ -455,9 +540,27 @@ export default function SystemPolicyConfig() {
                   min={1}
                   max={72}
                   value={examReminderHours}
-                  onChange={(e) => setExamReminderHours(Number(e.target.value))}
+                  onChange={(e) =>
+                    setExamReminderHours(sanitizeNumericInput(e.target.value))
+                  }
+                  onBlur={(e) =>
+                    setNumberErrors((prev) => ({
+                      ...prev,
+                      examReminderHours:
+                        getNumericInputError(e.target.value, {
+                          min: 1,
+                          max: 72,
+                          integer: true,
+                        }) || "",
+                    }))
+                  }
                   className="w-24"
                 />
+                {numberErrors.examReminderHours ? (
+                  <p className="text-xs text-destructive">
+                    {numberErrors.examReminderHours}
+                  </p>
+                ) : null}
               </div>
             </CardContent>
           </Card>

@@ -6,7 +6,9 @@ import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -98,6 +100,8 @@ export default function CourseManagement() {
   const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterValues>(EMPTY_FILTERS);
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   useEffect(() => {
     fetchCourses();
@@ -281,15 +285,20 @@ export default function CourseManagement() {
 
       return true;
     });
-  }, [appliedFilters, courses, normalizedSearch]);
+  }, [appliedFilters, courses, normalizedSearch, sortField, sortOrder]);
 
-  const groupedCourses = groupCoursesByFaculty(filteredCourses);
+  // Apply sorting before returning
+  const filteredAndSortedCourses = useMemo(() => {
+    return sortItems(filteredCourses, sortField, sortOrder);
+  }, [filteredCourses, sortField, sortOrder]);
+
+  const groupedCourses = groupCoursesByFaculty(filteredAndSortedCourses);
 
   const COURSES_PER_PAGE = 12;
   const [page, setPage] = useState(1);
   const totalPages = Math.max(
     1,
-    Math.ceil(filteredCourses.length / COURSES_PER_PAGE),
+    Math.ceil(filteredAndSortedCourses.length / COURSES_PER_PAGE),
   );
 
   useEffect(() => {
@@ -298,8 +307,8 @@ export default function CourseManagement() {
 
   const paginatedCourses = useMemo(() => {
     const start = (page - 1) * COURSES_PER_PAGE;
-    return filteredCourses.slice(start, start + COURSES_PER_PAGE);
-  }, [filteredCourses, page]);
+    return filteredAndSortedCourses.slice(start, start + COURSES_PER_PAGE);
+  }, [filteredAndSortedCourses, page]);
 
   const paginatedGrouped = groupCoursesByFaculty(paginatedCourses);
 
@@ -318,6 +327,12 @@ export default function CourseManagement() {
     courseFilterDefinitions,
   );
   const activeFilterChips = getFilterChips(appliedFilters, courseFilterDefinitions);
+
+  const courseSortOptions = [
+    { field: "name", label: "Course Name" },
+    { field: "_count.enrollments", label: "Students" },
+    { field: "_count.exams", label: "Exams" },
+  ];
 
   const runSearch = () => setAppliedSearch(searchInput.trim());
   const applyFilters = () => setAppliedFilters(draftFilters);
@@ -387,6 +402,15 @@ export default function CourseManagement() {
               onSearch={runSearch}
               placeholder="Search by code, name, faculty, academic year, or term"
               className="flex-1"
+            />
+            <SortButton
+              options={courseSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
             />
             <FilterPanel
               title="Course filters"

@@ -5,7 +5,9 @@ import { DataPagination } from "@/components/common/DataPagination";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -42,6 +44,8 @@ export default function StudentResults() {
     courseCode: "all",
     score: { min: undefined, max: undefined },
   });
+  const [sortField, setSortField] = useState("exam.title");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [page, setPage] = useState(1);
 
   useEffect(() => {
@@ -104,7 +108,7 @@ export default function StudentResults() {
 
   const normalizedSearch = appliedSearch.trim().toLowerCase();
   const filteredSubmissions = useMemo(() => {
-    return submissions.filter((submission) => {
+    const filtered = submissions.filter((submission) => {
       const statusFilter = appliedFilters.status as string | undefined;
       const courseFilter = appliedFilters.courseCode as string | undefined;
       const scoreFilter = appliedFilters.score as
@@ -143,7 +147,9 @@ export default function StudentResults() {
 
       return true;
     });
-  }, [appliedFilters, normalizedSearch, submissions]);
+
+    return sortItems(filtered, sortField, sortOrder);
+  }, [appliedFilters, normalizedSearch, submissions, sortField, sortOrder]);
 
   const ITEMS_PER_PAGE = 10;
   const totalPages = Math.max(
@@ -199,6 +205,12 @@ export default function StudentResults() {
   );
   const activeFilterChips = getFilterChips(appliedFilters, resultFilterDefinitions);
 
+  const resultSortOptions = [
+    { field: "score", label: "Score" },
+    { field: "status", label: "Status" },
+    { field: "exam.title", label: "Exam Title" },
+  ];
+
   return (
     <DashboardLayout>
       <div className="space-y-6">
@@ -213,6 +225,15 @@ export default function StudentResults() {
               onSearch={runSearch}
               placeholder="Search by exam title or course"
               className="flex-1"
+            />
+            <SortButton
+              options={resultSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
             />
             <FilterPanel
               title="Result filters"

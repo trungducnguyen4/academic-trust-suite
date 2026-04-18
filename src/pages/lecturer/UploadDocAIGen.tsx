@@ -38,6 +38,7 @@ import {
   RefreshCw,
   AlertTriangle,
 } from "lucide-react";
+import { getNumericInputError, sanitizeNumericInput } from "@/lib/number-input";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 interface GeneratedQuestion {
@@ -65,7 +66,8 @@ export default function UploadDocAIGen() {
   const [uploadProgress, setUploadProgress] = useState(0);
 
   // Config state
-  const [numQuestions, setNumQuestions] = useState(10);
+  const [numQuestions, setNumQuestions] = useState("10");
+  const [numQuestionsError, setNumQuestionsError] = useState("");
   const [targetDifficulty, setTargetDifficulty] = useState("mixed");
   const [questionTypes, setQuestionTypes] = useState({ mc: true, tf: true });
   const [focusTopics, setFocusTopics] = useState("");
@@ -90,6 +92,16 @@ export default function UploadDocAIGen() {
   };
 
   const startGeneration = () => {
+    const message = getNumericInputError(numQuestions, {
+      min: 1,
+      max: 50,
+      integer: true,
+    });
+    if (message) {
+      setNumQuestionsError(message);
+      return;
+    }
+
     setStep("generating");
     let p = 0;
     const interval = setInterval(() => {
@@ -342,8 +354,22 @@ export default function UploadDocAIGen() {
                     min={1}
                     max={50}
                     value={numQuestions}
-                    onChange={(e) => setNumQuestions(Number(e.target.value))}
+                    onChange={(e) =>
+                      setNumQuestions(sanitizeNumericInput(e.target.value))
+                    }
+                    onBlur={(e) =>
+                      setNumQuestionsError(
+                        getNumericInputError(e.target.value, {
+                          min: 1,
+                          max: 50,
+                          integer: true,
+                        }) || "",
+                      )
+                    }
                   />
+                  {numQuestionsError ? (
+                    <p className="text-xs text-destructive">{numQuestionsError}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label>Target Difficulty</Label>

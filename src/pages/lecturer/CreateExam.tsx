@@ -48,6 +48,11 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import {
+  getNumericInputError,
+  parseNumericInput,
+  sanitizeNumericInput,
+} from "@/lib/number-input";
 
 // ─── Steps ───────────────────────────────────────────────────────
 type Step = "info" | "settings" | "questions" | "preview";
@@ -273,6 +278,7 @@ export default function CreateExam() {
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [bankTopics, setBankTopics] = useState<BankTopic[]>([]);
   const [isLoadingBankTopics, setIsLoadingBankTopics] = useState(false);
+  const [numberErrors, setNumberErrors] = useState<Record<string, string>>({});
 
   const set = (key: keyof ExamForm, val: string | boolean) =>
     setForm((f) => ({ ...f, [key]: val }));
@@ -389,6 +395,30 @@ export default function CreateExam() {
       : undefined;
 
     try {
+      const durationError = getNumericInputError(form.duration, { min: 5, integer: true });
+      const passingScoreError = getNumericInputError(form.passingScore, {
+        min: 0,
+        max: 100,
+        integer: true,
+      });
+      const questionCountError = getNumericInputError(form.questionCount, {
+        min: 1,
+        integer: true,
+      });
+
+      const nextErrors = {
+        duration: durationError || "",
+        passingScore: passingScoreError || "",
+        questionCount: questionCountError || "",
+      };
+      setNumberErrors(nextErrors);
+
+      const firstError = Object.values(nextErrors).find(Boolean);
+      if (firstError) {
+        toast.error(firstError);
+        return;
+      }
+
       setIsCreating(true);
       let questionIds: string[] | undefined;
 
@@ -424,13 +454,20 @@ export default function CreateExam() {
         title: form.title.trim(),
         description: form.description.trim() || undefined,
         courseId: form.course,
-        duration: Number(form.duration),
-        passingScore: Number(form.passingScore),
+        duration: parseNumericInput(form.duration, { min: 5, integer: true })!,
+        passingScore: parseNumericInput(form.passingScore, {
+          min: 0,
+          max: 100,
+          integer: true,
+        })!,
         startTime,
         endTime,
         questionIds,
         settings: {
-          maxAttempts: Number(form.maxAttempts || 1),
+          maxAttempts: parseNumericInput(form.maxAttempts, {
+            min: 1,
+            integer: true,
+          }) || 1,
           requiresProctoring: form.requiresProctoring,
           requiresDownload: form.requiresDownload,
           shuffleQuestions: form.shuffleQuestions,
@@ -438,7 +475,11 @@ export default function CreateExam() {
           sourceMethod: form.sourceMethod,
           questionType: form.questionType,
           bankDifficulty: difficultyOptionToBankValue(form.bankDifficulty),
-          requestedQuestionCount: Number(form.questionCount || 0),
+          requestedQuestionCount:
+            parseNumericInput(form.questionCount, {
+              min: 1,
+              integer: true,
+            }) || 1,
           aiGenerationMode: form.aiGenerationMode,
           aiPrompt: form.aiPrompt || undefined,
           aiDifficulty: difficultyOptionToValue(form.aiDifficulty),
@@ -457,11 +498,25 @@ export default function CreateExam() {
 
   const handleAiGenerate = async () => {
     if (!form.aiPrompt.trim()) return;
+    const questionCountError = getNumericInputError(form.questionCount, {
+      min: 1,
+      integer: true,
+    });
+    if (questionCountError) {
+      setNumberErrors((prev) => ({ ...prev, questionCount: questionCountError }));
+      toast.error(questionCountError);
+      return;
+    }
+
     setIsAiGenerating(true);
     try {
       const result = await api.aiGenerateExamQuestions({
         prompt: form.aiPrompt,
-        questionCount: parseInt(form.questionCount) || 20,
+        questionCount:
+          parseNumericInput(form.questionCount, {
+            min: 1,
+            integer: true,
+          }) || 20,
         difficulty: difficultyOptionToValue(form.aiDifficulty),
         questionType: mapQuestionTypeToAiApi(form.questionType),
         language: "en",
@@ -530,7 +585,11 @@ export default function CreateExam() {
 
       const result = await api.aiGenerateExamQuestions({
         prompt,
-        questionCount: parseInt(form.questionCount) || 20,
+        questionCount:
+          parseNumericInput(form.questionCount, {
+            min: 1,
+            integer: true,
+          }) || 20,
         difficulty: difficultyOptionToValue(form.aiDifficulty),
         questionType: mapQuestionTypeToAiApi(form.questionType),
         language: "en",
@@ -697,21 +756,65 @@ export default function CreateExam() {
                     <Input
                       type="number"
                       value={form.duration}
-                      onChange={(e) => set("duration", e.target.value)}
+                      onChange={(e) =>
+                        set(
+                          "duration",
+                          sanitizeNumericInput(e.target.value, { min: 5 }),
+                        )
+                      }
                       min={5}
+                      onBlur={(e) =>
+                        setNumberErrors((prev) => ({
+                          ...prev,
+                          duration:
+                            getNumericInputError(e.target.value, {
+                              min: 5,
+                              integer: true,
+                            }) || "",
+                        }))
+                      }
                       className="mt-1"
                     />
+                    {numberErrors.duration ? (
+                      <p className="mt-1 text-xs text-destructive">
+                        {numberErrors.duration}
+                      </p>
+                    ) : null}
                   </div>
                   <div>
                     <Label>Passing Score (%)</Label>
                     <Input
                       type="number"
                       value={form.passingScore}
-                      onChange={(e) => set("passingScore", e.target.value)}
+                      onChange={(e) =>
+                        set(
+                          "passingScore",
+                          sanitizeNumericInput(e.target.value, {
+                            min: 0,
+                            max: 100,
+                          }),
+                        )
+                      }
                       min={0}
                       max={100}
+                      onBlur={(e) =>
+                        setNumberErrors((prev) => ({
+                          ...prev,
+                          passingScore:
+                            getNumericInputError(e.target.value, {
+                              min: 0,
+                              max: 100,
+                              integer: true,
+                            }) || "",
+                        }))
+                      }
                       className="mt-1"
                     />
+                    {numberErrors.passingScore ? (
+                      <p className="mt-1 text-xs text-destructive">
+                        {numberErrors.passingScore}
+                      </p>
+                    ) : null}
                   </div>
                 </div>
 
@@ -851,10 +954,30 @@ export default function CreateExam() {
                         <Input
                           type="number"
                           value={form.questionCount}
-                          onChange={(e) => set("questionCount", e.target.value)}
+                          onChange={(e) =>
+                            set(
+                              "questionCount",
+                              sanitizeNumericInput(e.target.value, { min: 1 }),
+                            )
+                          }
                           min={1}
+                          onBlur={(e) =>
+                            setNumberErrors((prev) => ({
+                              ...prev,
+                              questionCount:
+                                getNumericInputError(e.target.value, {
+                                  min: 1,
+                                  integer: true,
+                                }) || "",
+                            }))
+                          }
                           className="mt-1"
                         />
+                        {numberErrors.questionCount ? (
+                          <p className="mt-1 text-xs text-destructive">
+                            {numberErrors.questionCount}
+                          </p>
+                        ) : null}
                       </div>
                       <div>
                         <Label>Question Type Mix</Label>
@@ -1147,11 +1270,30 @@ export default function CreateExam() {
                           <Label>Question Count</Label>
                           <Input
                             type="number"
+                            min={1}
                             value={form.questionCount}
                             onChange={(e) =>
-                              set("questionCount", e.target.value)
+                              set(
+                                "questionCount",
+                                sanitizeNumericInput(e.target.value, { min: 1 }),
+                              )
+                            }
+                            onBlur={(e) =>
+                              setNumberErrors((prev) => ({
+                                ...prev,
+                                questionCount:
+                                  getNumericInputError(e.target.value, {
+                                    min: 1,
+                                    integer: true,
+                                  }) || "",
+                              }))
                             }
                           />
+                          {numberErrors.questionCount ? (
+                            <p className="mt-1 text-xs text-destructive">
+                              {numberErrors.questionCount}
+                            </p>
+                          ) : null}
                         </div>
                         <div className="space-y-2">
                           <Label>Question Type Mix</Label>

@@ -42,6 +42,11 @@ import { toast } from "sonner";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import { getStatusBadgeLabel } from "@/components/ui/status-badge";
+import {
+  getNumericInputError,
+  parseNumericInput,
+  sanitizeNumericInput,
+} from "@/lib/number-input";
 
 interface ExamItem {
   id: string;
@@ -83,6 +88,7 @@ export default function GenerateExamLink() {
 
   const [expiryDatetime, setExpiryDatetime] = useState("");
   const [maxUses, setMaxUses] = useState("");
+  const [maxUsesError, setMaxUsesError] = useState("");
   const [password, setPassword] = useState("");
   const [restrictedToCourse, setRestrictedToCourse] = useState(false);
   const [note, setNote] = useState("");
@@ -165,6 +171,16 @@ export default function GenerateExamLink() {
   const handleGenerate = async () => {
     if (!selectedExamId) return;
 
+    const maxUsesMessage = getNumericInputError(maxUses, {
+      min: 1,
+      integer: true,
+    });
+    if (maxUsesMessage) {
+      setMaxUsesError(maxUsesMessage);
+      toast.error(maxUsesMessage);
+      return;
+    }
+
     setCreating(true);
     try {
       const payload: any = {
@@ -173,7 +189,12 @@ export default function GenerateExamLink() {
 
       if (expiryDatetime)
         payload.expiryDatetime = new Date(expiryDatetime).toISOString();
-      if (maxUses) payload.maxUses = Number(maxUses);
+      if (maxUses) {
+        const parsedMaxUses = parseNumericInput(maxUses, { min: 1 });
+        if (parsedMaxUses !== undefined) {
+          payload.maxUses = parsedMaxUses;
+        }
+      }
       if (password.trim()) payload.password = password.trim();
       if (note.trim()) payload.note = note.trim();
 
@@ -186,6 +207,7 @@ export default function GenerateExamLink() {
 
       setPassword("");
       setNote("");
+      setMaxUsesError("");
     } catch (error: any) {
       toast.error(error?.message || "Failed to generate exam link");
     } finally {
@@ -285,8 +307,21 @@ export default function GenerateExamLink() {
                   min={1}
                   placeholder="Leave empty for unlimited"
                   value={maxUses}
-                  onChange={(e) => setMaxUses(e.target.value)}
+                  onChange={(e) =>
+                    setMaxUses(sanitizeNumericInput(e.target.value, { min: 1 }))
+                  }
+                  onBlur={(e) =>
+                    setMaxUsesError(
+                      getNumericInputError(e.target.value, {
+                        min: 1,
+                        integer: true,
+                      }) || "",
+                    )
+                  }
                 />
+                {maxUsesError ? (
+                  <p className="text-xs text-destructive">{maxUsesError}</p>
+                ) : null}
               </div>
 
               <div className="space-y-2">

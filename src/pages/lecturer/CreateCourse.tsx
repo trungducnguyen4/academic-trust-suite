@@ -7,7 +7,9 @@ import { DataPagination } from "@/components/common/DataPagination";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -85,6 +87,11 @@ import {
   getAcademicYearOptions,
   getDefaultAcademicYear,
 } from "@/lib/course-term";
+import {
+  getNumericInputError,
+  parseNumericInput,
+  sanitizeNumericInput,
+} from "@/lib/number-input";
 
 interface Course {
   id: string;
@@ -167,12 +174,16 @@ export default function CreateCourse() {
   const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterValues>(EMPTY_FILTERS);
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [page, setPage] = useState(1);
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
+  const [createCreditsError, setCreateCreditsError] = useState("");
+  const [editCreditsError, setEditCreditsError] = useState("");
 
   // Multi-step wizard
   const [step, setStep] = useState<1 | 2>(1);
@@ -318,7 +329,7 @@ export default function CreateCourse() {
       return sourceValue.includes(filterValue);
     };
 
-    return courses.filter((course) => {
+    const filtered = courses.filter((course) => {
       const termLabel = formatCourseTerm(
         course.academicYear,
         course.term,
@@ -356,7 +367,9 @@ export default function CreateCourse() {
 
       return true;
     });
-  }, [appliedFilters, courses, normalizedSearch]);
+
+    return sortItems(filtered, sortField, sortOrder);
+  }, [appliedFilters, courses, normalizedSearch, sortField, sortOrder]);
 
   const ITEMS_PER_PAGE = 10;
   const totalPages = Math.max(1, Math.ceil(filteredCourses.length / ITEMS_PER_PAGE));
@@ -398,11 +411,15 @@ export default function CreateCourse() {
     setPage(1);
   };
 
-  const activeFilterCount = getActiveFilterCount(
-    appliedFilters,
-    courseFilterDefinitions,
-  );
+  const activeFilterCount = getActiveFilterCount(appliedFilters, courseFilterDefinitions);
   const activeFilterChips = getFilterChips(appliedFilters, courseFilterDefinitions);
+
+  const courseSortOptions = [
+    { field: "name", label: "Course Name" },
+    { field: "credits", label: "Credits" },
+    { field: "students", label: "Students" },
+    { field: "status", label: "Status" },
+  ];
 
   // Search students by name or email
   const handleStudentSearch = useCallback(
@@ -495,13 +512,27 @@ export default function CreateCourse() {
     setCsvEmails(emails);
   };
 
+  const validateCreditsField = (rawValue: string) =>
+    getNumericInputError(rawValue, {
+      min: 1,
+      max: 10,
+      integer: true,
+    });
+
   const handleCreate = async () => {
+    const creditsError = validateCreditsField(newCourse.credits);
+    if (creditsError) {
+      setCreateCreditsError(creditsError);
+      toast.error(creditsError);
+      return;
+    }
+
     setIsCreating(true);
     try {
       const created = await api.createCourse({
         name: newCourse.name,
         description: newCourse.description || undefined,
-        credits: newCourse.credits ? parseInt(newCourse.credits) : undefined,
+        credits: parseNumericInput(newCourse.credits, { min: 1, max: 10 }),
         academicYear: newCourse.academicYear,
         term: newCourse.term,
       });
@@ -527,6 +558,7 @@ export default function CreateCourse() {
       setCreatedCourseId(created.id);
       setCreatedCourseCode(created.code);
       setStep(2);
+      setCreateCreditsError("");
       toast.success("Course created successfully");
     } catch (err) {
       console.error("Failed to create course:", err);
@@ -548,11 +580,19 @@ export default function CreateCourse() {
       description: course.description || "",
       credits: course.credits ? String(course.credits) : "",
     });
+    setEditCreditsError("");
     setShowEditDialog(true);
   };
 
   const handleUpdate = async () => {
     if (!editingCourseId) return;
+
+    const creditsError = validateCreditsField(editCourse.credits);
+    if (creditsError) {
+      setEditCreditsError(creditsError);
+      toast.error(creditsError);
+      return;
+    }
 
     setIsUpdating(true);
     try {
@@ -561,7 +601,7 @@ export default function CreateCourse() {
         academicYear: editCourse.academicYear || undefined,
         term: editCourse.term || undefined,
         description: editCourse.description || undefined,
-        credits: editCourse.credits ? Number(editCourse.credits) : undefined,
+        credits: parseNumericInput(editCourse.credits, { min: 1, max: 10 }),
       });
 
       setCourses((prev) =>
@@ -870,15 +910,30 @@ export default function CreateCourse() {
                       <Input
                         id="credits"
                         type="number"
+                        min={1}
+                        max={10}
                         placeholder="e.g., 3"
                         value={newCourse.credits}
                         onChange={(e) =>
                           setNewCourse({
                             ...newCourse,
-                            credits: e.target.value,
+                            credits: sanitizeNumericInput(e.target.value, {
+                              min: 1,
+                              max: 10,
+                            }),
                           })
                         }
+                        onBlur={(e) =>
+                          setCreateCreditsError(
+                            validateCreditsField(e.target.value) || "",
+                          )
+                        }
                       />
+                      {createCreditsError ? (
+                        <p className="text-xs text-destructive">
+                          {createCreditsError}
+                        </p>
+                      ) : null}
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="description">
@@ -1375,10 +1430,23 @@ export default function CreateCourse() {
                     onChange={(e) =>
                       setEditCourse((prev) => ({
                         ...prev,
-                        credits: e.target.value,
+                        credits: sanitizeNumericInput(e.target.value, {
+                          min: 1,
+                          max: 10,
+                        }),
                       }))
                     }
+                    onBlur={(e) =>
+                      setEditCreditsError(
+                        validateCreditsField(e.target.value) || "",
+                      )
+                    }
                   />
+                  {editCreditsError ? (
+                    <p className="text-xs text-destructive">
+                      {editCreditsError}
+                    </p>
+                  ) : null}
                 </div>
 
                 <div className="space-y-2">
@@ -1459,6 +1527,15 @@ export default function CreateCourse() {
               placeholder="Search by code, name, academic year, or term"
               className="flex-1"
             />
+            <SortButton
+              options={courseSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
+            />
             <FilterPanel
               title="Course filters"
               description="Filter by status, academic year, term, and student range."
@@ -1499,6 +1576,7 @@ export default function CreateCourse() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Course Name</TableHead>
+                    <TableHead className="text-center">Credits</TableHead>
                     <TableHead>Term</TableHead>
                     <TableHead className="text-center">Students</TableHead>
                     <TableHead className="text-center">Exams</TableHead>
@@ -1513,6 +1591,9 @@ export default function CreateCourse() {
                         {course.code}
                       </TableCell>
                       <TableCell className="font-medium">{course.name}</TableCell>
+                      <TableCell className="text-center">
+                        {course.credits ?? "-"}
+                      </TableCell>
                       <TableCell className="text-muted-foreground">
                         {formatCourseTerm(
                           course.academicYear,

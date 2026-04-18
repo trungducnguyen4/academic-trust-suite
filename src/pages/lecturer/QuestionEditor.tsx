@@ -49,6 +49,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { getNumericInputError, sanitizeNumericInput } from "@/lib/number-input";
 
 interface Option {
   id: string;
@@ -120,7 +121,8 @@ export default function QuestionEditor() {
 
   // Essay rubric
   const [essayRubric, setEssayRubric] = useState("");
-  const [essayMaxScore, setEssayMaxScore] = useState(10);
+  const [essayMaxScore, setEssayMaxScore] = useState("10");
+  const [essayMaxScoreError, setEssayMaxScoreError] = useState("");
 
   // Load courses from API
   const snapDifficulty = (value: number) => {
@@ -1048,10 +1050,26 @@ export default function QuestionEditor() {
                               max={100}
                               value={essayMaxScore}
                               onChange={(e) =>
-                                setEssayMaxScore(Number(e.target.value))
+                                setEssayMaxScore(
+                                  sanitizeNumericInput(e.target.value),
+                                )
+                              }
+                              onBlur={(e) =>
+                                setEssayMaxScoreError(
+                                  getNumericInputError(e.target.value, {
+                                    min: 1,
+                                    max: 100,
+                                    integer: true,
+                                  }) || "",
+                                )
                               }
                               className="w-20 sm:w-24 text-sm"
                             />
+                            {essayMaxScoreError ? (
+                              <p className="text-xs text-destructive">
+                                {essayMaxScoreError}
+                              </p>
+                            ) : null}
                           </div>
                         </div>
                       )}

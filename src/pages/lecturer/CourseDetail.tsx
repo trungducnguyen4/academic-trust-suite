@@ -6,7 +6,9 @@ import { DataPagination } from "@/components/common/DataPagination";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -120,6 +122,8 @@ export default function CourseDetail() {
     joinedAt: { from: undefined, to: undefined },
     studentCode: { value: "", operator: "contains" },
   });
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [page, setPage] = useState(1);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -241,7 +245,7 @@ export default function CourseDetail() {
   ];
 
   const normalizedSearch = appliedSearch.trim().toLowerCase();
-  const filteredStudents = students.filter((student) => {
+  const filteredStudents = sortItems(students.filter((student) => {
     const statusFilter = appliedFilters.status as string | undefined;
     const joinedAtFilter = appliedFilters.joinedAt as
       | { from?: string; to?: string }
@@ -288,7 +292,7 @@ export default function CourseDetail() {
     })();
 
     return matchesJoinedDate;
-  });
+  }), sortField, sortOrder);
 
   const ITEMS_PER_PAGE = 10;
   const totalPages = Math.max(1, Math.ceil(filteredStudents.length / ITEMS_PER_PAGE));
@@ -342,6 +346,12 @@ export default function CourseDetail() {
     studentFilterDefinitions,
   );
   const activeFilterChips = getFilterChips(appliedFilters, studentFilterDefinitions);
+
+  const studentSortOptions = [
+    { field: "studentCode", label: "Student ID" },
+    { field: "name", label: "Name" },
+    { field: "joinedAt", label: "Joined Date" },
+  ];
 
   const handleAddManual = async () => {
     if (!resolvedCourseId) return;
@@ -541,6 +551,15 @@ export default function CourseDetail() {
               onSearch={runSearch}
               placeholder="Search by name, ID, email"
               className="flex-1"
+            />
+            <SortButton
+              options={studentSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
             />
             <FilterPanel
               title="Student filters"

@@ -66,7 +66,9 @@ import { formatDistanceToNow } from "date-fns";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -114,6 +116,8 @@ export default function AdminExamManagement() {
   const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterValues>(EMPTY_FILTERS);
+  const [sortField, setSortField] = useState("title");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -237,6 +241,13 @@ export default function AdminExamManagement() {
     [courses, exams],
   );
 
+  const examSortOptions = [
+    { field: "course.code", label: "Course" },
+    { field: "startTime", label: "Schedule" },
+    { field: "status", label: "Status" },
+    { field: "title", label: "Title" },
+  ];
+
   const normalizedSearch = appliedSearch.trim().toLowerCase();
 
   const filteredExams = useMemo(() => {
@@ -264,7 +275,7 @@ export default function AdminExamManagement() {
       return sourceValue.includes(filterValue);
     };
 
-    return exams.filter((exam) => {
+    const filtered = exams.filter((exam) => {
       const matchesSearch = !normalizedSearch
         ? true
         : [
@@ -349,7 +360,9 @@ export default function AdminExamManagement() {
         matchesCreatedAt
       );
     });
-  }, [exams, normalizedSearch, appliedFilters]);
+
+    return sortItems(filtered, sortField, sortOrder);
+  }, [exams, normalizedSearch, appliedFilters, sortField, sortOrder]);
 
   const [page, setPage] = useState(1);
   const EXAM_ROWS_PER_VIEW = 10;
@@ -553,6 +566,15 @@ export default function AdminExamManagement() {
               onSearch={runSearch}
               placeholder="Search exams, courses, or lecturers"
               className="flex-1"
+            />
+            <SortButton
+              options={examSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
             />
             <FilterPanel
               title="Exam filters"

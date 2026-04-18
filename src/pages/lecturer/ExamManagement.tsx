@@ -7,7 +7,9 @@ import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -60,6 +62,11 @@ import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import api, { unwrapPaginatedData } from "@/lib/api";
+import {
+  getNumericInputError,
+  parseNumericInput,
+  sanitizeNumericInput,
+} from "@/lib/number-input";
 import { toast } from "sonner";
 import { formatDistanceToNow } from "date-fns";
 
@@ -108,6 +115,8 @@ export default function ExamManagement() {
     duration: { min: undefined, max: undefined },
     createdAt: { from: undefined, to: undefined },
   });
+  const [sortField, setSortField] = useState("title");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
   const [selectedExam, setSelectedExam] = useState<Exam | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -120,6 +129,7 @@ export default function ExamManagement() {
     description: "",
     passingScore: "",
   });
+  const [passingScoreError, setPassingScoreError] = useState("");
   const [rescheduleForm, setRescheduleForm] = useState({
     startTime: "",
     endTime: "",
@@ -192,6 +202,7 @@ export default function ExamManagement() {
       description: exam.description || "",
       passingScore: exam.passingScore?.toString() || "",
     });
+    setPassingScoreError("");
     setShowEditDialog(true);
   };
 
@@ -204,7 +215,24 @@ export default function ExamManagement() {
         description: editForm.description,
       };
       if (editForm.passingScore) {
-        updateData.passingScore = parseInt(editForm.passingScore, 10);
+        const message = getNumericInputError(editForm.passingScore, {
+          min: 0,
+          max: 100,
+          integer: true,
+        });
+        if (message) {
+          setPassingScoreError(message);
+          toast.error(message);
+          return;
+        }
+
+        const passingScore = parseNumericInput(editForm.passingScore, {
+          min: 0,
+          max: 100,
+        });
+        if (passingScore !== undefined) {
+          updateData.passingScore = passingScore;
+        }
       }
       await api.updateExam(selectedExam.id, updateData);
 
@@ -363,7 +391,7 @@ export default function ExamManagement() {
       return sourceValue.includes(filterValue);
     };
 
-    return exams.filter((exam) => {
+    const filtered = exams.filter((exam) => {
       const matchesSearch = !normalizedSearch
         ? true
         : [exam.title, exam.course.code, exam.course.name]
@@ -421,7 +449,9 @@ export default function ExamManagement() {
         matchesCreatedAt
       );
     });
-  }, [appliedFilters, exams, normalizedSearch]);
+
+    return sortItems(filtered, sortField, sortOrder);
+  }, [appliedFilters, exams, normalizedSearch, sortField, sortOrder]);
 
   const runSearch = () => {
     setAppliedSearch(searchInput.trim());
@@ -464,6 +494,12 @@ export default function ExamManagement() {
     examFilterDefinitions,
   );
   const activeFilterChips = getFilterChips(appliedFilters, examFilterDefinitions);
+
+  const examSortOptions = [
+    { field: "course.code", label: "Course" },
+    { field: "startTime", label: "Schedule" },
+    { field: "status", label: "Status" },
+  ];
 
   const ITEMS_PER_PAGE = 10;
   const [page, setPage] = useState(1);
@@ -556,6 +592,15 @@ export default function ExamManagement() {
               onSearch={runSearch}
               placeholder="Search exams, courses"
               className="flex-1"
+            />
+            <SortButton
+              options={examSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
             />
             <FilterPanel
               title="Exam filters"
@@ -822,11 +867,26 @@ export default function ExamManagement() {
                 onChange={(e) =>
                   setEditForm((prev) => ({
                     ...prev,
-                    passingScore: e.target.value,
+                    passingScore: sanitizeNumericInput(e.target.value, {
+                      min: 0,
+                      max: 100,
+                    }),
                   }))
+                }
+                onBlur={(e) =>
+                  setPassingScoreError(
+                    getNumericInputError(e.target.value, {
+                      min: 0,
+                      max: 100,
+                      integer: true,
+                    }) || "",
+                  )
                 }
                 placeholder="Passing score (0-100)"
               />
+              {passingScoreError ? (
+                <p className="text-xs text-destructive">{passingScoreError}</p>
+              ) : null}
             </div>
           </div>
           <DialogFooter>

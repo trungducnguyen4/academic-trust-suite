@@ -15,15 +15,38 @@ const TERM_LABELS: Record<CourseTerm, string> = {
 export const getTermLabel = (term?: CourseTerm | null) =>
   term ? TERM_LABELS[term] : "";
 
+const normalizeLegacyTermLabel = (legacyTerm?: string | null) => {
+  if (!legacyTerm) return "";
+
+  const normalized = legacyTerm.trim().toUpperCase().replace(/\s+/g, "_");
+  if (normalized === "TERM_1") return TERM_LABELS.TERM_1;
+  if (normalized === "TERM_2") return TERM_LABELS.TERM_2;
+  if (normalized === "SUMMER") return TERM_LABELS.SUMMER;
+
+  if (/^TERM\s*1$/i.test(legacyTerm)) return TERM_LABELS.TERM_1;
+  if (/^TERM\s*2$/i.test(legacyTerm)) return TERM_LABELS.TERM_2;
+  if (/^SUMMER$/i.test(legacyTerm)) return TERM_LABELS.SUMMER;
+
+  return legacyTerm.trim();
+};
+
 export const formatCourseTerm = (
   academicYear?: string | null,
   term?: CourseTerm | null,
   legacySemester?: string | null,
 ) => {
-  if (academicYear && term) {
-    return `${academicYear} / ${TERM_LABELS[term]}`;
+  const year = academicYear?.trim();
+  const termLabel = term ? TERM_LABELS[term] : "";
+  const legacyLabel = normalizeLegacyTermLabel(legacySemester);
+
+  if (termLabel && year) {
+    return `${termLabel}`+' / '+`${year}`;
   }
-  if (legacySemester) return legacySemester;
+  if (termLabel) return termLabel;
+  if (legacyLabel && year) return `${legacyLabel}`+', '+`${year}`;
+  if (legacyLabel) return legacyLabel;
+  if (year) return year;
+
   return "N/A";
 };
 

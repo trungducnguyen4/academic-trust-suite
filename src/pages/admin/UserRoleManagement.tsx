@@ -50,7 +50,9 @@ import api, { unwrapPaginatedData } from "@/lib/api";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -179,6 +181,8 @@ export default function UserRoleManagement() {
   const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterValues>(EMPTY_FILTERS);
+  const [sortField, setSortField] = useState("fullName");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   const [page, setPage] = useState(1);
   const ITEMS_PER_PAGE = 10;
@@ -208,7 +212,7 @@ export default function UserRoleManagement() {
   const normalizedSearch = appliedSearch.trim().toLowerCase();
 
   const filteredUsers = useMemo(() => {
-    return users.filter((item) => {
+    const filtered = users.filter((item) => {
       const matchesSearch = !normalizedSearch
         ? true
         : [
@@ -277,7 +281,9 @@ export default function UserRoleManagement() {
         matchesCreatedAt
       );
     });
-  }, [users, normalizedSearch, appliedFilters]);
+
+    return sortItems(filtered, sortField, sortOrder);
+  }, [users, normalizedSearch, appliedFilters, sortField, sortOrder]);
 
   const totalPages = Math.max(
     1,
@@ -295,6 +301,13 @@ export default function UserRoleManagement() {
 
   const activeFilterCount = getActiveFilterCount(appliedFilters, USER_FILTERS);
   const activeFilterChips = getFilterChips(appliedFilters, USER_FILTERS);
+
+  const userSortOptions = [
+    { field: "fullName", label: "Name" },
+    { field: "role", label: "Role" },
+    { field: "status", label: "Status" },
+    { field: "createdAt", label: "Date Created" },
+  ];
 
   const runSearch = () => {
     setAppliedSearch(searchInput.trim());
@@ -659,6 +672,15 @@ export default function UserRoleManagement() {
               onSearch={runSearch}
               placeholder="Search by name, email, student ID, or department"
               className="flex-1"
+            />
+            <SortButton
+              options={userSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
             />
             <FilterPanel
               title="User filters"

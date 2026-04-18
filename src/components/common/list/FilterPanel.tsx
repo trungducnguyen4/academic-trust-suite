@@ -31,6 +31,7 @@ import { Separator } from "@/components/ui/separator";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { getNumericInputError, parseNumericInput } from "@/lib/number-input";
 import { cn } from "@/lib/utils";
 import {
   FilterDefinition,
@@ -54,6 +55,9 @@ type FilterPanelProps = {
 
 const EMPTY_TEXT_FILTER: TextFilterValue = { value: "", operator: "contains" };
 
+const getNumberFieldKey = (filterKey: string, bound: "min" | "max") =>
+  `${filterKey}::${bound}`;
+
 export function FilterPanel({
   title = "Filters",
   description = "Refine results before applying.",
@@ -68,6 +72,118 @@ export function FilterPanel({
 }: FilterPanelProps) {
   const isMobile = useIsMobile();
   const [open, setOpen] = useState(false);
+  const [numberDrafts, setNumberDrafts] = useState<Record<string, string>>({});
+  const [numberErrors, setNumberErrors] = useState<Record<string, string>>({});
+
+  const getRangeDraftValue = (
+    filterKey: string,
+    bound: "min" | "max",
+    valueFromState?: number,
+  ) => {
+    const key = getNumberFieldKey(filterKey, bound);
+    if (Object.prototype.hasOwnProperty.call(numberDrafts, key)) {
+      return numberDrafts[key];
+    }
+    return valueFromState === undefined ? "" : String(valueFromState);
+  };
+
+  const setRangeError = (
+    filterKey: string,
+    bound: "min" | "max",
+    message: string,
+  ) => {
+    const key = getNumberFieldKey(filterKey, bound);
+    setNumberErrors((prev) => ({ ...prev, [key]: message }));
+  };
+
+  const clearRangeError = (filterKey: string, bound: "min" | "max") => {
+    const key = getNumberFieldKey(filterKey, bound);
+    setNumberErrors((prev) => {
+      if (!prev[key]) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
+  };
+
+  const commitRangeValue = (
+    filter: Extract<FilterDefinition, { type: "number-range" }>,
+    bound: "min" | "max",
+    rawValue: string,
+    currentRange: NumberRangeValue,
+  ) => {
+    const message = getNumericInputError(rawValue, {
+      min: filter.min ?? 0,
+      max: filter.max,
+      integer: false,
+    });
+
+    if (message) {
+      setRangeError(filter.key, bound, message);
+      return false;
+    }
+
+    clearRangeError(filter.key, bound);
+
+    const parsed = parseNumericInput(rawValue, {
+      min: filter.min ?? 0,
+      max: filter.max,
+      integer: false,
+    });
+
+    if (bound === "min") {
+      onValueChange(filter.key, {
+        min: parsed,
+        max: currentRange.max,
+      });
+      return true;
+    }
+
+    onValueChange(filter.key, {
+      min: currentRange.min,
+      max: parsed,
+    });
+    return true;
+  };
+
+  const handleApplyWithValidation = () => {
+    let hasError = false;
+
+    filters.forEach((filter) => {
+      if (filter.type !== "number-range") return;
+      const current = value[filter.key];
+      const range =
+        current && typeof current === "object"
+          ? (current as NumberRangeValue)
+          : {};
+
+      const minRaw = getRangeDraftValue(filter.key, "min", range.min);
+      const maxRaw = getRangeDraftValue(filter.key, "max", range.max);
+
+      const minOk = commitRangeValue(filter, "min", minRaw, range);
+      const maxOk = commitRangeValue(filter, "max", maxRaw, {
+        min: parseNumericInput(minRaw, {
+          min: filter.min ?? 0,
+          max: filter.max,
+          integer: false,
+        }),
+        max: range.max,
+      });
+
+      if (!minOk || !maxOk) {
+        hasError = true;
+      }
+    });
+
+    if (hasError) return;
+    onApply();
+  };
+
+  const handleClearWithReset = () => {
+    setNumberDrafts({});
+    setNumberErrors({});
+    onClear();
+  };
 
   const trigger = (
     <Button
@@ -100,7 +216,7 @@ export function FilterPanel({
           type="button"
           variant="ghost"
           size="sm"
-          onClick={onClear}
+          onClick={handleClearWithReset}
           className="h-8 rounded-full px-2.5 text-xs"
         >
           Clear
@@ -310,6 +426,12 @@ export function FilterPanel({
                   : {};
               const minValue = range.min;
               const maxValue = range.max;
+              const minKey = getNumberFieldKey(filter.key, "min");
+              const maxKey = getNumberFieldKey(filter.key, "max");
+              const minDraft = getRangeDraftValue(filter.key, "min", minValue);
+              const maxDraft = getRangeDraftValue(filter.key, "max", maxValue);
+              const minError = numberErrors[minKey];
+              const maxError = numberErrors[maxKey];
 
               return (
                 <div
@@ -326,79 +448,148 @@ export function FilterPanel({
                         max={filter.max}
                         step={filter.step || 1}
                         value={[minValue ?? filter.min, maxValue ?? filter.max]}
-                        onValueChange={([min, max]) =>
-                          onValueChange(filter.key, { min, max })
-                        }
+                        onValueChange={([min, max]) => {
+                          onValueChange(filter.key, { min, max });
+                          setNumberDrafts((prev) => ({
+                            ...prev,
+                            [minKey]: String(min),
+                            [maxKey]: String(max),
+                          }));
+                          clearRangeError(filter.key, "min");
+                          clearRangeError(filter.key, "max");
+                        }}
                       />
                       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                        <Input
-                          type="number"
-                          min={filter.min}
-                          max={filter.max}
-                          step={filter.step || 1}
-                          value={minValue ?? ""}
-                          onChange={(event) =>
-                            onValueChange(filter.key, {
-                              min: event.target.value
-                                ? Number(event.target.value)
-                                : undefined,
-                              max: maxValue,
-                            })
-                          }
-                          placeholder="Min"
-                          className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
-                        />
-                        <Input
-                          type="number"
-                          min={filter.min}
-                          max={filter.max}
-                          step={filter.step || 1}
-                          value={maxValue ?? ""}
-                          onChange={(event) =>
-                            onValueChange(filter.key, {
-                              min: minValue,
-                              max: event.target.value
-                                ? Number(event.target.value)
-                                : undefined,
-                            })
-                          }
-                          placeholder="Max"
-                          className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
-                        />
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            min={filter.min ?? 0}
+                            max={filter.max}
+                            step={filter.step || 1}
+                            value={minDraft}
+                            onChange={(event) =>
+                              setNumberDrafts((prev) => ({
+                                ...prev,
+                                [minKey]: event.target.value,
+                              }))
+                            }
+                            onBlur={(event) =>
+                              commitRangeValue(
+                                filter,
+                                "min",
+                                event.target.value,
+                                range,
+                              )
+                            }
+                            placeholder="Min"
+                            className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                          />
+                          {minError ? (
+                            <p className="text-[11px] text-destructive">{minError}</p>
+                          ) : null}
+                        </div>
+                        <div className="space-y-1">
+                          <Input
+                            type="number"
+                            min={filter.min ?? 0}
+                            max={filter.max}
+                            step={filter.step || 1}
+                            value={maxDraft}
+                            onChange={(event) =>
+                              setNumberDrafts((prev) => ({
+                                ...prev,
+                                [maxKey]: event.target.value,
+                              }))
+                            }
+                            onBlur={(event) =>
+                              commitRangeValue(
+                                filter,
+                                "max",
+                                event.target.value,
+                                {
+                                  min: parseNumericInput(minDraft, {
+                                    min: filter.min ?? 0,
+                                    max: filter.max,
+                                    integer: false,
+                                  }),
+                                  max: range.max,
+                                },
+                              )
+                            }
+                            placeholder="Max"
+                            className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                          />
+                          {maxError ? (
+                            <p className="text-[11px] text-destructive">{maxError}</p>
+                          ) : null}
+                        </div>
                       </div>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 gap-2 rounded-lg border border-border/80 p-2.5 sm:grid-cols-2">
-                      <Input
-                        type="number"
-                        step={filter.step || 1}
-                        value={minValue ?? ""}
-                        onChange={(event) =>
-                          onValueChange(filter.key, {
-                            min: event.target.value
-                              ? Number(event.target.value)
-                              : undefined,
-                            max: maxValue,
-                          })
-                        }
-                        placeholder="Min"
-                        className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
-                      />
-                      <Input
-                        type="number"
-                        step={filter.step || 1}
-                        value={maxValue ?? ""}
-                        onChange={(event) =>
-                          onValueChange(filter.key, {
-                            min: minValue,
-                            max: event.target.value
-                              ? Number(event.target.value)
-                              : undefined,
-                          })
-                        }
-                        placeholder="Max"
-                        className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
-                      />
+                      <div className="space-y-1">
+                        <Input
+                          type="number"
+                          min={filter.min ?? 0}
+                          max={filter.max}
+                          step={filter.step || 1}
+                          value={minDraft}
+                          onChange={(event) =>
+                            setNumberDrafts((prev) => ({
+                              ...prev,
+                              [minKey]: event.target.value,
+                            }))
+                          }
+                          onBlur={(event) =>
+                            commitRangeValue(
+                              filter,
+                              "min",
+                              event.target.value,
+                              range,
+                            )
+                          }
+                          placeholder="Min"
+                          className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                        />
+                        {minError ? (
+                          <p className="text-[11px] text-destructive">{minError}</p>
+                        ) : null}
+                      </div>
+                      <div className="space-y-1">
+                        <Input
+                          type="number"
+                          min={filter.min ?? 0}
+                          max={filter.max}
+                          step={filter.step || 1}
+                          value={maxDraft}
+                          onChange={(event) =>
+                            setNumberDrafts((prev) => ({
+                              ...prev,
+                              [maxKey]: event.target.value,
+                            }))
+                          }
+                          onBlur={(event) =>
+                            commitRangeValue(
+                              filter,
+                              "max",
+                              event.target.value,
+                              {
+                                min: parseNumericInput(minDraft, {
+                                  min: filter.min ?? 0,
+                                  max: filter.max,
+                                  integer: false,
+                                }),
+                                max: range.max,
+                              },
+                            )
+                          }
+                          placeholder="Max"
+                          className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                        />
+                        {maxError ? (
+                          <p className="text-[11px] text-destructive">{maxError}</p>
+                        ) : null}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -464,12 +655,16 @@ export function FilterPanel({
         <Button
           type="button"
           variant="outline"
-          onClick={onClear}
+          onClick={handleClearWithReset}
           className="h-8 rounded-lg px-3 text-xs"
         >
           Clear filters
         </Button>
-        <Button type="button" onClick={onApply} className="h-8 rounded-lg px-2.5 text-xs">
+        <Button
+          type="button"
+          onClick={handleApplyWithValidation}
+          className="h-8 rounded-lg px-2.5 text-xs"
+        >
           Apply Filter
         </Button>
       </div>

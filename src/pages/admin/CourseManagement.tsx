@@ -7,7 +7,9 @@ import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
 import { SearchBar } from "@/components/common/list/SearchBar";
 import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
 import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
 import {
   FilterDefinition,
   FilterValues,
@@ -64,6 +66,11 @@ import {
   getAcademicYearOptions,
   getDefaultAcademicYear,
 } from "@/lib/course-term";
+import {
+  getNumericInputError,
+  parseNumericInput,
+  sanitizeNumericInput,
+} from "@/lib/number-input";
 import { toast } from "sonner";
 import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import { useAuth } from "@/contexts/AuthContext";
@@ -145,6 +152,8 @@ export default function AdminCourseManagement() {
   const [draftFilters, setDraftFilters] = useState<FilterValues>(EMPTY_FILTERS);
   const [appliedFilters, setAppliedFilters] =
     useState<FilterValues>(EMPTY_FILTERS);
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
 
   const [showCreateDialog, setShowCreateDialog] = useState(false);
   const [showEditDialog, setShowEditDialog] = useState(false);
@@ -152,6 +161,8 @@ export default function AdminCourseManagement() {
 
   const [createForm, setCreateForm] = useState<CourseForm>(defaultForm);
   const [editForm, setEditForm] = useState<CourseForm>(defaultForm);
+  const [createCreditsError, setCreateCreditsError] = useState("");
+  const [editCreditsError, setEditCreditsError] = useState("");
 
   const fetchData = async () => {
     try {
@@ -230,6 +241,13 @@ export default function AdminCourseManagement() {
     [lecturers],
   );
 
+  const courseSortOptions = [
+    { field: "name", label: "Course Name" },
+    { field: "credits", label: "Credits" },
+    { field: "_count.enrollments", label: "Students" },
+    { field: "status", label: "Status" },
+  ];
+
   const normalizedSearch = appliedSearch.trim().toLowerCase();
 
   const filteredCourses = useMemo(() => {
@@ -256,7 +274,7 @@ export default function AdminCourseManagement() {
       return sourceValue.includes(filterValue);
     };
 
-    return courses.filter((course) => {
+    const filtered = courses.filter((course) => {
       const termLabel = formatCourseTerm(
         course.academicYear,
         course.term,
@@ -312,7 +330,9 @@ export default function AdminCourseManagement() {
         matchesCredits
       );
     });
-  }, [courses, normalizedSearch, appliedFilters]);
+
+    return sortItems(filtered, sortField, sortOrder);
+  }, [courses, normalizedSearch, appliedFilters, sortField, sortOrder]);
 
   const [page, setPage] = useState(1);
   const COURSE_ROWS_PER_VIEW = 10;
@@ -394,7 +414,7 @@ export default function AdminCourseManagement() {
     academicYear: form.academicYear.trim() || undefined,
     term: form.term || undefined,
     description: form.description.trim() || undefined,
-    credits: form.credits ? Number(form.credits) : undefined,
+    credits: parseNumericInput(form.credits, { min: 1, max: 10 }),
     lecturerId:
       form.lecturerId === "unassigned"
         ? allowUnassign
@@ -402,6 +422,13 @@ export default function AdminCourseManagement() {
           : undefined
         : form.lecturerId,
   });
+
+  const validateCreditsField = (rawValue: string) =>
+    getNumericInputError(rawValue, {
+      min: 1,
+      max: 10,
+      integer: true,
+    });
 
   const getPreviewCode = (courseName: string) => {
     const courseToken = buildToken(courseName, 6, "COURSE");
@@ -414,11 +441,19 @@ export default function AdminCourseManagement() {
   };
 
   const handleCreate = async () => {
+    const creditsError = validateCreditsField(createForm.credits);
+    if (creditsError) {
+      setCreateCreditsError(creditsError);
+      toast.error(creditsError);
+      return;
+    }
+
     setSaving(true);
     try {
       const created = await api.createCourse(toPayload(createForm));
       setCourses((prev) => [created, ...prev]);
       setCreateForm(defaultForm);
+      setCreateCreditsError("");
       setShowCreateDialog(false);
       toast.success("Course created successfully");
     } catch (error) {
@@ -441,11 +476,19 @@ export default function AdminCourseManagement() {
       credits: course.credits ? String(course.credits) : "",
       lecturerId: course.lecturerId || "unassigned",
     });
+    setEditCreditsError("");
     setShowEditDialog(true);
   };
 
   const handleUpdate = async () => {
     if (!editingCourseId) return;
+
+    const creditsError = validateCreditsField(editForm.credits);
+    if (creditsError) {
+      setEditCreditsError(creditsError);
+      toast.error(creditsError);
+      return;
+    }
 
     setSaving(true);
     try {
@@ -495,6 +538,8 @@ export default function AdminCourseManagement() {
   const renderForm = (
     form: CourseForm,
     onChange: (patch: Partial<CourseForm>) => void,
+    creditsError: string,
+    setCreditsError: (message: string) => void,
   ) => (
     <div className="space-y-4 py-2">
       <div className="grid grid-cols-2 gap-4">
@@ -566,8 +611,16 @@ export default function AdminCourseManagement() {
           min={1}
           max={10}
           value={form.credits}
-          onChange={(e) => onChange({ credits: e.target.value })}
+          onChange={(e) =>
+            onChange({
+              credits: sanitizeNumericInput(e.target.value, { min: 1, max: 10 }),
+            })
+          }
+          onBlur={(e) => setCreditsError(validateCreditsField(e.target.value) || "")}
         />
+        {creditsError ? (
+          <p className="text-xs text-destructive">{creditsError}</p>
+        ) : null}
       </div>
 
       <div className="space-y-2">
@@ -623,8 +676,11 @@ export default function AdminCourseManagement() {
                   </DialogDescription>
                 </DialogHeader>
 
-                {renderForm(createForm, (patch) =>
-                  setCreateForm((prev) => ({ ...prev, ...patch })),
+                {renderForm(
+                  createForm,
+                  (patch) => setCreateForm((prev) => ({ ...prev, ...patch })),
+                  createCreditsError,
+                  setCreateCreditsError,
                 )}
 
                 <DialogFooter>
@@ -695,6 +751,15 @@ export default function AdminCourseManagement() {
               placeholder="Search by code, name, academic year, term, or lecturer"
               className="flex-1"
             />
+            <SortButton
+              options={courseSortOptions}
+              value={sortField}
+              order={sortOrder}
+              onSortChange={(field, order) => {
+                setSortField(field);
+                setSortOrder(order);
+              }}
+            />
             <FilterPanel
               title="Course filters"
               description="Filter courses by status, lecturer, academic year, term, and credits."
@@ -726,6 +791,7 @@ export default function AdminCourseManagement() {
                   <TableRow>
                     <TableHead>Code</TableHead>
                     <TableHead>Course Name</TableHead>
+                    <TableHead className="text-center min-w-20">Credits</TableHead>
                     <TableHead>Term</TableHead>
                     <TableHead>Lecturer</TableHead>
                     <TableHead className="text-center min-w-20">
@@ -747,6 +813,9 @@ export default function AdminCourseManagement() {
                         </TableCell>
                         <TableCell className="font-medium">
                           {course.name}
+                        </TableCell>
+                        <TableCell className="text-center font-semibold">
+                          {course.credits ?? "-"}
                         </TableCell>
                         <TableCell>
                           {formatCourseTerm(
@@ -823,7 +892,7 @@ export default function AdminCourseManagement() {
                   ) : (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="text-center py-8 text-muted-foreground"
                       >
                         No course found.
@@ -853,8 +922,11 @@ export default function AdminCourseManagement() {
             </DialogDescription>
           </DialogHeader>
 
-          {renderForm(editForm, (patch) =>
-            setEditForm((prev) => ({ ...prev, ...patch })),
+          {renderForm(
+            editForm,
+            (patch) => setEditForm((prev) => ({ ...prev, ...patch })),
+            editCreditsError,
+            setEditCreditsError,
           )}
 
           <DialogFooter>

@@ -37,6 +37,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { getNumericInputError, sanitizeNumericInput } from "@/lib/number-input";
 
 export default function AdvancedExamRuleConfig() {
   const [saving, setSaving] = useState(false);
@@ -48,9 +49,9 @@ export default function AdvancedExamRuleConfig() {
   const [hardRatio, setHardRatio] = useState([20]);
 
   // Exam Settings
-  const [duration, setDuration] = useState(120);
-  const [totalQuestions, setTotalQuestions] = useState(40);
-  const [passingScore, setPassingScore] = useState(50);
+  const [duration, setDuration] = useState("120");
+  const [totalQuestions, setTotalQuestions] = useState("40");
+  const [passingScore, setPassingScore] = useState("50");
 
   // Shuffle Settings
   const [shuffleQuestions, setShuffleQuestions] = useState(true);
@@ -77,13 +78,43 @@ export default function AdvancedExamRuleConfig() {
 
   // Auto Submit
   const [autoSubmit, setAutoSubmit] = useState(true);
-  const [gracePeriod, setGracePeriod] = useState(5);
+  const [gracePeriod, setGracePeriod] = useState("5");
+
+  const [numberErrors, setNumberErrors] = useState<Record<string, string>>({});
 
   // AI Integrity
   const [similarityThreshold, setSimilarityThreshold] = useState([80]);
   const [timingAnomalyThreshold, setTimingAnomalyThreshold] = useState([3]);
 
   const handleSave = async () => {
+    const nextErrors = {
+      duration:
+        getNumericInputError(duration, { min: 10, max: 300, integer: true }) ||
+        "",
+      totalQuestions:
+        getNumericInputError(totalQuestions, {
+          min: 1,
+          max: 200,
+          integer: true,
+        }) || "",
+      passingScore:
+        getNumericInputError(passingScore, {
+          min: 0,
+          max: 100,
+          integer: true,
+        }) || "",
+      gracePeriod:
+        getNumericInputError(gracePeriod, {
+          min: 0,
+          max: 30,
+          integer: true,
+        }) || "",
+    };
+    setNumberErrors(nextErrors);
+
+    const firstError = Object.values(nextErrors).find(Boolean);
+    if (firstError) return;
+
     setSaving(true);
     await new Promise((r) => setTimeout(r, 1000));
     setSaving(false);
@@ -135,8 +166,22 @@ export default function AdvancedExamRuleConfig() {
                     min={10}
                     max={300}
                     value={duration}
-                    onChange={(e) => setDuration(Number(e.target.value))}
+                    onChange={(e) => setDuration(sanitizeNumericInput(e.target.value))}
+                    onBlur={(e) =>
+                      setNumberErrors((prev) => ({
+                        ...prev,
+                        duration:
+                          getNumericInputError(e.target.value, {
+                            min: 10,
+                            max: 300,
+                            integer: true,
+                          }) || "",
+                      }))
+                    }
                   />
+                  {numberErrors.duration ? (
+                    <p className="text-xs text-destructive">{numberErrors.duration}</p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label>Total Questions</Label>
@@ -145,8 +190,26 @@ export default function AdvancedExamRuleConfig() {
                     min={1}
                     max={200}
                     value={totalQuestions}
-                    onChange={(e) => setTotalQuestions(Number(e.target.value))}
+                    onChange={(e) =>
+                      setTotalQuestions(sanitizeNumericInput(e.target.value))
+                    }
+                    onBlur={(e) =>
+                      setNumberErrors((prev) => ({
+                        ...prev,
+                        totalQuestions:
+                          getNumericInputError(e.target.value, {
+                            min: 1,
+                            max: 200,
+                            integer: true,
+                          }) || "",
+                      }))
+                    }
                   />
+                  {numberErrors.totalQuestions ? (
+                    <p className="text-xs text-destructive">
+                      {numberErrors.totalQuestions}
+                    </p>
+                  ) : null}
                 </div>
                 <div className="space-y-2">
                   <Label>Passing Score (%)</Label>
@@ -155,8 +218,26 @@ export default function AdvancedExamRuleConfig() {
                     min={0}
                     max={100}
                     value={passingScore}
-                    onChange={(e) => setPassingScore(Number(e.target.value))}
+                    onChange={(e) =>
+                      setPassingScore(sanitizeNumericInput(e.target.value))
+                    }
+                    onBlur={(e) =>
+                      setNumberErrors((prev) => ({
+                        ...prev,
+                        passingScore:
+                          getNumericInputError(e.target.value, {
+                            min: 0,
+                            max: 100,
+                            integer: true,
+                          }) || "",
+                      }))
+                    }
                   />
+                  {numberErrors.passingScore ? (
+                    <p className="text-xs text-destructive">
+                      {numberErrors.passingScore}
+                    </p>
+                  ) : null}
                 </div>
               </div>
             </CardContent>
@@ -558,9 +639,27 @@ export default function AdvancedExamRuleConfig() {
                     min={0}
                     max={30}
                     value={gracePeriod}
-                    onChange={(e) => setGracePeriod(Number(e.target.value))}
+                    onChange={(e) =>
+                      setGracePeriod(sanitizeNumericInput(e.target.value))
+                    }
+                    onBlur={(e) =>
+                      setNumberErrors((prev) => ({
+                        ...prev,
+                        gracePeriod:
+                          getNumericInputError(e.target.value, {
+                            min: 0,
+                            max: 30,
+                            integer: true,
+                          }) || "",
+                      }))
+                    }
                     className="w-24"
                   />
+                  {numberErrors.gracePeriod ? (
+                    <p className="text-xs text-destructive">
+                      {numberErrors.gracePeriod}
+                    </p>
+                  ) : null}
                   <p className="text-xs text-muted-foreground">
                     Extra minutes before auto-submit after timer ends
                   </p>
