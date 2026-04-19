@@ -1,6 +1,20 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { useParams, Link } from "react-router-dom";
+import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { SearchBar } from "@/components/common/list/SearchBar";
+import { FilterPanel } from "@/components/common/list/FilterPanel";
+import { SortButton, type SortOrder } from "@/components/common/list/SortButton";
+import { ActiveFilterChips } from "@/components/common/list/ActiveFilterChips";
+import { sortItems } from "@/components/common/list/sort-utils";
+import {
+  FilterDefinition,
+  FilterValues,
+} from "@/components/common/list/filter-types";
+import {
+  getActiveFilterCount,
+  getFilterChips,
+} from "@/components/common/list/filter-utils";
 import {
   Card,
   CardContent,
@@ -9,10 +23,15 @@ import {
   CardDescription,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import {
   Table,
   TableBody,
@@ -22,13 +41,6 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Loader2,
   Users,
   Clock,
@@ -36,13 +48,11 @@ import {
   Shield,
   Eye,
   Globe,
-  Search,
   RefreshCw,
   QrCode,
   Monitor,
-  Wifi,
-  Ban,
   Flag,
+  BarChart3,
   CheckCircle2,
   XCircle,
   Activity,
@@ -87,6 +97,7 @@ interface StudentSession {
   score: number | null;
   tabSwitches: number;
   mouseAnomalies: number;
+  integrityEvents: number;
   startedAt: string | null;
   submittedAt: string | null;
   flagReason: string | null;
@@ -141,6 +152,23 @@ const mapEventTypeToAlertType = (
   return "similarity";
 };
 
+const EMPTY_STUDENT_FILTERS: FilterValues = {
+  status: "all",
+  riskLevel: "all",
+};
+
+const getRiskLevel = (session: StudentSession): "clean" | "watch" | "high" => {
+  if (session.status === "flagged" || session.integrityEvents >= 5) {
+    return "high";
+  }
+  if (session.integrityEvents >= 2) {
+    return "watch";
+  }
+  return "clean";
+};
+
+const STUDENTS_PER_PAGE = 10;
+
 export default function ExamMonitor() {
   const { id } = useParams();
   const [students, setStudents] = useState<StudentSession[]>([]);
@@ -152,8 +180,18 @@ export default function ExamMonitor() {
   const [resolvedAlertIds, setResolvedAlertIds] = useState<Set<string>>(
     new Set(),
   );
-  const [search, setSearch] = useState("");
-  const [statusFilter, setStatusFilter] = useState("all");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [draftFilters, setDraftFilters] = useState<FilterValues>(
+    EMPTY_STUDENT_FILTERS,
+  );
+  const [appliedFilters, setAppliedFilters] = useState<FilterValues>(
+    EMPTY_STUDENT_FILTERS,
+  );
+  const [sortField, setSortField] = useState("name");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("asc");
+  const [page, setPage] = useState(1);
+  const [showScoreDialog, setShowScoreDialog] = useState(false);
   const [autoRefresh, setAutoRefresh] = useState(true);
   const [lastRefresh, setLastRefresh] = useState(
     new Date().toLocaleTimeString(),
@@ -237,6 +275,7 @@ export default function ExamMonitor() {
           score: submission?.score ?? null,
           tabSwitches: anomalyCount?.tab || 0,
           mouseAnomalies: anomalyCount?.mouse || 0,
+          integrityEvents: (anomalyCount?.tab || 0) + (anomalyCount?.mouse || 0),
           startedAt: submission?.startedAt
             ? new Date(submission.startedAt).toLocaleTimeString()
             : null,
@@ -331,8 +370,14 @@ export default function ExamMonitor() {
             prev.map((s) => {
               if (s.submissionId !== mapped.submissionId) return s;
               const next = { ...s };
-              if (alertType === "tab_switch") next.tabSwitches += 1;
-              if (alertType === "mouse_pattern") next.mouseAnomalies += 1;
+              if (alertType === "tab_switch") {
+                next.tabSwitches += 1;
+                next.integrityEvents += 1;
+              }
+              if (alertType === "mouse_pattern") {
+                next.mouseAnomalies += 1;
+                next.integrityEvents += 1;
+              }
               return next;
             }),
           );
@@ -359,13 +404,118 @@ export default function ExamMonitor() {
     };
   }, [id]);
 
-  const filtered = students.filter((s) => {
-    const matchSearch =
-      s.name.toLowerCase().includes(search.toLowerCase()) ||
-      s.studentId.includes(search);
-    const matchStatus = statusFilter === "all" || s.status === statusFilter;
-    return matchSearch && matchStatus;
-  });
+  const studentFilterDefinitions: FilterDefinition[] = useMemo(
+    () => [
+      {
+        key: "status",
+        label: "Status",
+        type: "select",
+        allLabel: "All status",
+        options: [
+          { label: "In Progress", value: "in_progress" },
+          { label: "Submitted", value: "submitted" },
+          { label: "Flagged", value: "flagged" },
+          { label: "Not Joined", value: "not_joined" },
+          { label: "Disconnected", value: "disconnected" },
+        ],
+      },
+      {
+        key: "riskLevel",
+        label: "Integrity risk",
+        type: "select",
+        allLabel: "All risk levels",
+        options: [
+          { label: "Clean", value: "clean" },
+          { label: "Watch", value: "watch" },
+          { label: "High", value: "high" },
+        ],
+      },
+    ],
+    [],
+  );
+
+  const normalizedSearch = appliedSearch.trim().toLowerCase();
+  const sortedStudents = useMemo(() => {
+    const statusValue = appliedFilters.status as string | undefined;
+    const riskValue = appliedFilters.riskLevel as string | undefined;
+
+    const filtered = students.filter((student) => {
+      const matchSearch = !normalizedSearch
+        ? true
+        : [student.name, student.studentId]
+            .join(" ")
+            .toLowerCase()
+            .includes(normalizedSearch);
+      const matchStatus =
+        !statusValue || statusValue === "all" || student.status === statusValue;
+      const matchRisk =
+        !riskValue || riskValue === "all"
+          ? true
+          : getRiskLevel(student) === riskValue;
+
+      return matchSearch && matchStatus && matchRisk;
+    });
+
+    return sortItems(filtered, sortField, sortOrder);
+  }, [appliedFilters, normalizedSearch, sortField, sortOrder, students]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedStudents.length / STUDENTS_PER_PAGE),
+  );
+
+  useEffect(() => {
+    setPage((currentPage) => Math.min(currentPage, totalPages));
+  }, [totalPages]);
+
+  const paginatedStudents = useMemo(() => {
+    const start = (page - 1) * STUDENTS_PER_PAGE;
+    return sortedStudents.slice(start, start + STUDENTS_PER_PAGE);
+  }, [page, sortedStudents]);
+
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
+  };
+
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setPage(1);
+  };
+
+  const clearFilters = () => {
+    setDraftFilters(EMPTY_STUDENT_FILTERS);
+    setAppliedFilters(EMPTY_STUDENT_FILTERS);
+    setSearchInput("");
+    setAppliedSearch("");
+    setPage(1);
+  };
+
+  const removeFilter = (key: string) => {
+    const nextFilters = { ...appliedFilters, [key]: EMPTY_STUDENT_FILTERS[key] };
+    setAppliedFilters(nextFilters);
+    setDraftFilters(nextFilters);
+    setPage(1);
+  };
+
+  const activeFilterCount = getActiveFilterCount(
+    appliedFilters,
+    studentFilterDefinitions,
+  );
+  const activeFilterChips = getFilterChips(
+    appliedFilters,
+    studentFilterDefinitions,
+  );
+
+  const studentSortOptions = [
+    { field: "name", label: "Name" },
+    { field: "studentId", label: "Student ID" },
+    { field: "status", label: "Status" },
+    { field: "progress", label: "Progress" },
+    { field: "tabSwitches", label: "Tab Switches" },
+    { field: "mouseAnomalies", label: "Mouse Anomalies" },
+    { field: "integrityEvents", label: "Integrity Events" },
+  ];
 
   const stats = {
     total: students.length,
@@ -487,6 +637,14 @@ export default function ExamMonitor() {
               <Link to={`/lecturer/exam/${id}/qr`} className="gap-1">
                 <QrCode className="h-3.5 w-3.5" /> Show QR
               </Link>
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowScoreDialog(true)}
+              className="gap-1"
+            >
+              <BarChart3 className="h-3.5 w-3.5" /> Score Distribution
             </Button>
           </div>
         </div>
@@ -629,58 +787,75 @@ export default function ExamMonitor() {
           </Card>
         )}
 
-        <div className="grid grid-cols-3 gap-6 mb-6">
-          {/* Student Table - 2 cols */}
-          <div className="col-span-2">
-            <Card>
-              <CardHeader className="pb-3">
+        <div className="mb-6">
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base">Student Sessions</CardTitle>
-                  <div className="flex gap-2">
-                    <div className="relative w-48">
-                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                      <Input
-                        placeholder="Search..."
-                        value={search}
-                        onChange={(e) => setSearch(e.target.value)}
-                        className="h-8 bg-white pl-9 text-sm"
-                      />
-                    </div>
-                    <Select
-                      value={statusFilter}
-                      onValueChange={setStatusFilter}
-                    >
-                      <SelectTrigger className="w-[130px] h-8 text-sm">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="all">All Status</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="submitted">Submitted</SelectItem>
-                        <SelectItem value="flagged">Flagged</SelectItem>
-                        <SelectItem value="not_joined">Not Joined</SelectItem>
-                        <SelectItem value="disconnected">
-                          Disconnected
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
                 </div>
-              </CardHeader>
-              <CardContent className="p-0">
-                <Table>
-                  <TableHeader>
+                <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                  <SearchBar
+                    value={searchInput}
+                    onChange={setSearchInput}
+                    onSearch={runSearch}
+                    placeholder="Search student name or student ID"
+                    className="flex-1"
+                  />
+                  <SortButton
+                    options={studentSortOptions}
+                    value={sortField}
+                    order={sortOrder}
+                    onSortChange={(field, order) => {
+                      setSortField(field);
+                      setSortOrder(order);
+                      setPage(1);
+                    }}
+                  />
+                  <FilterPanel
+                    title="Student filters"
+                    description="Filter sessions by status and integrity risk level."
+                    filters={studentFilterDefinitions}
+                    value={draftFilters}
+                    onValueChange={(key, nextValue) =>
+                      setDraftFilters((prev) => ({ ...prev, [key]: nextValue }))
+                    }
+                    onApply={applyFilters}
+                    onClear={clearFilters}
+                    activeCount={activeFilterCount}
+                  />
+                </div>
+                <ActiveFilterChips
+                  chips={activeFilterChips}
+                  onRemove={removeFilter}
+                  onClearAll={clearFilters}
+                />
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-[28%]">Student</TableHead>
+                    <TableHead className="w-[18%]">IP Address</TableHead>
+                    <TableHead className="w-[20%]">Progress</TableHead>
+                    <TableHead className="w-[12%] text-center">Tab Sw.</TableHead>
+                    <TableHead className="w-[14%]">Status</TableHead>
+                    <TableHead className="w-[8%] text-right">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {paginatedStudents.length === 0 ? (
                     <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>IP Address</TableHead>
-                      <TableHead>Progress</TableHead>
-                      <TableHead className="text-center">Tab Sw.</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Action</TableHead>
+                      <TableCell
+                        colSpan={6}
+                        className="py-10 text-center text-sm text-muted-foreground"
+                      >
+                        No student sessions match your current search or filters.
+                      </TableCell>
                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {filtered.map((s) => (
+                  ) : (
+                    paginatedStudents.map((s) => (
                       <TableRow
                         key={s.id}
                         className={s.status === "flagged" ? "bg-red-50/50" : ""}
@@ -700,13 +875,11 @@ export default function ExamMonitor() {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <div className="w-24">
-                            <div className="flex justify-between text-xs mb-0.5">
+                          <div className="w-28">
+                            <div className="mb-0.5 flex justify-between text-xs">
                               <span>{s.progress}%</span>
                               {s.score !== null && (
-                                <span className="font-medium">
-                                  {s.score}pts
-                                </span>
+                                <span className="font-medium">{s.score}pts</span>
                               )}
                             </div>
                             <Progress value={s.progress} className="h-1.5" />
@@ -735,77 +908,110 @@ export default function ExamMonitor() {
                               className="text-red-600 text-xs"
                               onClick={() =>
                                 flagStudent(
-                                  s.submissionId!,
+                                  s.submissionId,
                                   "Manually flagged by instructor",
                                 )
                               }
                             >
-                              <Flag className="h-3.5 w-3.5 mr-1" /> Flag
+                              <Flag className="mr-1 h-3.5 w-3.5" /> Flag
                             </Button>
                           )}
                           {s.status === "flagged" && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-xs"
-                            >
-                              <Eye className="h-3.5 w-3.5 mr-1" /> Review
+                            <Button variant="ghost" size="sm" className="text-xs">
+                              <Eye className="mr-1 h-3.5 w-3.5" /> Review
                             </Button>
                           )}
                         </TableCell>
                       </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
-          </div>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+            <DataPagination
+              currentPage={page}
+              totalPages={totalPages}
+              totalItems={sortedStudents.length}
+              onPageChange={setPage}
+              itemLabel="students"
+            />
+          </Card>
+        </div>
 
-          {/* Score Distribution Chart - 1 col */}
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-base">Score Distribution</CardTitle>
-              <CardDescription>
-                {stats.submitted} submitted so far
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Bar
-                data={chartData}
-                options={{
-                  responsive: true,
-                  plugins: { legend: { display: false } },
-                  scales: { y: { beginAtZero: true, ticks: { stepSize: 1 } } },
-                }}
-              />
-              {stats.submitted > 0 && (
-                <div className="mt-4 space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Average:</span>
-                    <span className="font-medium">
+        <Dialog open={showScoreDialog} onOpenChange={setShowScoreDialog}>
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Score Distribution
+              </DialogTitle>
+              <DialogDescription>
+                Distribution for submitted students in exam {id}. Submitted count: {stats.submitted}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-5">
+              <div className="rounded-lg border border-border/70 bg-muted/20 p-3">
+                <div className="h-[360px] w-full">
+                  <Bar
+                    data={chartData}
+                    options={{
+                      responsive: true,
+                      maintainAspectRatio: false,
+                      plugins: { legend: { display: false } },
+                      scales: {
+                        y: {
+                          beginAtZero: true,
+                          ticks: { stepSize: 1 },
+                          title: { display: true, text: "Students" },
+                        },
+                        x: {
+                          title: { display: true, text: "Score Range" },
+                        },
+                      },
+                    }}
+                  />
+                </div>
+              </div>
+
+              {stats.submitted > 0 ? (
+                <div className="grid gap-3 sm:grid-cols-3">
+                  <div className="rounded-lg border border-border/70 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Average
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-foreground">
                       {Math.round(
                         submittedScores.reduce((a, b) => a + b, 0) /
                           submittedScores.length,
                       )}
-                    </span>
+                    </p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Highest:</span>
-                    <span className="font-medium text-green-600">
+                  <div className="rounded-lg border border-border/70 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Highest
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-green-600">
                       {Math.max(...submittedScores)}
-                    </span>
+                    </p>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-muted-foreground">Lowest:</span>
-                    <span className="font-medium text-red-600">
+                  <div className="rounded-lg border border-border/70 p-3">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Lowest
+                    </p>
+                    <p className="mt-1 text-2xl font-semibold text-red-600">
                       {Math.min(...submittedScores)}
-                    </span>
+                    </p>
                   </div>
                 </div>
+              ) : (
+                <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                  Score distribution will appear once students submit their exams.
+                </div>
               )}
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
     </DashboardLayout>
   );
