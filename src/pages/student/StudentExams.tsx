@@ -21,13 +21,38 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Loader2 } from "lucide-react";
 import api from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
+type StudentExamItem = {
+  id: string;
+  title?: string;
+  status?: string;
+  startTime?: string | null;
+  endTime?: string | null;
+  duration?: number;
+  submitted?: boolean;
+  completed?: boolean;
+  source?: "available" | "submission";
+  course?: {
+    id?: string;
+    code?: string;
+    name?: string;
+  };
+};
+
+const statusText = (exam: StudentExamItem) => {
+  if (exam.completed) return "Completed";
+  const status = String(exam.status || "").toUpperCase();
+  if (status === "ONGOING") return "Ongoing";
+  return "Upcoming";
+};
+
 export default function StudentExams() {
-  const [exams, setExams] = useState<any[]>([]);
+  const [exams, setExams] = useState<StudentExamItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
@@ -47,6 +72,7 @@ export default function StudentExams() {
 
   useEffect(() => {
     let mounted = true;
+
     const fetch = async () => {
       try {
         setLoading(true);
@@ -54,8 +80,8 @@ export default function StudentExams() {
           api.getAvailableExams(),
           api.getMySubmissions(),
         ]);
-        const examsList = available || [];
-        const submissions = mySubs || [];
+        const examsList = (available || []) as any[];
+        const submissions = (mySubs || []) as any[];
         const submittedExamIds = new Set<string>(
           submissions
             .filter((s: any) =>
@@ -63,15 +89,61 @@ export default function StudentExams() {
                 String(s.status || "").toUpperCase(),
               ),
             )
-            .map((s: any) => s.examId ?? s.exam?.id),
+            .map((s: any) => String(s.examId ?? s.exam?.id)),
         );
-        if (mounted) {
-          setExams(
-            examsList.map((e: any) => ({
-              ...e,
-              submitted: submittedExamIds.has(e.id),
-            })),
+
+        const byId = new Map<string, StudentExamItem>();
+
+        examsList.forEach((exam: any) => {
+          const id = String(exam.id);
+          byId.set(id, {
+            id,
+            title: exam.title,
+            status: exam.status,
+            startTime: exam.startTime,
+            endTime: exam.endTime,
+            duration: exam.duration,
+            course: exam.course,
+            submitted: submittedExamIds.has(id),
+            completed: false,
+            source: "available",
+          });
+        });
+
+        submissions.forEach((submission: any) => {
+          const submissionStatus = String(submission.status || "").toUpperCase();
+          const examId = String(submission.examId ?? submission.exam?.id ?? "");
+          if (!examId) return;
+
+          const isCompleted = ["SUBMITTED", "GRADED", "FLAGGED", "FINALIZED"].includes(
+            submissionStatus,
           );
+
+          const existing = byId.get(examId);
+          if (existing) {
+            byId.set(examId, {
+              ...existing,
+              submitted: existing.submitted || isCompleted,
+              completed: existing.completed || isCompleted,
+            });
+            return;
+          }
+
+          byId.set(examId, {
+            id: examId,
+            title: submission.exam?.title,
+            status: isCompleted ? "COMPLETED" : submissionStatus,
+            startTime: submission.submittedAt || submission.startedAt,
+            duration: undefined,
+            course: submission.exam?.course,
+            submitted: isCompleted,
+            completed: isCompleted,
+            source: "submission",
+          });
+        });
+
+        if (mounted) {
+          setExams(Array.from(byId.values()));
         }
       } catch (err) {
         console.error("Failed to load exams", err);
@@ -79,6 +151,7 @@ export default function StudentExams() {
         if (mounted) setLoading(false);
       }
     };
+
     fetch();
     return () => {
       mounted = false;
@@ -103,7 +176,7 @@ export default function StudentExams() {
         type: "select",
         allLabel: "All Status",
         options: [
-          { label: "Published", value: "PUBLISHED" },
+          { label: "Upcoming", value: "PUBLISHED" },
           { label: "Ongoing", value: "ONGOING" },
           { label: "Completed", value: "COMPLETED" },
         ],
@@ -131,7 +204,7 @@ export default function StudentExams() {
 
   const normalizedSearch = appliedSearch.trim().toLowerCase();
   const filteredExams = useMemo(() => {
-    return exams.filter((exam: any) => {
+    return exams.filter((exam) => {
       const submissionState = appliedFilters.submissionState as string | undefined;
       const statusFilter = appliedFilters.status as string | undefined;
       const courseFilter = appliedFilters.courseCode as string | undefined;
@@ -150,7 +223,11 @@ export default function StudentExams() {
       if (submissionState === "submitted" && !exam.submitted) return false;
       if (submissionState === "notSubmitted" && exam.submitted) return false;
 
-      if (statusFilter && statusFilter !== "all" && exam.status !== statusFilter) {
+      const effectiveStatus = exam.completed
+        ? "COMPLETED"
+        : String(exam.status || "PUBLISHED").toUpperCase();
+
+      if (statusFilter && statusFilter !== "all" && effectiveStatus !== statusFilter) {
         return false;
       }
 
@@ -181,13 +258,24 @@ export default function StudentExams() {
     });
   }, [appliedFilters, exams, normalizedSearch]);
 
+  const examSummary = useMemo(() => {
+    const counts = { upcoming: 0, ongoing: 0, completed: 0 };
+    exams.forEach((exam) => {
+      const status = statusText(exam).toLowerCase();
+      if (status === "upcoming") counts.upcoming += 1;
+      if (status === "ongoing") counts.ongoing += 1;
+      if (status === "completed") counts.completed += 1;
+    });
+    return counts;
+  }, [exams]);
+
   const ITEMS_PER_PAGE = 10;
   const totalPages = Math.max(1, Math.ceil(filteredExams.length / ITEMS_PER_PAGE));
   const paginatedExams = filteredExams.slice(
     (page - 1) * ITEMS_PER_PAGE,
     page * ITEMS_PER_PAGE,
   );
-  const EXAM_ITEM_HEIGHT = 92;
+  const EXAM_ITEM_HEIGHT = 106;
   const EXAM_LIST_MIN_HEIGHT = ITEMS_PER_PAGE * EXAM_ITEM_HEIGHT;
 
   useEffect(() => {
@@ -198,10 +286,12 @@ export default function StudentExams() {
     setAppliedSearch(searchInput.trim());
     setPage(1);
   };
+
   const applyFilters = () => {
     setAppliedFilters(draftFilters);
     setPage(1);
   };
+
   const clearFilters = () => {
     const empty: FilterValues = {
       submissionState: "all",
@@ -215,6 +305,7 @@ export default function StudentExams() {
     setAppliedSearch("");
     setPage(1);
   };
+
   const removeFilter = (key: string) => {
     const empty: FilterValues = {
       submissionState: "all",
@@ -241,6 +332,21 @@ export default function StudentExams() {
 
         <div className="space-y-3">
           <ListPageHeader title="Exams" />
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+            <div className="rounded-xl border border-border/60 p-3">
+              <p className="text-xs text-muted-foreground">Upcoming</p>
+              <p className="text-xl font-semibold text-foreground">{examSummary.upcoming}</p>
+            </div>
+            <div className="rounded-xl border border-border/60 p-3">
+              <p className="text-xs text-muted-foreground">Ongoing</p>
+              <p className="text-xl font-semibold text-foreground">{examSummary.ongoing}</p>
+            </div>
+            <div className="rounded-xl border border-border/60 p-3">
+              <p className="text-xs text-muted-foreground">Completed</p>
+              <p className="text-xl font-semibold text-foreground">{examSummary.completed}</p>
+            </div>
+          </div>
+
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <SearchBar
               value={searchInput}
@@ -271,8 +377,10 @@ export default function StudentExams() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Available Exams</CardTitle>
-            <CardDescription>Start or review exam details</CardDescription>
+            <CardTitle>My Exams</CardTitle>
+            <CardDescription>
+              Upcoming, ongoing, and completed exams with clear course context.
+            </CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -286,45 +394,53 @@ export default function StudentExams() {
               >
                 {filteredExams.length === 0 ? (
                   <div className="text-center py-12">
-                    <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
+                    <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-muted">
                       <Calendar className="h-6 w-6 text-muted-foreground" />
                     </div>
-                    <p className="text-muted-foreground font-medium">
+                    <p className="font-medium text-muted-foreground">
                       No exams match current search/filter
                     </p>
                   </div>
                 ) : (
-                  paginatedExams.map((exam: any) => (
+                  paginatedExams.map((exam) => (
                     <div
                       key={exam.id}
-                      className="flex items-center justify-between rounded-xl border border-border/50 p-4"
+                      className="flex flex-col gap-3 rounded-xl border border-border/50 p-4 md:flex-row md:items-center md:justify-between"
                     >
                       <div>
                         <h4 className="font-semibold text-foreground">
                           {exam.title}
                         </h4>
                         <p className="text-sm text-muted-foreground">
-                          {exam.course?.code ?? exam.course}
+                          {(exam.course?.code || "-") + " - " + (exam.course?.name || "Course unavailable")}
                         </p>
                         {exam.startTime && (
                           <p className="text-xs text-muted-foreground">
                             {new Date(exam.startTime).toLocaleString()}
                           </p>
                         )}
+                        <div className="mt-1 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">{statusText(exam)}</Badge>
+                          {exam.submitted ? <Badge variant="secondary">Submitted</Badge> : null}
+                        </div>
                       </div>
+
                       <div className="flex items-center gap-2">
-                        {!exam.submitted && (
+                        {!exam.submitted && !exam.completed ? (
                           <Button asChild size="sm">
-                            <Link to={`/student/exam-ready?examId=${exam.id}`}>
-                              Start
-                            </Link>
+                            <Link to={`/student/exam-ready?examId=${exam.id}`}>Start</Link>
                           </Button>
-                        )}
+                        ) : null}
+
                         <Button asChild variant="outline" size="sm">
-                          <Link to={`/student/grading?examId=${exam.id}`}>
-                            Result
-                          </Link>
+                          <Link to={`/student/exams/${exam.id}`}>Detail</Link>
                         </Button>
+
+                        {exam.submitted ? (
+                          <Button asChild variant="outline" size="sm">
+                            <Link to={`/student/results/${exam.id}`}>Result</Link>
+                          </Button>
+                        ) : null}
                       </div>
                     </div>
                   ))

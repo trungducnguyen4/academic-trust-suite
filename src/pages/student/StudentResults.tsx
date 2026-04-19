@@ -296,10 +296,13 @@ export default function StudentResults() {
                       </div>
                       <div className="flex items-center gap-2">
                         <Button asChild size="sm">
-                          <Link
-                            to={`/student/grading?examId=${s.examId ?? s.exam?.id}`}
-                          >
-                            View
+                          <Link to={`/student/results/${s.examId ?? s.exam?.id}`}>
+                            View Result
+                          </Link>
+                        </Button>
+                        <Button asChild size="sm" variant="outline">
+                          <Link to={`/student/exams/${s.examId ?? s.exam?.id}`}>
+                            Exam Detail
                           </Link>
                         </Button>
                       </div>

@@ -12,6 +12,7 @@ import {
   BookOpen,
   Shield,
   GraduationCap,
+  CalendarDays,
   LogOut,
   ChevronRight,
   PanelLeftClose,
@@ -59,9 +60,19 @@ const studentNavItems: NavItem[] = [
     icon: <LayoutDashboard className="h-[18px] w-[18px]" />,
   },
   {
+    title: "My Courses",
+    href: "/student/courses",
+    icon: <GraduationCap className="h-[18px] w-[18px]" />,
+  },
+  {
     title: "My Exams",
     href: "/student/exams",
     icon: <FileText className="h-[18px] w-[18px]" />,
+  },
+  {
+    title: "Schedule",
+    href: "/student/schedule",
+    icon: <CalendarDays className="h-[18px] w-[18px]" />,
   },
   {
     title: "Results",

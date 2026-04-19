@@ -33,6 +33,10 @@ import OfflineExamDownload from "./pages/student/OfflineExamDownload";
 import StudentCourseDetail from "./pages/student/StudentCourseDetail";
 import StudentExams from "./pages/student/StudentExams";
 import StudentResults from "./pages/student/StudentResults";
+import StudentCourses from "./pages/student/StudentCourses";
+import StudentExamDetail from "./pages/student/StudentExamDetail";
+import StudentResultDetail from "./pages/student/StudentResultDetail";
+import StudentSchedule from "./pages/student/StudentSchedule";
 
 // Lecturer
 import LecturerDashboard from "./pages/lecturer/LecturerDashboard";
@@ -96,8 +100,15 @@ const App = () => {
 
               {/* ================= STUDENT ================= */}
               <Route path="/student" element={<StudentDashboard />} />
+              <Route path="/student/courses" element={<StudentCourses />} />
               <Route path="/student/exams" element={<StudentExams />} />
+              <Route path="/student/exams/:id" element={<StudentExamDetail />} />
+              <Route path="/student/schedule" element={<StudentSchedule />} />
               <Route path="/student/results" element={<StudentResults />} />
+              <Route
+                path="/student/results/:examId"
+                element={<StudentResultDetail />}
+              />
               <Route path="/student/feedback" element={<FeedbackDetail />} />
               <Route path="/student/timeline" element={<ExamEventTimeline />} />
               <Route path="/student/grading" element={<GradingBreakdown />} />

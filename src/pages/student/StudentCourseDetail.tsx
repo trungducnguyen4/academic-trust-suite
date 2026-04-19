@@ -349,17 +349,27 @@ export default function StudentCourseDetail() {
                           </div>
                         </div>
 
-                        {canJoin ? (
-                          <Button asChild>
-                            <Link to={`/student/exam-ready?examId=${exam.id}`}>
-                              Open Exam
-                            </Link>
+                        <div className="flex items-center gap-2">
+                          {canJoin ? (
+                            <Button asChild>
+                              <Link to={`/student/exam-ready?examId=${exam.id}`}>
+                                Open Exam
+                              </Link>
+                            </Button>
+                          ) : (
+                            <Button variant="outline" disabled>
+                              Not Available
+                            </Button>
+                          )}
+                          <Button asChild variant="outline">
+                            <Link to={`/student/exams/${exam.id}`}>Detail</Link>
                           </Button>
-                        ) : (
-                          <Button variant="outline" disabled>
-                            Not Available
-                          </Button>
-                        )}
+                          {exam.status === "COMPLETED" ? (
+                            <Button asChild variant="outline">
+                              <Link to={`/student/results/${exam.id}`}>Result</Link>
+                            </Button>
+                          ) : null}
+                        </div>
                       </div>
                     );
                   })}
