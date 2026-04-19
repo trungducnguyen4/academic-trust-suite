@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useLocation, useParams, useNavigate } from "react-router-dom";
 import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { Button } from "@/components/ui/button";
@@ -67,7 +67,11 @@ function formatTimeSpent(start?: string | null, end?: string | null) {
 
 export default function ExamResultsList() {
   const { id: examId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const basePath = location.pathname.startsWith("/admin")
+    ? "/admin"
+    : "/lecturer";
   const [examTitle, setExamTitle] = useState("Exam Results");
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [overview, setOverview] = useState<ExamOverview | null>(null);
@@ -334,9 +338,7 @@ export default function ExamResultsList() {
                         <TableCell>
                           <a
                             className="text-blue-600 hover:underline"
-                            onClick={() =>
-                              navigate(`/lecturer/exam/${examId}/monitor`)
-                            }
+                            onClick={() => navigate(`${basePath}/exam/${examId}/monitor`)}
                           >
                             {s.student?.fullName || "—"}
                           </a>

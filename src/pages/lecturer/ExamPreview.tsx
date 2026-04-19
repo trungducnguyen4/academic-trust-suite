@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { format } from "date-fns";
 import {
   Dialog,
@@ -70,7 +70,11 @@ function normalizeType(rawType?: string) {
 
 export default function ExamPreview() {
   const { id: examId } = useParams();
+  const location = useLocation();
   const navigate = useNavigate();
+  const basePath = location.pathname.startsWith("/admin")
+    ? "/admin"
+    : "/lecturer";
   const [exam, setExam] = useState<ExamData | null>(null);
   const [loading, setLoading] = useState(true);
   const [showShareDialog, setShowShareDialog] = useState(false);
@@ -179,7 +183,7 @@ export default function ExamPreview() {
             <Button
               variant="ghost"
               className="px-0"
-              onClick={() => navigate("/lecturer/exams")}
+              onClick={() => navigate(`${basePath}/exams`)}
             >
               <ArrowLeft className="h-4 w-4 mr-1" />
               Back to Exams
@@ -211,14 +215,14 @@ export default function ExamPreview() {
             </Button>
             {timeline.isEnded ? (
               <Button asChild>
-                <Link to={`/lecturer/exam/${exam.id}/results`}>
+                <Link to={`${basePath}/exam/${exam.id}/results`}>
                   <BarChart3 className="h-4 w-4 mr-2" />
                   View Results
                 </Link>
               </Button>
             ) : (
               <Button variant="outline" asChild>
-                <Link to="/lecturer/question-bank">Open Question Bank</Link>
+                <Link to={`${basePath}/question-bank`}>Open Question Bank</Link>
               </Button>
             )}
           </div>
@@ -296,7 +300,7 @@ export default function ExamPreview() {
               />
               <div className="mt-4">
                 <Button asChild>
-                  <Link to={`/lecturer/exam/${exam?.id}/qr`}>
+                  <Link to={`${basePath}/exam/${exam?.id}/qr`}>
                     Open Full Screen
                   </Link>
                 </Button>
@@ -392,7 +396,7 @@ export default function ExamPreview() {
                         asChild
                       >
                         <Link
-                          to={`/lecturer/question-editor?id=${eq.question.id}`}
+                          to={`${basePath}/question-editor?id=${eq.question.id}`}
                         >
                           <PencilLine className="h-4 w-4 mr-1" />
                           Edit Question

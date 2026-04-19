@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useRef } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { SearchBar } from "@/components/common/list/SearchBar";
@@ -171,6 +171,10 @@ const STUDENTS_PER_PAGE = 10;
 
 export default function ExamMonitor() {
   const { id } = useParams();
+  const location = useLocation();
+  const basePath = location.pathname.startsWith("/admin")
+    ? "/admin"
+    : "/lecturer";
   const [students, setStudents] = useState<StudentSession[]>([]);
   const [alerts, setAlerts] = useState<IntegrityAlert[]>([]);
   const [examTitle, setExamTitle] = useState("Live Exam Monitor");
@@ -593,7 +597,7 @@ export default function ExamMonitor() {
   return (
     <DashboardLayout>
       <div className="max-w-6xl mx-auto">
-        <BackToDashboardButton to="/lecturer" className="mb-4 -ml-2" />
+        <BackToDashboardButton to={basePath} className="mb-4 -ml-2" />
 
         <div className="flex items-start justify-between mb-6">
           <div>
@@ -634,7 +638,7 @@ export default function ExamMonitor() {
               <RefreshCw className="h-3.5 w-3.5" /> Refresh
             </Button>
             <Button variant="ghost" size="sm" asChild>
-              <Link to={`/lecturer/exam/${id}/qr`} className="gap-1">
+              <Link to={`${basePath}/exam/${id}/qr`} className="gap-1">
                 <QrCode className="h-3.5 w-3.5" /> Show QR
               </Link>
             </Button>

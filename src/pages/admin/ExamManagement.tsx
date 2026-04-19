@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { useNavigate } from "react-router-dom";
 import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
@@ -109,6 +110,7 @@ const EMPTY_FILTERS: FilterValues = {
 };
 
 export default function AdminExamManagement() {
+  const navigate = useNavigate();
   const [exams, setExams] = useState<Exam[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
@@ -427,9 +429,9 @@ export default function AdminExamManagement() {
       toast.success("Exam deleted successfully");
       setShowDeleteDialog(false);
       setSelectedExam(null);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to delete exam:", error);
-      toast.error("Failed to delete exam");
+      toast.error(error?.message || "Failed to delete exam");
     } finally {
       setIsDeleting(false);
     }
@@ -698,20 +700,35 @@ export default function AdminExamManagement() {
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
-                                <DropdownMenuItem className="gap-2 text-xs">
+                                <DropdownMenuItem
+                                  onClick={() =>
+                                    navigate(`/admin/exam/${exam.id}/preview`)
+                                  }
+                                  className="gap-2 text-xs"
+                                >
                                   <Eye className="h-4 w-4" />
                                   Preview
                                 </DropdownMenuItem>
                                 {(exam.status === "ONGOING" ||
                                   exam.status === "PUBLISHED") && (
-                                  <DropdownMenuItem className="gap-2 text-xs">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      navigate(`/admin/exam/${exam.id}/monitor`)
+                                    }
+                                    className="gap-2 text-xs"
+                                  >
                                     <Clock className="h-4 w-4" />
                                     Monitor
                                   </DropdownMenuItem>
                                 )}
                                 {(exam.status === "COMPLETED" ||
                                   (exam._count?.submissions ?? 0) > 0) && (
-                                  <DropdownMenuItem className="gap-2 text-xs">
+                                  <DropdownMenuItem
+                                    onClick={() =>
+                                      navigate(`/admin/exam/${exam.id}/results`)
+                                    }
+                                    className="gap-2 text-xs"
+                                  >
                                     <BarChart3 className="h-4 w-4" />
                                     Results
                                   </DropdownMenuItem>

@@ -1,4 +1,11 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+  ConflictException,
+  InternalServerErrorException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto, RescheduleExamDto } from './dto/exam.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
@@ -480,10 +487,72 @@ export class ExamsService {
       throw new NotFoundException('Exam not found');
     }
 
-    // Delete related exam questions first
-    await this.prisma.examQuestion.deleteMany({ where: { examId: id } });
+    try {
+      await this.prisma.$transaction(async (tx) => {
+        // Use SQL cleanup to remain robust even when Prisma delegates are out of sync.
+        await tx.$executeRawUnsafe(
+          `DELETE il
+           FROM integrity_logs il
+           INNER JOIN proctoring_sessions ps ON ps.id = il.proctoringId
+           INNER JOIN exam_submissions es ON es.id = ps.submissionId
+           WHERE es.examId = ?`,
+          id,
+        );
 
-    await this.prisma.exam.delete({ where: { id } });
+        await tx.$executeRawUnsafe(
+          `DELETE sa
+           FROM submission_answers sa
+           INNER JOIN exam_submissions es ON es.id = sa.submissionId
+           WHERE es.examId = ?`,
+          id,
+        );
+
+        await tx.$executeRawUnsafe(
+          `DELETE ps
+           FROM proctoring_sessions ps
+           INNER JOIN exam_submissions es ON es.id = ps.submissionId
+           WHERE es.examId = ?`,
+          id,
+        );
+
+        await tx.$executeRawUnsafe(
+          'DELETE FROM exam_submissions WHERE examId = ?',
+          id,
+        );
+
+        await tx.$executeRawUnsafe(
+          `DELETE elu
+           FROM exam_link_usages elu
+           INNER JOIN exam_links el ON el.id = elu.linkId
+           WHERE el.examId = ?`,
+          id,
+        );
+
+        await tx.$executeRawUnsafe('DELETE FROM exam_links WHERE examId = ?', id);
+        await tx.$executeRawUnsafe('DELETE FROM exam_questions WHERE examId = ?', id);
+        await tx.$executeRawUnsafe('DELETE FROM exams WHERE id = ?', id);
+      });
+    } catch (error: any) {
+      if (error?.code === 'P2003') {
+        throw new ConflictException(
+          'Cannot delete exam because it still has related data',
+        );
+      }
+
+      if (error?.code === 'P2025') {
+        throw new NotFoundException('Exam not found');
+      }
+
+      console.error('Failed to delete exam', {
+        examId: id,
+        code: error?.code,
+        message: error?.message,
+        meta: error?.meta,
+      });
+      throw new InternalServerErrorException(
+        'Failed to delete exam due to a server-side data constraint issue',
+      );
+    }
 
     try {
       const studentIds = await this.getCourseRecipientIds(exam.course.id);

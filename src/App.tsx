@@ -180,6 +180,10 @@ const App = () => {
               {/* ================= ADMIN ================= */}
               <Route path="/admin" element={<AdminDashboard />} />
               <Route path="/admin/exams" element={<AdminExamManagement />} />
+              <Route path="/admin/exam/:id/monitor" element={<ExamMonitor />} />
+              <Route path="/admin/exam/:id/preview" element={<ExamPreview />} />
+              <Route path="/admin/exam/:id/qr" element={<ExamQR />} />
+              <Route path="/admin/exam/:id/results" element={<ExamResultsList />} />
               <Route
                 path="/admin/courses"
                 element={<AdminCourseManagement />}
