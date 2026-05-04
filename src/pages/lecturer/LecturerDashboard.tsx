@@ -61,7 +61,7 @@ export default function LecturerDashboard() {
         setLoading(true);
         const [examsData, questionsData, coursesData] = await Promise.all([
           api.getExams(),
-          api.getQuestions(),
+          api.listQuestions(),
           api.getMyCourses(),
         ]);
         setExams(unwrapPaginatedData(examsData));
@@ -132,7 +132,7 @@ export default function LecturerDashboard() {
         <div className="flex items-start justify-between">
           <div className="animate-fade-in opacity-0">
             <h1 className="text-2xl font-bold text-foreground">
-              Welcome back, {user?.fullName.split(" ")[0]} 👋
+              Welcome back, {user?.fullName.split(" ")[0]}
             </h1>
             <p className="text-muted-foreground mt-1">
               Here's an overview of your courses, exams, and question bank.

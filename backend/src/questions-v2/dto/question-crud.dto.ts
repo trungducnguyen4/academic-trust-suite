@@ -1,6 +1,6 @@
 import { IsString, IsEnum, IsOptional, IsObject, IsInt, Min, Max, IsArray } from 'class-validator';
 
-export class CreateQuestionDto {
+export class CreateQuestionCrudDto {
   @IsEnum(['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE', 'SHORT_ANSWER', 'ESSAY', 'FILL_IN_BLANK', 'MATCHING', 'ORDERING'])
   type: string;
 
@@ -40,7 +40,7 @@ export class CreateQuestionDto {
   courseId?: string;
 }
 
-export class UpdateQuestionDto {
+export class UpdateQuestionCrudDto {
   @IsOptional()
   @IsEnum(['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE', 'SHORT_ANSWER', 'ESSAY', 'FILL_IN_BLANK', 'MATCHING', 'ORDERING'])
   type?: string;

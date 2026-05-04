@@ -15,6 +15,47 @@ enum CourseTerm {
   SUMMER
 }
 
+enum ExamMode {
+  NORMAL
+  LAB
+}
+
+enum QuestionLifecycleStatus {
+  DRAFT
+  IN_REVIEW
+  PUBLISHED
+  ARCHIVED
+}
+
+enum QuestionDraftStep {
+  INTENT
+  CONTENT
+  ANSWERS
+  CLASSIFICATION
+  REVIEW
+}
+
+enum QuestionDraftMode {
+  MANUAL
+  AI_ASSISTED
+  DUPLICATE
+}
+
+enum AISection {
+  CONTENT
+  ANSWERS
+  EXPLANATION
+  CLASSIFICATION
+}
+
+enum AIJobStatus {
+  QUEUED
+  RUNNING
+  SUCCEEDED
+  FAILED
+  REJECTED
+}
+
 model User {
   id         String    @id @default(uuid())
   email      String    @unique
@@ -61,6 +102,8 @@ model Course {
   enrollments Enrollment[]
   exams       Exam[]
   questions   Question[]
+  courseTopics CourseTopic[]
+  questionCourseScopes QuestionCourseScope[]
 
   @@index([code])
   @@index([lecturerId])
@@ -93,6 +136,7 @@ model Exam {
   startTime              DateTime?
   endTime                DateTime?
   status                 String   @default("DRAFT") // DRAFT, PUBLISHED, ONGOING, COMPLETED, ARCHIVED
+  mode                   ExamMode @default(NORMAL)
   settings               Json?
   creatorId              String
   creator                User     @relation("ExamCreator", fields: [creatorId], references: [id])
@@ -102,11 +146,47 @@ model Exam {
   examQuestions  ExamQuestion[]
   submissions    ExamSubmission[]
   links          ExamLink[]
+  ipWhitelist    ExamIpWhitelist[]
+  accessDeniedLogs ExamAccessDeniedLog[]
+  snapshots      ExamSnapshot[]
 
   @@index([courseId])
   @@index([creatorId])
   @@index([status])
   @@map("exams")
+}
+
+model ExamIpWhitelist {
+  id            String   @id @default(uuid())
+  exam          Exam     @relation(fields: [examId], references: [id])
+  examId        String
+  rule          String   // e.g. single IP or CIDR (192.168.1.10 or 192.168.1.0/24)
+  ipVersion     Int?
+  normalized    String?
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  @@index([examId])
+  @@map("exam_ip_whitelist")
+}
+
+model ExamAccessDeniedLog {
+  id              String   @id @default(uuid())
+  exam            Exam     @relation(fields: [examId], references: [id])
+  examId          String
+  studentId       String?
+  resolvedClientIp String
+  remoteIp        String?
+  forwardedFor    String?
+  userAgent       String?
+  reasonCode      String
+  reasonMessage   String?
+  route           String?
+  createdAt       DateTime @default(now())
+
+  @@index([examId])
+  @@index([studentId])
+  @@map("exam_access_denied_log")
 }
 
 model ExamLink {
@@ -166,15 +246,174 @@ model Question {
   course       Course?  @relation(fields: [courseId], references: [id])
   creatorId    String?
   creator      User?    @relation("AuthorQuestions", fields: [creatorId], references: [id])
+  status       QuestionLifecycleStatus @default(DRAFT)
+  latestVersionNo Int   @default(1)
+  isReusable   Boolean  @default(true)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
   exams             ExamQuestion[]
   submissionAnswers SubmissionAnswer[]
+  versions          QuestionVersion[]
+  tagLinks          QuestionTag[]
+  topicLinks        QuestionTopic[]
+  courseScopes      QuestionCourseScope[]
+  drafts            QuestionDraft[]
+  usages            QuestionUsage[]
 
   @@index([courseId])
   @@index([creatorId])
+  @@index([status])
   @@map("questions")
+}
+
+model QuestionVersion {
+  id            String   @id @default(uuid())
+  questionId    String
+  question      Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  versionNo     Int
+  stem          String   @db.Text
+  payload       Json?
+  answerKey     Json?
+  explanation   String?  @db.Text
+  difficulty    Int?
+  points        Int?
+  metadata      Json?
+  aiGenerated   Boolean  @default(false)
+  createdBy     String?
+  createdAt     DateTime @default(now())
+
+  examItems          ExamQuestion[]
+  submissionAnswers  SubmissionAnswer[]
+  aiRecords          AIGenerationRecord[]
+
+  @@unique([questionId, versionNo])
+  @@index([questionId, createdAt])
+  @@map("question_versions")
+}
+
+model Tag {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  createdAt DateTime @default(now())
+
+  links     QuestionTag[]
+
+  @@map("tags")
+}
+
+model QuestionTag {
+  questionId String
+  tagId      String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  tag        Tag      @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, tagId])
+  @@index([tagId])
+  @@map("question_tags")
+}
+
+model Topic {
+  id        String   @id @default(uuid())
+  code      String   @unique
+  name      String
+  createdAt DateTime @default(now())
+
+  questionLinks QuestionTopic[]
+  courseLinks   CourseTopic[]
+
+  @@map("topics")
+}
+
+model QuestionTopic {
+  questionId String
+  topicId    String
+  weight     Float?
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  topic      Topic    @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, topicId])
+  @@index([topicId])
+  @@map("question_topics")
+}
+
+model CourseTopic {
+  courseId String
+  topicId  String
+  course   Course @relation(fields: [courseId], references: [id], onDelete: Cascade)
+  topic    Topic  @relation(fields: [topicId], references: [id], onDelete: Cascade)
+
+  @@id([courseId, topicId])
+  @@index([topicId])
+  @@map("course_topics")
+}
+
+model QuestionCourseScope {
+  questionId String
+  courseId   String
+  question   Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  course     Course   @relation(fields: [courseId], references: [id], onDelete: Cascade)
+
+  @@id([questionId, courseId])
+  @@index([courseId])
+  @@map("question_course_scopes")
+}
+
+model QuestionDraft {
+  id              String   @id @default(uuid())
+  questionId      String?
+  question        Question? @relation(fields: [questionId], references: [id], onDelete: SetNull)
+  creatorId       String
+  mode            QuestionDraftMode
+  currentStep     QuestionDraftStep @default(INTENT)
+  autosaveVersion Int      @default(1)
+  state           Json
+  validation      Json?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  aiRecords       AIGenerationRecord[]
+
+  @@index([creatorId, updatedAt])
+  @@index([questionId])
+  @@map("question_drafts")
+}
+
+model AIGenerationRecord {
+  id                String   @id @default(uuid())
+  draftId           String?
+  draft             QuestionDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
+  questionVersionId String?
+  questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: SetNull)
+  section           AISection
+  status            AIJobStatus @default(QUEUED)
+  provider          String?
+  model             String?
+  prompt            Json?
+  output            Json?
+  safetyFlags       Json?
+  errorMessage      String?  @db.Text
+  createdAt         DateTime @default(now())
+  completedAt       DateTime?
+
+  @@index([draftId, createdAt])
+  @@index([questionVersionId])
+  @@index([status])
+  @@map("ai_generation_records")
+}
+
+model QuestionUsage {
+  id          String   @id @default(uuid())
+  questionId  String
+  question    Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  contextType String
+  contextId   String
+  usedAt      DateTime @default(now())
+  metrics     Json?
+
+  @@index([questionId, usedAt])
+  @@index([contextType, contextId])
+  @@map("question_usages")
 }
 
 model ExamQuestion {
@@ -183,11 +422,14 @@ model ExamQuestion {
   examId     String
   question   Question @relation(fields: [questionId], references: [id])
   questionId String
+  questionVersionId String?
+  questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id])
   orderIndex Int
   points     Int?     @default(1)
 
   @@unique([examId, questionId])
   @@index([examId])
+  @@index([questionVersionId])
   @@map("exam_questions")
 }
 
@@ -197,7 +439,16 @@ model ExamSubmission {
   examId       String
   student      User      @relation("StudentSubmissions", fields: [studentId], references: [id])
   studentId    String
-  status       String    @default("IN_PROGRESS") // IN_PROGRESS, SUBMITTED, GRADED, FLAGGED
+  attemptNo    Int       @default(1) // For versioning multiple attempts per (exam, student) pair
+  status       String    @default("IN_PROGRESS") // IN_PROGRESS, SUBMITTING, SUBMITTED, GRADE_PENDING, GRADED, FLAGGED, SUBMIT_FAILED
+  version      Int       @default(0)
+  submitLockedAt DateTime?
+  lastAutosaveAt DateTime?
+  lastActivityAt DateTime?
+  submitIdempotencyKey String? @db.VarChar(255)
+  finalSnapshotVersion Int?
+  examSnapshotId String?
+  examSnapshot   ExamSnapshot? @relation(fields: [examSnapshotId], references: [id])
   score        Int?
   startedAt    DateTime?
   submittedAt  DateTime?
@@ -207,8 +458,12 @@ model ExamSubmission {
   answers      SubmissionAnswer[]
   proctoring   ProctoringSession?
 
+  @@unique([examId, studentId, attemptNo])
   @@index([examId])
   @@index([studentId])
+  @@index([examId, studentId, status])
+  @@index([studentId, status, createdAt])
+  @@index([submitIdempotencyKey])
   @@map("exam_submissions")
 }
 
@@ -218,15 +473,76 @@ model SubmissionAnswer {
   submissionId     String
   question         Question       @relation(fields: [questionId], references: [id])
   questionId       String
+  questionVersionId String?
+  questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id])
+  questionSnapshotId String?
+  questionSnapshot   QuestionSnapshot? @relation(fields: [questionSnapshotId], references: [id])
+  sequence         Int            @default(1)
+  clientBatchId    String?        @db.VarChar(255)
+  serverVersion    Int            @default(0)
   answer           Json
   isCorrect        Boolean?
   pointsAwarded    Int?
   feedback         String?        @db.Text
   timeTaken        Int?           // in seconds
+  updatedAt        DateTime       @updatedAt
 
+  @@unique([submissionId, questionId])
   @@index([submissionId])
   @@index([questionId])
+  @@index([submissionId, questionId, sequence])
+  @@index([submissionId, questionVersionId])
+  @@index([questionVersionId])
   @@map("submission_answers")
+}
+
+model ExamSnapshot {
+  id         String   @id @default(uuid())
+  examId     String
+  exam       Exam     @relation(fields: [examId], references: [id], onDelete: Cascade)
+  title      String
+  payload    Json?    // full exam-level payload (settings, static metadata)
+  createdBy  String?
+  createdAt  DateTime @default(now())
+  publishedAt DateTime?
+
+  questions  ExamQuestionSnapshot[]
+  submissions ExamSubmission[]
+  @@index([examId])
+  @@map("exam_snapshots")
+}
+
+model ExamQuestionSnapshot {
+  id                String   @id @default(uuid())
+  examSnapshotId    String
+  examSnapshot      ExamSnapshot @relation(fields: [examSnapshotId], references: [id], onDelete: Cascade)
+  questionId        String
+  questionVersionId String?
+  questionSnapshotId String?
+  orderIndex        Int
+  points            Int?
+  payload           Json?    // question payload copied at snapshot time
+
+  questionSnapshot  QuestionSnapshot? @relation(fields: [questionSnapshotId], references: [id])
+
+  @@index([examSnapshotId])
+  @@index([questionId])
+  @@map("exam_question_snapshots")
+}
+
+model QuestionSnapshot {
+  id               String   @id @default(uuid())
+  originalQuestionId String
+  questionVersionId String
+  payload          Json?    // full question payload (stem, options, answerKey, explanation)
+  createdAt        DateTime @default(now())
+
+  examQuestionLinks ExamQuestionSnapshot[]
+  submissionAnswers SubmissionAnswer[]
+
+  @@index([originalQuestionId])
+  @@index([questionVersionId])
+  @@map("question_snapshots")
 }
 
 model ProctoringSession {
@@ -274,4 +590,23 @@ model Notification {
   @@index([recipientId, isRead])
   @@index([createdAt])
   @@map("notifications")
+}
+
+/// Durable event store for critical events that must be persisted and replayable
+model EventStore {
+  id         String   @id @default(uuid())
+  dedupId    String?  @db.VarChar(255) // optional client-supplied id for idempotency
+  kind       String
+  payload    Json
+  critical   Boolean  @default(false)
+  status     String   @default("PENDING") // PENDING, PROCESSING, PROCESSED, FAILED
+  attempts   Int      @default(0)
+  lastError  String?  @db.Text
+  source     String?  // e.g. 'api-instance'
+  createdAt  DateTime @default(now())
+  processedAt DateTime?
+
+  @@index([dedupId])
+  @@index([kind])
+  @@map("event_store")
 }

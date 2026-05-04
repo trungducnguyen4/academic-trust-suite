@@ -109,7 +109,6 @@ export default function CourseDetail() {
   const [course, setCourse] = useState<Course | null>(null);
   const [loading, setLoading] = useState(true);
   const [resolvedCourseId, setResolvedCourseId] = useState<string | null>(null);
-  const [enrollmentsRaw, setEnrollmentsRaw] = useState<any[] | null>(null);
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [draftFilters, setDraftFilters] = useState<FilterValues>({
@@ -145,7 +144,6 @@ export default function CourseDetail() {
       joinedAt: new Date(e.joinedAt).toISOString().split("T")[0],
     }));
     setStudents(mapped);
-    setEnrollmentsRaw(enrollments || []);
   };
 
   useEffect(() => {
@@ -212,7 +210,6 @@ export default function CourseDetail() {
           joinedAt: new Date(e.joinedAt).toISOString().split("T")[0],
         }));
         setStudents(mapped);
-        setEnrollmentsRaw(enrollments || []);
       } catch (err) {
         console.error("Failed to fetch course or enrollments:", err);
       } finally {
@@ -512,34 +509,6 @@ export default function CourseDetail() {
               course?.semester,
             )} • {students.length} Students Enrolled
           </p>
-            {typeof window !== "undefined" &&
-              window.location.hostname.includes("localhost") && (
-                <div className="mt-3 p-3 rounded-md bg-muted/30 text-sm text-muted-foreground">
-                  <div className="font-medium text-foreground">Dev debug</div>
-                  <div>
-                    Resolved course id:{" "}
-                    <span className="font-mono">
-                      {resolvedCourseId || "none"}
-                    </span>
-                  </div>
-                  <div>
-                    Enrollments fetched:{" "}
-                    {Array.isArray(enrollmentsRaw)
-                      ? enrollmentsRaw.length
-                      : "null"}
-                  </div>
-                  <details className="mt-2 text-xs">
-                    <summary className="cursor-pointer">
-                      Show raw enrollments (first 5)
-                    </summary>
-                    <pre className="max-h-56 overflow-auto p-2 bg-white text-xs text-muted-foreground rounded mt-2">
-                      {enrollmentsRaw
-                        ? JSON.stringify(enrollmentsRaw.slice(0, 5), null, 2)
-                        : "no data"}
-                    </pre>
-                  </details>
-                </div>
-              )}
         </div>
 
         {/* Filters */}

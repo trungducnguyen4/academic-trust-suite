@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { isIpInAnyCidr, normalizeIp } from '../common/utils/ip.utils';
+import { AccessPolicyService } from '../common/services/access-policy.service';
 import { GenerateExamLinkDto, JoinExamLinkDto, UpdateExamLinkDto } from './dto/exam-link.dto';
 import { createHash, randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
@@ -18,6 +19,7 @@ export class ExamLinksService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private readonly accessPolicy: AccessPolicyService,
   ) {}
 
   private makeToken(): string {
@@ -188,18 +190,20 @@ export class ExamLinksService {
       }
     }
 
-    // Check optional IP restrictions defined on the exam settings
+    // Enforce LAB-mode whitelist via AccessPolicyService (falls back to legacy settings when no DB entries)
     try {
-      const allowedCidrs = Array.isArray(link?.exam?.settings?.allowedIpCidrs)
-        ? link.exam.settings.allowedIpCidrs
-        : null;
-      if (allowedCidrs && allowedCidrs.length > 0) {
-        if (!ip) throw new ForbiddenException('Access restricted to approved IP ranges');
-        const allowed = isIpInAnyCidr(normalizeIp(ip), allowedCidrs as string[]);
-        if (!allowed) throw new ForbiddenException('Access denied: outside allowed lab network');
+      const check = await this.accessPolicy.isIpAllowedForExam(link.exam.id, ip ? normalizeIp(ip) : null);
+      if (!check.allowed) {
+        await this.accessPolicy.logDeniedAccess(link.exam.id, {
+          resolvedClientIp: ip ? normalizeIp(ip) : null,
+          remoteIp: ip || null,
+          reasonCode: check.reason || 'LAB_IP_DENIED',
+          reasonMessage: 'Access denied by lab IP whitelist',
+          route: 'exam-links.validateEligibility',
+        });
+        throw new ForbiddenException('Access denied: outside allowed lab network');
       }
     } catch (e) {
-      // If IP check fails due to malformed config, default to deny
       if (e instanceof ForbiddenException) throw e;
       throw new ForbiddenException('Access restricted by network policy');
     }

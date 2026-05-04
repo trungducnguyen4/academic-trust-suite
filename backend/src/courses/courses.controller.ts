@@ -56,6 +56,12 @@ export class CoursesController {
     return this.coursesService.getMyCoursesAsLecturer(req.user.id);
   }
 
+  @Get('my-recent-courses')
+  getMyRecentCourses(@Request() req) {
+    const limit = 5; // Fetch the last 5 courses
+    return this.coursesService.getMyCoursesAsStudent(req.user.id, limit);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req) {
     return this.coursesService.findOne(id, req.user);

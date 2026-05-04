@@ -1,10 +1,25 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { isIpInAnyCidr, normalizeIp } from '../common/utils/ip.utils';
-import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto } from './dto/submission.dto';
+import { AccessPolicyService } from '../common/services/access-policy.service';
+import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto, AutosaveExamDto } from './dto/submission.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
 import { SubmissionsEventsService } from './submissions-events.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { QueueService } from '../queue/queue.service';
+
+type AutosaveAnswerMeta = {
+  questionId: string;
+  sequence: number;
+  clientBatchId?: string | null;
+  serverVersion?: number | null;
+};
+
+type ExistingAutosaveAnswer = {
+  id: string;
+  questionId: string;
+  sequence: number;
+};
 
 @Injectable()
 export class SubmissionsService {
@@ -12,6 +27,8 @@ export class SubmissionsService {
     private prisma: PrismaService,
     private submissionsEvents: SubmissionsEventsService,
     private readonly notificationsService: NotificationsService,
+    private readonly accessPolicy: AccessPolicyService,
+    private readonly queueService: QueueService,
   ) {}
 
   private getRealtimeSeverity(eventType: string): 'low' | 'medium' | 'high' {
@@ -55,7 +72,7 @@ export class SubmissionsService {
     }
   }
 
-  async startExam(startExamDto: StartExamDto, studentId: string, context?: { ip?: string; userAgent?: string }): Promise<void> {
+  async startExam(startExamDto: StartExamDto, studentId: string, context?: { remoteIp?: string; forwardedFor?: string; userAgent?: string }): Promise<any> {
     const exam = await this.prisma.exam.findUnique({
       where: { id: startExamDto.examId },
       include: {
@@ -94,22 +111,29 @@ export class SubmissionsService {
       throw new ForbiddenException('Exam has ended');
     }
 
-    // Check optional IP whitelist configured on exam.settings.allowedIpCidrs
+    // Resolve client IP (respecting trusted proxy configuration) and enforce LAB whitelist
     try {
-      const allowedCidrs = Array.isArray((exam.settings || {})?.allowedIpCidrs)
-        ? (exam.settings || {})?.allowedIpCidrs
-        : null;
-      if (allowedCidrs && allowedCidrs.length > 0) {
-        if (!context?.ip) throw new ForbiddenException('Access restricted to approved IP ranges');
-        const allowed = isIpInAnyCidr(normalizeIp(context.ip), allowedCidrs as string[]);
-        if (!allowed) throw new ForbiddenException('Access denied: outside allowed lab network');
+      const clientIp = this.accessPolicy.resolveClientIpFromParts(context?.remoteIp ?? null, context?.forwardedFor ?? null);
+      const check = await this.accessPolicy.isIpAllowedForExam(startExamDto.examId, clientIp);
+      if (!check.allowed) {
+        await this.accessPolicy.logDeniedAccess(startExamDto.examId, {
+          studentId,
+          resolvedClientIp: clientIp,
+          remoteIp: context?.remoteIp ?? null,
+          forwardedFor: context?.forwardedFor ?? null,
+          userAgent: context?.userAgent ?? null,
+          reasonCode: check.reason || 'LAB_IP_DENIED',
+          reasonMessage: 'Access denied by lab IP whitelist',
+          route: 'submissions.startExam',
+        });
+        throw new ForbiddenException('Access denied: outside allowed lab network');
       }
     } catch (e) {
       if (e instanceof ForbiddenException) throw e;
       throw new ForbiddenException('Access restricted by network policy');
     }
 
-    // Check for in-progress submission
+    // Check for in-progress submission (idempotency: return existing IN_PROGRESS)
     const inProgressSubmission = await this.prisma.examSubmission.findFirst({
       where: {
         examId: startExamDto.examId,
@@ -129,27 +153,42 @@ export class SubmissionsService {
       ? Math.max(1, Math.floor(parsedMaxAttempts))
       : 1;
 
-    const completedAttempts = await this.prisma.examSubmission.count({
+    // Get count of completed attempts to determine next attemptNo
+    const completedSubmissions = await this.prisma.examSubmission.findMany({
       where: {
         examId: startExamDto.examId,
         studentId,
         status: { in: ['SUBMITTED', 'GRADED', 'FLAGGED'] },
       },
+      select: { attemptNo: true },
+      orderBy: { attemptNo: 'desc' },
+      take: 1,
     });
 
-    if (completedAttempts >= maxAttempts) {
+    const lastAttemptNo = completedSubmissions[0]?.attemptNo || 0;
+    const nextAttemptNo = lastAttemptNo + 1;
+
+    if (nextAttemptNo > maxAttempts) {
       throw new ConflictException(
-        `Attempt limit reached (${completedAttempts}/${maxAttempts}).`,
+        `Attempt limit reached (${lastAttemptNo}/${maxAttempts}).`,
       );
     }
 
-    // Create new submission
+    // Create new submission with idempotency (attemptNo versioning)
+    // attach the latest exam snapshot (materialized at publish time) if exists
+    const latestSnapshot = await this.prisma.examSnapshot.findFirst({
+      where: { examId: startExamDto.examId },
+      orderBy: { publishedAt: 'desc' },
+    });
+
     const startedSubmission = await this.prisma.examSubmission.create({
       data: {
         examId: startExamDto.examId,
         studentId,
+        attemptNo: nextAttemptNo,
         status: 'IN_PROGRESS',
         startedAt: now,
+        examSnapshotId: latestSnapshot?.id ?? null,
       },
       include: {
         exam: {
@@ -160,14 +199,42 @@ export class SubmissionsService {
           },
         },
       },
+    }).catch((err: any) => {
+      // Handle unique constraint violation (race condition: another request created submission for same attemptNo)
+      // In this case, return the existing submission as idempotent response
+      if (err.code === 'P2002' && err.meta?.target?.includes('unq_exam_student_attempt')) {
+        return this.prisma.examSubmission.findFirst({
+          where: {
+            examId: startExamDto.examId,
+            studentId,
+            attemptNo: nextAttemptNo,
+          },
+          include: {
+            exam: {
+              select: {
+                id: true,
+                title: true,
+                duration: true,
+              },
+            },
+          },
+        });
+      }
+      throw err;
     });
+
+    if (!startedSubmission) {
+      throw new ConflictException('Failed to create exam submission');
+    }
 
     // Create an initial proctoring session and record the client's IP (if provided)
     try {
       await this.prisma.proctoringSession.create({
         data: {
           submissionId: startedSubmission.id,
-          ipAddress: context?.ip ?? null,
+          ipAddress: typeof (context as any)?.remoteIp !== 'undefined' || typeof (context as any)?.forwardedFor !== 'undefined'
+            ? this.accessPolicy.resolveClientIpFromParts(context?.remoteIp ?? null, context?.forwardedFor ?? null)
+            : null,
         },
       });
     } catch (e) {
@@ -195,11 +262,26 @@ export class SubmissionsService {
   async submitExam(
     submissionId: string,
     submitExamDto: SubmitExamDto,
-    studentId: string
-  ): Promise<void> {
+    studentId: string,
+    options?: { idempotencyKey?: string },
+  ): Promise<any> {
+    const idempotencyKey = options?.idempotencyKey?.trim() || null;
+    const now = new Date();
+
     const submission = await this.prisma.examSubmission.findUnique({
       where: { id: submissionId },
-      include: {
+      select: {
+        id: true,
+        examId: true,
+        studentId: true,
+        status: true,
+        attemptNo: true,
+        version: true,
+        submittedAt: true,
+        gradedAt: true,
+        score: true,
+        submitIdempotencyKey: true,
+        submitLockedAt: true,
         student: {
           select: {
             id: true,
@@ -208,12 +290,10 @@ export class SubmissionsService {
           },
         },
         exam: {
-          include: {
-            examQuestions: {
-              include: {
-                question: true,
-              },
-            },
+          select: {
+            id: true,
+            title: true,
+            totalPoints: true,
           },
         },
       },
@@ -227,17 +307,22 @@ export class SubmissionsService {
       throw new ForbiddenException('Not authorized');
     }
 
-    if (submission.status !== 'IN_PROGRESS') {
+    if (submission.status === 'SUBMITTED' || submission.status === 'GRADED') {
+      if (idempotencyKey && submission.submitIdempotencyKey === idempotencyKey) {
+        return this.buildSubmitResponse(submission, true);
+      }
       throw new BadRequestException('Exam already submitted');
     }
 
-    const now = new Date();
+    if (submission.status === 'SUBMITTING') {
+      throw new ConflictException('Submission is being finalized');
+    }
 
-    // Basic validation / security for logs
     const logs = submitExamDto.logs || [];
     if (logs.length > 1000) {
       throw new BadRequestException('Too many log entries');
     }
+
     let totalLogChars = 0;
     for (const l of logs) {
       const detailsStr = l.details ? String(l.details) : '';
@@ -250,24 +335,127 @@ export class SubmissionsService {
       throw new BadRequestException('Proctoring logs payload too large');
     }
 
-    // Use transaction to ensure atomicity of answer creation + submission update + logs
+    const answers = (submitExamDto.answers || []).slice(0, 1000);
+    const autoGradedTypes = new Set(['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE']);
+
     const result = await this.prisma.$transaction(async (tx) => {
-      // Create submission answers
-      let totalScore = 0;
-      const autoGradedTypes = ['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE'];
+      const locked = await tx.examSubmission.updateMany({
+        where: {
+          id: submissionId,
+          studentId,
+          status: 'IN_PROGRESS',
+        },
+        data: {
+          status: 'SUBMITTING',
+          submitLockedAt: now,
+          submitIdempotencyKey: idempotencyKey ?? undefined,
+          lastActivityAt: now,
+          version: { increment: 1 },
+        },
+      });
 
-      for (const answerDto of submitExamDto.answers) {
-        const examQuestion = submission.exam.examQuestions.find(
-          (eq) => eq.questionId === answerDto.questionId,
-        );
+      if (locked.count === 0) {
+        const current = await tx.examSubmission.findUnique({
+          where: { id: submissionId },
+          select: {
+            id: true,
+            status: true,
+            attemptNo: true,
+            submittedAt: true,
+            gradedAt: true,
+            score: true,
+            version: true,
+            submitIdempotencyKey: true,
+            studentId: true,
+          },
+        });
 
-        if (!examQuestion) continue;
+        if (!current) {
+          throw new NotFoundException('Submission not found');
+        }
 
+        if (current.studentId !== studentId) {
+          throw new ForbiddenException('Not authorized');
+        }
+
+        if ((current.status === 'SUBMITTED' || current.status === 'GRADED') && idempotencyKey && current.submitIdempotencyKey === idempotencyKey) {
+          return this.buildSubmitResponse({
+            ...submission,
+            status: current.status,
+            submittedAt: current.submittedAt,
+            gradedAt: current.gradedAt,
+            score: current.score,
+            version: current.version,
+            submitIdempotencyKey: current.submitIdempotencyKey,
+          }, true);
+        }
+
+        if (current.status === 'SUBMITTING') {
+          throw new ConflictException('Submission is being finalized');
+        }
+
+        throw new BadRequestException('Exam already submitted');
+      }
+
+      const lockedSubmission = await tx.examSubmission.findUnique({
+        where: { id: submissionId },
+        include: {
+          student: {
+            select: {
+              id: true,
+              fullName: true,
+              studentId: true,
+            },
+          },
+          exam: {
+            include: {
+              examQuestions: {
+                include: {
+                  question: true,
+                },
+              },
+            },
+          },
+          answers: {
+            select: {
+              questionId: true,
+              sequence: true,
+              clientBatchId: true,
+              serverVersion: true,
+            },
+          },
+        },
+      });
+
+      if (!lockedSubmission) {
+        throw new NotFoundException('Submission not found');
+      }
+
+      const examQuestions = lockedSubmission.exam.examQuestions as Array<{
+        questionId: string;
+        points: number | null;
+        question: {
+          type: string;
+          correctAnswer: any;
+          points: number | null;
+        };
+      }>;
+
+      const validQuestions = new Map<string, (typeof examQuestions)[number]>(
+        examQuestions.map((eq) => [eq.questionId, eq]),
+      );
+      const answerMetaByQuestionId = new Map<string, AutosaveAnswerMeta>(
+        (lockedSubmission.answers || []).map((answer) => [answer.questionId, answer as AutosaveAnswerMeta]),
+      );
+
+      const normalizedAnswers = answers.filter((answer) => validQuestions.has(answer.questionId));
+      const finalAnswerRows = normalizedAnswers.map((answerDto) => {
+        const examQuestion = validQuestions.get(answerDto.questionId)!;
+        const answerMeta = answerMetaByQuestionId.get(answerDto.questionId);
         let pointsAwarded = 0;
         let isCorrect = false;
 
-        // Auto-grade for objective question types
-        if (autoGradedTypes.includes(examQuestion.question.type)) {
+        if (autoGradedTypes.has(examQuestion.question.type)) {
           const correctAnswer = examQuestion.question.correctAnswer;
           if (correctAnswer && this.compareAnswers(answerDto.answer, correctAnswer)) {
             pointsAwarded = examQuestion.points || examQuestion.question.points || 1;
@@ -275,66 +463,83 @@ export class SubmissionsService {
           }
         }
 
-        totalScore += pointsAwarded;
+        return {
+          submissionId,
+          questionId: answerDto.questionId,
+          questionVersionId: null,
+          sequence: Number(answerMeta?.sequence || 1),
+          clientBatchId: answerMeta?.clientBatchId || null,
+          serverVersion: Number(answerMeta?.serverVersion || 0),
+          answer: answerDto.answer,
+          timeTaken: answerDto.timeTaken,
+          isCorrect,
+          pointsAwarded,
+        };
+      });
 
-        await tx.submissionAnswer.create({
-          data: {
-            submissionId,
-            questionId: answerDto.questionId,
-            answer: answerDto.answer,
-            timeTaken: answerDto.timeTaken,
-            isCorrect,
-            pointsAwarded,
-          },
+      const totalScore = finalAnswerRows.reduce((sum, row) => sum + Number(row.pointsAwarded || 0), 0);
+      const hasManualGrading = lockedSubmission.exam.examQuestions.some(
+        (eq) => !autoGradedTypes.has(eq.question.type),
+      );
+
+      await tx.submissionAnswer.deleteMany({
+        where: { submissionId },
+      });
+
+      if (finalAnswerRows.length > 0) {
+        await tx.submissionAnswer.createMany({
+          data: finalAnswerRows,
         });
       }
 
-      // Check if all questions are auto-gradable
-      const hasManualGrading = submission.exam.examQuestions.some(
-        (eq) => !autoGradedTypes.includes(eq.question.type),
-      );
-
-      // Create or update proctoring session and logs (inside same transaction)
       if (logs.length > 0) {
-        // compute simple aggregates
-        const tabSwitchCount = logs.filter((x) => x.type === 'tab_switch').length;
-        // upsert ProctoringSession by submissionId
+        const tabSwitchCount = logs.filter((x) => String(x.type).toLowerCase() === 'tab_switch').length;
+        const mouseAnomalies = logs.filter((x) => String(x.type).toLowerCase() === 'mouse_anomaly').length;
+
         const proctoringSession = await tx.proctoringSession.upsert({
           where: { submissionId },
           create: {
             submissionId,
             tabSwitchCount,
-            mouseAnomalies: logs.filter((x) => x.type === 'mouse_anomaly').length,
+            mouseAnomalies,
           },
           update: {
             tabSwitchCount: { increment: tabSwitchCount },
-            mouseAnomalies: { increment: logs.filter((x) => x.type === 'mouse_anomaly').length },
+            mouseAnomalies: { increment: mouseAnomalies },
           },
         });
-        const proctoringId = proctoringSession.id;
 
-        // prepare integrity logs
-        const createLogs = logs.map((l) => ({
-          proctoringId,
-          eventType: String(l.type).slice(0, 100),
-          details: l.details ? String(l.details).slice(0, 2000) : undefined,
-          timestamp: l.ts ? new Date(l.ts) : new Date(),
+        const integrityRows = logs.map((log) => ({
+          proctoringId: proctoringSession.id,
+          eventType: String(log.type).slice(0, 100),
+          details: log.details ? String(log.details).slice(0, 2000) : undefined,
+          timestamp: log.ts ? new Date(log.ts) : now,
         }));
-        if (createLogs.length > 0) {
-          // createMany is faster; fallback to individual create if needed
-          await tx.integrityLog.createMany({ data: createLogs });
+
+        if (integrityRows.length > 0) {
+          await tx.integrityLog.createMany({ data: integrityRows });
         }
       }
 
-      // Update submission
-      return tx.examSubmission.update({
+      const updatedSubmission = await tx.examSubmission.update({
         where: { id: submissionId },
         data: {
           status: hasManualGrading ? 'SUBMITTED' : 'GRADED',
           submittedAt: now,
+          gradedAt: hasManualGrading ? null : now,
           score: totalScore,
+          finalSnapshotVersion: lockedSubmission.version,
+          lastActivityAt: now,
+          version: { increment: 1 },
         },
         include: {
+          student: {
+            select: {
+              id: true,
+              fullName: true,
+              studentId: true,
+            },
+          },
           exam: {
             select: {
               id: true,
@@ -355,7 +560,13 @@ export class SubmissionsService {
           },
         },
       });
-    }); // end $transaction
+
+      return {
+        submission: updatedSubmission,
+        totalScore,
+        hasManualGrading,
+      };
+    });
 
     if (logs.length > 0) {
       this.publishRealtimeLogs(
@@ -369,6 +580,215 @@ export class SubmissionsService {
         logs,
       );
     }
+
+    this.sendIntegrityNotifications(submissionId, studentId).catch((err) => {
+      console.error('Failed to send notifications:', err);
+    });
+
+    return this.buildSubmitResponse(result.submission, false);
+  }
+
+  async autosaveAnswers(
+    submissionId: string,
+    payload: AutosaveExamDto,
+    studentId: string,
+  ): Promise<{ success: boolean; count: number; skipped: number; serverVersion: number }> {
+    const answers = Array.isArray(payload?.answers) ? payload.answers : [];
+    const clientBatchId = String(payload?.clientBatchId || '').trim() || null;
+
+    const submission = await this.prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+      select: {
+        id: true,
+        studentId: true,
+        status: true,
+        version: true,
+        examSnapshotId: true,
+        exam: {
+          select: {
+            id: true,
+            examQuestions: {
+              select: {
+                questionId: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    if (submission.studentId !== studentId) {
+      throw new ForbiddenException('Not authorized');
+    }
+
+    if (submission.status !== 'IN_PROGRESS') {
+      throw new BadRequestException('Exam already submitted, cannot autosave');
+    }
+
+    const validQuestionIds = new Set(submission.exam.examQuestions.map((eq) => eq.questionId));
+    const normalizedAnswers = new Map<string, { questionId: string; sequence: number; answer: any; timeTaken?: number }>();
+
+    for (const answer of answers.slice(0, 500)) {
+      if (!answer || !validQuestionIds.has(answer.questionId)) continue;
+
+      const sequence = Number(answer.sequence || 0);
+      if (!Number.isInteger(sequence) || sequence < 1) continue;
+
+      const current = normalizedAnswers.get(answer.questionId);
+      if (!current || sequence > current.sequence) {
+        normalizedAnswers.set(answer.questionId, {
+          questionId: answer.questionId,
+          sequence,
+          answer: answer.answer,
+          timeTaken: answer.timeTaken,
+        });
+      }
+    }
+
+    if (normalizedAnswers.size === 0) {
+      return { success: true, count: 0, skipped: answers.length, serverVersion: submission.version || 0 };
+    }
+
+    // Backpressure: if queue backlog is high, decline low-priority autosave to protect DB
+    try {
+      const overloaded = await this.queueService.isQueueOverloaded('integrity-logs', Number(process.env.QUEUE_WAITING_THRESHOLD_AUTOSAVE || '1000'));
+      if (overloaded) {
+        // signal client to retry later; do not perform DB writes for autosave under severe load
+        return { success: false, count: 0, skipped: answers.length, serverVersion: submission.version || 0 };
+      }
+    } catch (err) {
+      // ignore and continue
+    }
+
+    const incomingQuestionIds = Array.from(normalizedAnswers.keys());
+
+    if (incomingQuestionIds.length === 0) {
+      return { success: true, count: 0, skipped: answers.length, serverVersion: submission.version || 0 };
+    }
+
+    const now = new Date();
+
+    const result = await this.prisma.$transaction(async (tx) => {
+      const locked = await tx.examSubmission.updateMany({
+        where: {
+          id: submissionId,
+          studentId,
+          status: 'IN_PROGRESS',
+        },
+        data: {
+          lastActivityAt: now,
+        },
+      });
+
+      if (locked.count === 0) {
+        throw new BadRequestException('Exam already submitted, cannot autosave');
+      }
+
+      const currentSubmission = await tx.examSubmission.findUnique({
+        where: { id: submissionId },
+        select: { version: true, status: true },
+      });
+
+      if (!currentSubmission || currentSubmission.status !== 'IN_PROGRESS') {
+        throw new BadRequestException('Exam already submitted, cannot autosave');
+      }
+
+      const existingAnswers = await tx.submissionAnswer.findMany({
+        where: {
+          submissionId,
+          questionId: { in: incomingQuestionIds },
+        },
+        select: {
+          id: true,
+          questionId: true,
+          sequence: true,
+        },
+      });
+
+      // map questionId -> questionSnapshotId if submission references an examSnapshot
+      const questionSnapshotByQuestionId = new Map<string, string | null>();
+      if (submission.examSnapshotId) {
+        const eqSnapshots = await tx.examQuestionSnapshot.findMany({
+          where: { examSnapshotId: submission.examSnapshotId, questionId: { in: incomingQuestionIds } },
+          select: { questionId: true, questionSnapshotId: true },
+        });
+        for (const r of eqSnapshots) questionSnapshotByQuestionId.set(r.questionId, r.questionSnapshotId || null);
+      }
+
+      const existingByQuestionId = new Map<string, ExistingAutosaveAnswer>(
+        existingAnswers.map((row) => [row.questionId, row]),
+      );
+      const changedAnswers = Array.from(normalizedAnswers.values()).filter((answer) => {
+        const existing = existingByQuestionId.get(answer.questionId);
+        return !existing || answer.sequence > existing.sequence;
+      });
+
+      if (changedAnswers.length === 0) {
+        return {
+          success: true,
+          count: 0,
+          skipped: normalizedAnswers.size,
+          serverVersion: Number(currentSubmission.version || 0),
+        };
+      }
+
+      const serverVersion = Number(currentSubmission.version || 0) + 1;
+      let savedCount = 0;
+
+      for (const answer of changedAnswers) {
+        const existing = existingByQuestionId.get(answer.questionId);
+        const data = {
+          answer: answer.answer,
+          timeTaken: answer.timeTaken,
+          sequence: answer.sequence,
+          clientBatchId,
+          serverVersion,
+        };
+
+        if (existing) {
+          await tx.submissionAnswer.update({
+            where: { id: existing.id },
+            data,
+          });
+        } else {
+          const qSnapshotId = questionSnapshotByQuestionId.get(answer.questionId) || null;
+          await tx.submissionAnswer.create({
+            data: {
+              submissionId,
+              questionId: answer.questionId,
+              questionSnapshotId: qSnapshotId,
+              answer: answer.answer,
+              timeTaken: answer.timeTaken,
+              sequence: answer.sequence,
+              clientBatchId,
+              serverVersion,
+            },
+          });
+        }
+
+        savedCount += 1;
+      }
+
+      await tx.examSubmission.update({
+        where: { id: submissionId },
+        data: {
+          version: { increment: 1 },
+          lastAutosaveAt: now,
+          lastActivityAt: now,
+        },
+      });
+
+      return {
+        success: true,
+        count: savedCount,
+        skipped: normalizedAnswers.size - savedCount,
+        serverVersion,
+      };
+    });
 
     return result;
   }
@@ -461,20 +881,40 @@ export class SubmissionsService {
       );
     }
 
+    // Publish realtime logs
+    if (entries.length > 0) {
+      this.publishRealtimeLogs(
+        submission.examId,
+        submission.id,
+        {
+          id: submission.student?.id,
+          fullName: submission.student?.fullName,
+          studentId: submission.student?.studentId,
+        },
+        entries,
+      );
+    }
+
+    // Send notifications asynchronously (do not block response)
+    this.sendIntegrityNotifications(submissionId, studentId).catch((err) => {
+      console.error('Failed to send notifications:', err);
+      // Do not throw, notifications are non-critical
+    });
+
     return result;
+  }
+
+  private async sendIntegrityNotifications(submissionId: string, studentId: string): Promise<void> {
     try {
       await this.notificationsService.create({
         recipientId: studentId,
         kind: 'SUBMISSION_RECEIVED',
         title: 'Submission received',
-        message: `Your submission for ${submission.exam.title} has been received.`,
+        message: `Your submission for exam has been received.`,
         link: '/student/results',
         priority: 'normal',
         metadata: {
-          submissionId: submission.id,
-          examId: submission.exam.id,
-          status: submission.status,
-          score: submission.score,
+          submissionId,
         },
       });
 
@@ -548,11 +988,10 @@ export class SubmissionsService {
           });
         }
       }
-    } catch {
-      // Notification failures must not block submission flow.
+    } catch (err) {
+      // Notification failures must not block submission flow
+      console.error('Notification error:', err);
     }
-
-    return submission;
   }
 
   private compareAnswers(submitted: any, correct: any): boolean {
@@ -560,6 +999,32 @@ export class SubmissionsService {
       return JSON.stringify(submitted) === JSON.stringify(correct);
     }
     return submitted === correct;
+  }
+
+  private buildSubmitResponse(
+    submission: {
+      id: string;
+      status: string;
+      attemptNo: number;
+      submittedAt: Date | null;
+      gradedAt?: Date | null;
+      score?: number | null;
+      version?: number | null;
+      submitIdempotencyKey?: string | null;
+    },
+    duplicate = false,
+  ) {
+    return {
+      submissionId: submission.id,
+      status: submission.status,
+      attemptNo: submission.attemptNo,
+      submittedAt: submission.submittedAt ? submission.submittedAt.toISOString() : null,
+      gradedAt: submission.gradedAt ? submission.gradedAt.toISOString() : null,
+      score: submission.score ?? null,
+      serverVersion: submission.version ?? null,
+      duplicate,
+      idempotencyKey: submission.submitIdempotencyKey ?? null,
+    };
   }
 
   async gradeAnswer(gradeDto: GradeAnswerDto) {
@@ -1002,6 +1467,11 @@ export class SubmissionsService {
           },
         },
         answers: {
+          orderBy: [
+            { questionId: 'asc' },
+            { sequence: 'desc' },
+            { updatedAt: 'desc' },
+          ],
           include: {
             question: {
               select: {

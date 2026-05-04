@@ -7,6 +7,8 @@ import {
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AccessPolicyService } from '../common/services/access-policy.service';
+import { isValidIpOrCidr } from '../common/utils/ip.utils';
 import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto, RescheduleExamDto } from './dto/exam.dto';
 import { PaginationDto, buildPaginatedResult } from '../common/dto/pagination.dto';
 import { NotificationsService } from '../notifications/notifications.service';
@@ -16,6 +18,7 @@ export class ExamsService {
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
+    private readonly accessPolicy: AccessPolicyService,
   ) {}
 
   private async getCourseRecipientIds(courseId: string) {
@@ -28,6 +31,13 @@ export class ExamsService {
 
   async create(createExamDto: CreateExamDto, creatorId: string) {
     const { questionIds, ...examData } = createExamDto;
+
+    if (Array.isArray((createExamDto as any).ipWhitelist)) {
+      const invalidRule = (createExamDto as any).ipWhitelist.find((rule: string) => !isValidIpOrCidr(rule));
+      if (invalidRule) {
+        throw new BadRequestException(`Invalid IP/CIDR format: ${invalidRule}. Example: 192.168.1.10 or 192.168.1.0/24`);
+      }
+    }
 
     // Check if course exists
     const course = await this.prisma.course.findUnique({
@@ -63,6 +73,12 @@ export class ExamsService {
           },
         },
       });
+
+      // Persist IP whitelist entries if provided on creation
+      if (Array.isArray((createExamDto as any).ipWhitelist) && (createExamDto as any).ipWhitelist.length > 0) {
+        const toCreate = (createExamDto as any).ipWhitelist.map((r: string) => ({ examId: exam.id, rule: r, normalized: r }));
+        await tx.examIpWhitelist.createMany({ data: toCreate });
+      }
 
       // Add questions if provided
       if (questionIds && questionIds.length > 0) {
@@ -275,7 +291,7 @@ export class ExamsService {
     return exam;
   }
 
-  async findForStudent(id: string, studentId: string) {
+  async findForStudent(id: string, studentId: string, clientIp?: string | null) {
     const exam = await this.prisma.exam.findUnique({
       where: { id },
       include: {
@@ -326,6 +342,25 @@ export class ExamsService {
       throw new ForbiddenException('Exam is not available');
     }
 
+    // Enforce LAB-mode IP whitelist if needed
+    try {
+      const check = await this.accessPolicy.isIpAllowedForExam(exam.id, clientIp ?? null);
+      if (!check.allowed) {
+        await this.accessPolicy.logDeniedAccess(exam.id, {
+          studentId,
+          resolvedClientIp: clientIp ?? null,
+          reasonCode: check.reason || 'LAB_IP_DENIED',
+          reasonMessage: 'Access denied by lab IP whitelist',
+          route: 'exams.findForStudent',
+        });
+        throw new ForbiddenException('Access denied: outside allowed lab network');
+      }
+    } catch (e) {
+      if (e instanceof ForbiddenException) throw e;
+      // If access policy checks failed unexpectedly, treat as restricted
+      throw new ForbiddenException('Access restricted by network policy');
+    }
+
     return exam;
   }
 
@@ -334,6 +369,13 @@ export class ExamsService {
 
     if (!exam) {
       throw new NotFoundException('Exam not found');
+    }
+
+    if (Array.isArray((updateExamDto as any).ipWhitelist)) {
+      const invalidRule = (updateExamDto as any).ipWhitelist.find((rule: string) => !isValidIpOrCidr(rule));
+      if (invalidRule) {
+        throw new BadRequestException(`Invalid IP/CIDR format: ${invalidRule}. Example: 192.168.1.10 or 192.168.1.0/24`);
+      }
     }
 
     const updateData: any = { ...updateExamDto };
@@ -359,6 +401,18 @@ export class ExamsService {
         },
       },
     });
+
+    // Update IP whitelist if provided via DTO (replace existing entries)
+    if (Array.isArray((updateExamDto as any).ipWhitelist)) {
+      await this.prisma.$transaction(async (tx) => {
+        await tx.examIpWhitelist.deleteMany({ where: { examId: id } });
+        const newList = (updateExamDto as any).ipWhitelist || [];
+        if (newList.length > 0) {
+          const toCreate = newList.map((r: string) => ({ examId: id, rule: r, normalized: r }));
+          await tx.examIpWhitelist.createMany({ data: toCreate });
+        }
+      });
+    }
 
     try {
       const studentIds = await this.getCourseRecipientIds(updatedExam.course.id);
@@ -683,9 +737,72 @@ export class ExamsService {
       throw new BadRequestException('Cannot publish exam without questions');
     }
 
-    const publishedExam = await this.prisma.exam.update({
-      where: { id },
-      data: { status: 'PUBLISHED' },
+    // Create exam snapshot and mark exam as PUBLISHED inside a transaction
+    const publishedExam = await this.prisma.$transaction(async (tx) => {
+      // fetch exam questions with ordering
+      const examQuestions = await tx.examQuestion.findMany({
+        where: { examId: id },
+        include: { question: true },
+        orderBy: { orderIndex: 'asc' },
+      });
+
+      if (!examQuestions || examQuestions.length === 0) {
+        throw new BadRequestException('Cannot publish exam without questions');
+      }
+
+      const examSnapshot = await tx.examSnapshot.create({
+        data: {
+          examId: id,
+          title: exam.title,
+          payload: exam.settings ?? {},
+          createdBy: exam.creatorId,
+          publishedAt: new Date(),
+        },
+      });
+
+      // For each exam question, materialize a QuestionSnapshot and ExamQuestionSnapshot
+      for (const eq of examQuestions) {
+        // determine questionVersionId: prefer examQuestion.questionVersionId else latest
+        let questionVersionId = eq.questionVersionId;
+
+        if (!questionVersionId) {
+          const latest = await tx.questionVersion.findFirst({
+            where: { questionId: eq.questionId },
+            orderBy: { versionNo: 'desc' },
+          });
+          if (!latest) {
+            throw new BadRequestException(`Missing version for question ${eq.questionId}`);
+          }
+          questionVersionId = latest.id;
+        }
+
+        const questionVersion = await tx.questionVersion.findUnique({ where: { id: questionVersionId } });
+
+        // create a QuestionSnapshot for this question version
+        const qSnapshot = await tx.questionSnapshot.create({
+          data: {
+            originalQuestionId: eq.questionId,
+            questionVersionId: questionVersionId,
+            payload: questionVersion?.payload ?? {},
+          },
+        });
+
+        await tx.examQuestionSnapshot.create({
+          data: {
+            examSnapshotId: examSnapshot.id,
+            questionId: eq.questionId,
+            questionVersionId: questionVersionId,
+            questionSnapshotId: qSnapshot.id,
+            orderIndex: eq.orderIndex,
+            points: eq.points ?? 1,
+            payload: questionVersion?.payload ?? {},
+          },
+        });
+      }
+
+      // finally mark exam published
+      const updated = await tx.exam.update({ where: { id }, data: { status: 'PUBLISHED' } });
+      return updated;
     });
 
     try {

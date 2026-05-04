@@ -5,6 +5,7 @@ import {
   Body,
   Patch,
   Param,
+  Headers,
   Query,
   UseGuards,
   Request,
@@ -16,9 +17,11 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { SubmissionsService } from './submissions.service';
-import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto, AddLogsDto } from './dto/submission.dto';
+import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto, AddLogsDto, AutosaveExamDto } from './dto/submission.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
+import { RateLimit } from '../common/rate-limit.decorator';
+import { RateLimitGuard } from '../common/guards/rate-limit.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Observable } from 'rxjs';
 import { SubmissionsEventsService } from './submissions-events.service';
@@ -64,25 +67,44 @@ export class SubmissionsController {
 
   @Post('start')
   @UseGuards(JwtAuthGuard)
+  @UseGuards(RateLimitGuard)
+  @RateLimit('start')
   startExam(@Body() startExamDto: StartExamDto, @Request() req) {
-    const ipHeader = req?.headers?.['x-forwarded-for'] || req?.ip || req?.socket?.remoteAddress;
-    const ip = Array.isArray(ipHeader) ? ipHeader[0] : ipHeader;
+    const forwardedFor = req?.headers?.['x-forwarded-for'] as string | undefined;
+    const remoteIp = req?.socket?.remoteAddress || req?.ip;
     const userAgent = req?.headers?.['user-agent'] || undefined;
-    return this.submissionsService.startExam(startExamDto, req.user.id, { ip, userAgent });
+    return this.submissionsService.startExam(startExamDto, req.user.id, { remoteIp, forwardedFor, userAgent });
   }
 
   @Post(':id/submit')
   @UseGuards(JwtAuthGuard)
+  @UseGuards(RateLimitGuard)
+  @RateLimit('submit')
   submitExam(
     @Param('id') id: string,
     @Body() submitExamDto: SubmitExamDto,
+    @Headers('idempotency-key') idempotencyKey: string | undefined,
     @Request() req,
   ) {
-    return this.submissionsService.submitExam(id, submitExamDto, req.user.id);
+    return this.submissionsService.submitExam(id, submitExamDto, req.user.id, { idempotencyKey });
+  }
+
+  @Post(':id/autosave')
+  @UseGuards(JwtAuthGuard)
+  @UseGuards(RateLimitGuard)
+  @RateLimit('autosave')
+  autosaveAnswers(
+    @Param('id') id: string,
+    @Body() autosaveExamDto: AutosaveExamDto,
+    @Request() req,
+  ) {
+    return this.submissionsService.autosaveAnswers(id, autosaveExamDto, req.user.id);
   }
 
   @Post(':id/logs')
   @UseGuards(JwtAuthGuard)
+  @UseGuards(RateLimitGuard)
+  @RateLimit('integrity')
   addLogs(
     @Param('id') id: string,
     @Body() addLogsDto: AddLogsDto,

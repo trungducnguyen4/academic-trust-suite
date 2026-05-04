@@ -320,7 +320,7 @@ export default function CreateExam() {
         const counts = new Map<string, number>();
 
         while (page <= totalPages) {
-          const response: any = await api.getQuestions({
+          const response: any = await api.listQuestions({
             courseId: form.course,
             page,
             limit,
@@ -431,7 +431,7 @@ export default function CreateExam() {
 
         const createdQuestions = await Promise.all(
           aiGeneratedQuestions.map((q) =>
-            api.createQuestion({
+            api.saveQuestion({
               type: mapQuestionTypeToDb(q.type),
               content: q.content,
               options: q.options || undefined,

@@ -62,8 +62,13 @@ export default function Login() {
       } else {
         navigate('/student');
       }
-    } catch (err) {
-      setError('Invalid email or password. Please try again.');
+    } catch (err: any) {
+      const message = String(err?.message || '');
+      if (message.toLowerCase().includes('failed to fetch')) {
+        setError('Cannot connect to server. Please ensure backend is running on port 3001.');
+      } else {
+        setError('Invalid email or password. Please try again.');
+      }
     }
   };
 

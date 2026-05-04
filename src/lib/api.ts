@@ -54,6 +54,10 @@ class ApiClient {
     return response.json();
   }
 
+  async get<T>(endpoint: string): Promise<T> {
+    return this.request<T>(endpoint, { method: 'GET' });
+  }
+
   // Auth endpoints
   async login(email: string, password: string) {
     return this.request<{ accessToken: string; user: any }>('/auth/login', {
@@ -264,53 +268,250 @@ class ApiClient {
     });
   }
 
-  // Questions endpoints
-  async getQuestions(filters?: { courseId?: string; type?: string; difficulty?: number; search?: string; page?: number; limit?: number }) {
+  // Questions endpoints (official)
+  async listQuestions(filters?: {
+    topicId?: string;
+    tagId?: string;
+    courseId?: string;
+    type?: string;
+    difficulty?: number;
+    search?: string;
+    status?: string;
+    page?: number;
+    limit?: number;
+  }) {
     const params = new URLSearchParams();
+    if (filters?.topicId) params.append('topicId', filters.topicId);
+    if (filters?.tagId) params.append('tagId', filters.tagId);
     if (filters?.courseId) params.append('courseId', filters.courseId);
     if (filters?.type) params.append('type', filters.type);
     if (filters?.difficulty) params.append('difficulty', String(filters.difficulty));
     if (filters?.search) params.append('search', filters.search);
+    if (filters?.status) params.append('status', filters.status);
     if (filters?.page) params.append('page', String(filters.page));
     if (filters?.limit) params.append('limit', String(filters.limit));
     const query = params.toString() ? `?${params.toString()}` : '';
     return this.request<any>(`/questions${query}`);
   }
 
-  async getQuestion(id: string) {
+  async getQuestionById(id: string) {
     return this.request<any>(`/questions/${id}`);
   }
 
-  async createQuestion(data: {
-    type: string;
-    content: string;
-    options?: any;
-    correctAnswer?: any;
-    explanation?: string;
-    difficulty?: number;
-    points?: number;
-    tags?: string[];
-    courseId?: string;
-  }) {
-    return this.request<any>('/questions', {
-      method: 'POST',
-      body: data,
-    });
-  }
-
-  async updateQuestion(id: string, data: any) {
-    return this.request<any>(`/questions/${id}`, {
-      method: 'PATCH',
-      body: data,
-    });
+  async getQuestionStats() {
+    return this.request<any>('/questions/stats');
   }
 
   async deleteQuestion(id: string) {
     return this.request<any>(`/questions/${id}`, { method: 'DELETE' });
   }
 
-  async getQuestionStats() {
-    return this.request<any>('/questions/stats');
+  private normalizeQuestionType(type?: string): string {
+    const normalized = String(type || '').trim().toUpperCase();
+    if (normalized === 'SINGLE_CHOICE') return 'MULTIPLE_CHOICE';
+    const allowed = new Set([
+      'MULTIPLE_CHOICE',
+      'MULTI_SELECT',
+      'TRUE_FALSE',
+      'SHORT_ANSWER',
+      'ESSAY',
+      'FILL_IN_BLANK',
+      'MATCHING',
+      'ORDERING',
+    ]);
+    return allowed.has(normalized) ? normalized : 'MULTIPLE_CHOICE';
+  }
+
+  async saveQuestion(data: {
+    sourceQuestionId?: string;
+    type?: string;
+    content: string;
+    options?: Record<string, any>;
+    correctAnswer?: Record<string, any>;
+    explanation?: string;
+    difficulty?: number;
+    points?: number;
+    tags?: string[];
+    courseId?: string;
+    learningObjective?: string;
+    topic?: string;
+  }) {
+    const questionType = this.normalizeQuestionType(data.type);
+    const draft = await this.createQuestionDraft({
+      mode: data.sourceQuestionId ? 'DUPLICATE' : 'MANUAL',
+      questionType,
+      sourceQuestionId: data.sourceQuestionId,
+      initialContext: {
+        topic: data.topic,
+        learningObjective: data.learningObjective,
+      },
+    });
+
+    let autosaveVersion = Number(draft?.autosaveVersion || 1);
+
+    const intentRes = await this.saveQuestionDraftStep(draft.draftId, 'intent', {
+      autosaveVersion,
+      data: { questionType },
+    });
+    autosaveVersion = Number(intentRes?.autosaveVersion || autosaveVersion + 1);
+
+    const contentRes = await this.saveQuestionDraftStep(draft.draftId, 'content', {
+      autosaveVersion,
+      data: { content: data.content || '' },
+    });
+    autosaveVersion = Number(contentRes?.autosaveVersion || autosaveVersion + 1);
+
+    const answersRes = await this.saveQuestionDraftStep(draft.draftId, 'answers', {
+      autosaveVersion,
+      data: {
+        options: data.options || {},
+        correctAnswer: data.correctAnswer || {},
+        explanation: data.explanation || '',
+      },
+    });
+    autosaveVersion = Number(answersRes?.autosaveVersion || autosaveVersion + 1);
+
+    const classificationRes = await this.saveQuestionDraftStep(
+      draft.draftId,
+      'classification',
+      {
+        autosaveVersion,
+        data: {
+          difficulty: data.difficulty,
+          points: data.points,
+          tags: data.tags || [],
+          topic: data.topic,
+          learningObjective: data.learningObjective,
+          courseScopeIds: data.courseId ? [data.courseId] : [],
+        },
+      },
+    );
+    autosaveVersion = Number(
+      classificationRes?.autosaveVersion || autosaveVersion + 1,
+    );
+
+    const publishRes = await this.publishQuestionDraft(draft.draftId, {
+      expectedAutosaveVersion: autosaveVersion,
+      publishMode: 'PUBLISHED',
+    });
+
+    if (publishRes?.questionId) {
+      return this.getQuestionById(publishRes.questionId);
+    }
+
+    return publishRes;
+  }
+
+  async createQuestionDraft(data: {
+    mode: 'MANUAL' | 'AI_ASSISTED' | 'DUPLICATE';
+    questionType?: string;
+    sourceQuestionId?: string;
+    initialContext?: Record<string, any>;
+  }) {
+    return this.request<any>('/questions/drafts', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async saveQuestionDraftStep(draftId: string, stepKey: 'intent' | 'content' | 'answers' | 'classification' | 'review', data: {
+    autosaveVersion: number;
+    data: Record<string, any>;
+  }) {
+    return this.request<any>(`/questions/drafts/${draftId}/steps/${stepKey}`, {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
+  async aiGenerateQuestionDraftSection(draftId: string, data: {
+    section: 'CONTENT' | 'ANSWERS' | 'EXPLANATION' | 'CLASSIFICATION';
+    instruction?: string;
+    constraints?: {
+      difficulty?: number;
+      language?: string;
+      optionCount?: number;
+      maxLength?: number;
+      forbiddenTerms?: string[];
+    };
+    variants?: number;
+  }) {
+    return this.request<any>(`/questions/drafts/${draftId}/ai-generate-section`, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async applyQuestionDraftAICandidate(draftId: string, data: {
+    jobId: string;
+    candidateId: string;
+    section: 'CONTENT' | 'ANSWERS' | 'EXPLANATION' | 'CLASSIFICATION';
+  }) {
+    return this.request<any>(`/questions/drafts/${draftId}/ai-apply`, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async validateQuestionDraft(draftId: string, data?: { level?: 'SOFT' | 'STRICT' }) {
+    return this.request<any>(`/questions/drafts/${draftId}/validate`, {
+      method: 'POST',
+      body: data || {},
+    });
+  }
+
+  async publishQuestionDraft(draftId: string, data: {
+    expectedAutosaveVersion: number;
+    publishMode?: 'IN_REVIEW' | 'PUBLISHED';
+  }) {
+    return this.request<any>(`/questions/drafts/${draftId}/publish`, {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async getQuestionAIGenerationJob(jobId: string) {
+    return this.request<any>(`/questions/ai-jobs/${jobId}`);
+  }
+
+  async listQuestionTags(filters?: { search?: string; page?: number; limit?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.page) params.append('page', String(filters.page));
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`/questions/metadata/tags${query}`);
+  }
+
+  async createQuestionTag(name: string) {
+    return this.request<any>('/questions/metadata/tags', {
+      method: 'POST',
+      body: { name },
+    });
+  }
+
+  async listQuestionTopics(filters?: { search?: string; courseId?: string; page?: number; limit?: number }) {
+    const params = new URLSearchParams();
+    if (filters?.search) params.append('search', filters.search);
+    if (filters?.courseId) params.append('courseId', filters.courseId);
+    if (filters?.page) params.append('page', String(filters.page));
+    if (filters?.limit) params.append('limit', String(filters.limit));
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`/questions/metadata/topics${query}`);
+  }
+
+  async createQuestionTopic(data: { code: string; name: string }) {
+    return this.request<any>('/questions/metadata/topics', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
+  async setCourseTopics(courseId: string, topicIds: string[]) {
+    return this.request<any>(`/questions/metadata/courses/${courseId}/topics`, {
+      method: 'PUT',
+      body: { topicIds },
+    });
   }
 
   // Exams endpoints
@@ -461,6 +662,25 @@ class ApiClient {
     });
   }
 
+  async autosaveExamAnswers(
+    submissionId: string,
+    payload: {
+      clientBatchId?: string;
+      baseSubmissionVersion?: number;
+      answers: Array<{
+        questionId: string;
+        sequence: number;
+        answer: any;
+        timeTaken?: number;
+      }>;
+    },
+  ) {
+    return this.request<any>(`/submissions/${submissionId}/autosave`, {
+      method: 'POST',
+      body: payload,
+    });
+  }
+
   async sendExamLogs(submissionId: string, logs: Array<{ type: string; details?: any; ts?: number }>) {
     return this.request<any>(`/submissions/${submissionId}/logs`, {
       method: 'POST',
@@ -595,6 +815,10 @@ class ApiClient {
       method: 'POST',
       body: data,
     });
+  }
+
+  async getMyRecentCourses() {
+    return this.get('/courses/my-recent-courses');
   }
 }
 

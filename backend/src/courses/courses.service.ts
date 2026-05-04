@@ -28,12 +28,31 @@ export class CoursesService {
     }
   }
 
-  private assertCanAccessCourse(courseLecturerId: string | null, user: AuthUser) {
+  private async assertCanAccessCourse(courseId: string, courseLecturerId: string | null, user: AuthUser) {
     if (user.role === 'ADMIN') return;
 
-    if (user.role !== 'LECTURER' || courseLecturerId !== user.id) {
-      throw new ForbiddenException('You are not allowed to access this course');
+    if (user.role === 'LECTURER') {
+      if (courseLecturerId !== user.id) {
+        throw new ForbiddenException('You are not allowed to access this course');
+      }
+      return;
     }
+
+    if (user.role === 'STUDENT') {
+      const isEnrolled = await this.prisma.enrollment.findFirst({
+        where: {
+          studentId: user.id,
+          courseId,
+        },
+      });
+
+      if (!isEnrolled) {
+        throw new ForbiddenException('You are not allowed to access this course');
+      }
+      return;
+    }
+
+    throw new ForbiddenException('You are not allowed to access this course');
   }
 
   private toAsciiUpper(value: string) {
@@ -244,7 +263,7 @@ export class CoursesService {
       throw new NotFoundException('Course not found');
     }
 
-    this.assertCanAccessCourse(course.lecturerId, user);
+    await this.assertCanAccessCourse(course.id, course.lecturerId, user);
 
     return course;
   }
@@ -256,7 +275,7 @@ export class CoursesService {
       throw new NotFoundException('Course not found');
     }
 
-    this.assertCanAccessCourse(course.lecturerId, user);
+    await this.assertCanAccessCourse(course.id, course.lecturerId, user);
 
     const { lecturerId: requestedLecturerId, ...courseData } = updateCourseDto;
 
@@ -336,7 +355,7 @@ export class CoursesService {
       throw new NotFoundException('Course not found');
     }
 
-    this.assertCanAccessCourse(course.lecturerId, user);
+    await this.assertCanAccessCourse(course.id, course.lecturerId, user);
 
     const impactedEnrollments = await this.prisma.enrollment.findMany({
       where: { courseId: id },
@@ -375,7 +394,7 @@ export class CoursesService {
     return { message: 'Course deleted successfully' };
   }
 
-  async getMyCoursesAsStudent(studentId: string) {
+  async getMyCoursesAsStudent(studentId: string, limit?: number) {
     const courses = await this.prisma.course.findMany({
       where: {
         enrollments: {
@@ -388,6 +407,7 @@ export class CoursesService {
         },
       },
       orderBy: { createdAt: 'desc' },
+      take: limit, // Limit the number of courses if the limit is provided
     });
 
     // For each course compute counts and student progress

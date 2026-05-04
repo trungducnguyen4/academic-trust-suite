@@ -11,6 +11,7 @@ import {
   Request,
 } from '@nestjs/common';
 import { ExamsService } from './exams.service';
+import { AccessPolicyService } from '../common/services/access-policy.service';
 import { MailerService } from '../mailer/mailer.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { IsArray, IsEmail, IsOptional } from 'class-validator';
@@ -30,6 +31,7 @@ export class ExamsController {
     private readonly examsService: ExamsService,
     private readonly mailerService: MailerService,
     private readonly enrollmentsService: EnrollmentsService,
+    private readonly accessPolicy: AccessPolicyService,
   ) {}
 
   @Post(':id/share')
@@ -136,7 +138,8 @@ export class ExamsController {
   @Get(':id')
   findOne(@Param('id') id: string, @Request() req) {
     if (req.user.role === 'STUDENT') {
-      return this.examsService.findForStudent(id, req.user.id);
+      const clientIp = this.accessPolicy.resolveClientIp(req);
+      return this.examsService.findForStudent(id, req.user.id, clientIp);
     }
     return this.examsService.findOne(id);
   }

@@ -361,18 +361,6 @@ export default function Profile() {
                       disabled={isStudent}
                       required
                     />
-                    <Button
-                      type="submit"
-                      variant="destructive"
-                      disabled={isDeletingProfile || isStudent}
-                    >
-                      {isDeletingProfile ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="mr-2 h-4 w-4" />
-                      )}
-                      Delete Profile
-                    </Button>
                   </form>
                   <ConfirmActionDialog
                     title="Delete profile"

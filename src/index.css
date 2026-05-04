@@ -2,33 +2,33 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ExamTrust – PlotStat-inspired Design System
-   Warm, paper-like, professional academic aesthetic
+/* ExamTrust Design System
+  Clean, neutral, professional academic aesthetic
 */
 
 @layer base {
   :root {
-    /* Core palette – Warm beige/cream */
-    --background: 36 33% 93%;
-    --foreground: 30 10% 15%;
+    /* Core palette – Neutral white */
+    --background: 0 0% 100%;
+    --foreground: 222 16% 18%;
 
-    --card: 40 33% 99%;
-    --card-foreground: 30 10% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 222 16% 18%;
 
-    --popover: 40 33% 99%;
-    --popover-foreground: 30 10% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222 16% 18%;
 
     /* Primary – Muted steel blue */
     --primary: 200 30% 50%;
     --primary-foreground: 0 0% 100%;
 
-    /* Secondary – Warm light */
-    --secondary: 36 20% 90%;
-    --secondary-foreground: 30 10% 35%;
+    /* Secondary – Neutral light */
+    --secondary: 220 14% 96%;
+    --secondary-foreground: 220 10% 35%;
 
     /* Muted surfaces */
-    --muted: 36 20% 90%;
-    --muted-foreground: 30 8% 50%;
+    --muted: 220 14% 96%;
+    --muted-foreground: 220 8% 50%;
 
     /* Accent – Same steel blue, slightly different */
     --accent: 200 25% 45%;
@@ -48,8 +48,8 @@
     --info-foreground: 0 0% 100%;
 
     /* UI elements */
-    --border: 36 15% 85%;
-    --input: 36 15% 85%;
+    --border: 220 12% 88%;
+    --input: 220 12% 88%;
     --ring: 200 30% 50%;
 
     --radius: 0.75rem;

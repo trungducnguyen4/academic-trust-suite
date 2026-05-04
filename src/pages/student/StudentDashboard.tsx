@@ -9,10 +9,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { StatusBadge, getStatusBadgeLabel } from "@/components/ui/status-badge";
 import { Progress } from "@/components/ui/progress";
 import {
   Calendar,
+  CalendarDays,
   Clock,
   FileText,
   ArrowRight,
@@ -25,13 +27,12 @@ import {
   TrendingUp,
   Target,
   Award,
-  Filter,
-  MoreHorizontal,
-  Users,
+  UserRound,
 } from "lucide-react";
 import { format, formatDistanceToNow, addHours } from "date-fns";
 import { Link } from "react-router-dom";
 import api from "@/lib/api";
+import { formatCourseTerm, type CourseTerm } from "@/lib/course-term";
 import {
   Select,
   SelectContent,
@@ -66,13 +67,33 @@ interface ExamHistoryItem {
   submittedAt: string | null;
 }
 
+type StudentCourse = {
+  id: string;
+  code?: string;
+  name?: string;
+  description?: string;
+  academicYear?: string;
+  term?: CourseTerm;
+  semester?: string;
+  credits?: number;
+  progress?: number;
+  lastAccessed?: string;
+  lecturer?: {
+    id?: string;
+    fullName?: string;
+    email?: string;
+  };
+};
+
+const safeLabel = (value?: string | null) => (value ? value : "N/A");
+
 export default function StudentDashboard() {
   const { user } = useAuth();
   const [upcomingExams, setUpcomingExams] = useState<UpcomingExam[]>([]);
   const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [courses, setCourses] = useState<any[]>([]);
-  const [recentCourses, setRecentCourses] = useState<any[]>([]);
+  const [courses, setCourses] = useState<StudentCourse[]>([]);
+  const [recentCourses, setRecentCourses] = useState<StudentCourse[]>([]);
   const [downloadProgress, setDownloadProgress] = useState<
     Record<string, number>
   >({});
@@ -81,68 +102,32 @@ export default function StudentDashboard() {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [exams, submissions] = await Promise.all([
+        const [exams, submissions, myRecentCourses, myCourses] = await Promise.all([
           api.getAvailableExams(),
           api.getMySubmissions(),
+          api.getMyRecentCourses(),
+          api.getMyCourses(),
         ]);
-        // try to load real course data for this student from backend
-        let myCourses: any[] = [];
-        try {
-          myCourses = await api.getMyCourses();
-        } catch (err) {
-          console.warn(
-            "getMyCourses failed, falling back to mock courses",
-            err,
-          );
-        }
-        // simple mock fallback if backend returns nothing
-        const mockCourses = [
-          {
-            id: "c1",
-            code: "HK1_2025_504074",
-            name: "Industry Internship",
-            faculty: "Faculty of Information Technology",
-            enrolledStudents: 38,
-            totalStudents: 40,
-            progress: 33,
-            lastAccessed: "2 days ago",
-          },
-          {
-            id: "c2",
-            code: "HK2_2024_502071",
-            name: "Mobile Application Development",
-            faculty: "Faculty of Information Technology",
-            enrolledStudents: 42,
-            totalStudents: 45,
-            progress: 65,
-            lastAccessed: "3 hours ago",
-          },
-          {
-            id: "c3",
-            code: "HK2_2024_503111",
-            name: "Java Technology",
-            faculty: "Faculty of Information Technology",
-            enrolledStudents: 35,
-            totalStudents: 40,
-            progress: 90,
-            lastAccessed: "5 hours ago",
-          },
-          {
-            id: "c4",
-            code: "HK3_2023_304105",
-            name: "History of the Communist Party of Vietnam",
-            faculty: "Faculty of Social Sciences and Humanities",
-            enrolledStudents: 45,
-            totalStudents: 50,
-            progress: 75,
-            lastAccessed: "1 day ago",
-          },
-        ];
+
+        const recentList = Array.isArray(myRecentCourses)
+          ? (myRecentCourses as StudentCourse[])
+          : [];
+        const fullCourseList = Array.isArray(myCourses)
+          ? (myCourses as StudentCourse[])
+          : [];
+
+        setRecentCourses(recentList);
+        setCourses(fullCourseList);
+
         const now = new Date();
+        const submissionList = Array.isArray(submissions) ? submissions : [];
+        const examList = Array.isArray(exams) ? exams : [];
+
         const latestSubmissionByExamId = new Map<string, any>();
-        (submissions || []).forEach((s: any) => {
+        submissionList.forEach((s: any) => {
           const key = s?.examId;
           if (!key) return;
+
           const prev = latestSubmissionByExamId.get(key);
           const currentTime = new Date(
             s?.submittedAt || s?.startedAt || s?.createdAt || 0,
@@ -152,15 +137,21 @@ export default function StudentDashboard() {
                 prev?.submittedAt || prev?.startedAt || prev?.createdAt || 0,
               ).getTime()
             : -1;
+
           if (!prev || currentTime >= prevTime) {
             latestSubmissionByExamId.set(key, s);
           }
         });
 
-        const upcoming = exams
+        const upcoming = examList
           .filter((exam: any) => {
-            const endTime = new Date(exam.endTime);
-            return exam.status === "PUBLISHED" && endTime > now;
+            const endTime = exam?.endTime ? new Date(exam.endTime) : null;
+            return (
+              exam?.status === "PUBLISHED" &&
+              endTime !== null &&
+              !isNaN(endTime.getTime()) &&
+              endTime > now
+            );
           })
           .map((exam: any) => ({
             ...exam,
@@ -171,36 +162,17 @@ export default function StudentDashboard() {
 
         setUpcomingExams(upcoming);
         setExamHistory(
-          submissions.filter(
+          submissionList.filter(
             (s: any) => s.status === "GRADED" || s.status === "SUBMITTED",
           ),
         );
-
-        const safeRelativeTime = (raw: any): string => {
-          if (!raw) return "—";
-          const d = new Date(raw);
-          if (isNaN(d.getTime())) return typeof raw === "string" ? raw : "—";
-          return formatDistanceToNow(d, { addSuffix: true });
-        };
-
-        const normaliseCourses = (list: any[]) =>
-          list.map((c: any) => ({
-            ...c,
-            lastAccessed: safeRelativeTime(c.lastAccessed),
-          }));
-
-        const finalCourses =
-          myCourses && myCourses.length
-            ? normaliseCourses(myCourses)
-            : mockCourses;
-        setCourses(finalCourses);
-        setRecentCourses(finalCourses.slice(0, 2));
-      } catch (error) {
-        console.error("Failed to fetch dashboard data:", error);
+      } catch (err) {
+        console.error("Error fetching data: ", err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchData();
   }, []);
 
@@ -268,7 +240,7 @@ export default function StudentDashboard() {
         {/* Welcome Section */}
         <div className="animate-fade-in opacity-0">
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome back, {user?.fullName.split(" ")[0]} 👋
+            Welcome back, {user?.fullName.split(" ")[0]}
           </h1>
           <p className="text-muted-foreground mt-1">
             {upcomingExams.length > 0
@@ -347,126 +319,95 @@ export default function StudentDashboard() {
         </div>
 
         <div className="grid gap-6 lg:grid-cols-3">
-          {/* Course overview (matches lecturer style) */}
+          {/* Recent Courses */}
           <div className="lg:col-span-3">
-            <section className="mb-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-semibold">Course overview</h2>
-                <div className="flex items-center gap-2">
-                  <Button variant="outline" size="sm" className="gap-2">
-                    <Filter className="h-4 w-4" />
-                    All (except removed from view)
-                  </Button>
-                  <Select defaultValue="name">
-                    <SelectTrigger className="w-40">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="name">Course name</SelectItem>
-                      <SelectItem value="code">Course code</SelectItem>
-                      <SelectItem value="faculty">Faculty</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <Select defaultValue="card">
-                    <SelectTrigger className="w-24">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="card">Card</SelectItem>
-                      <SelectItem value="list">List</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
+            <Card>
+              <CardHeader>
+                <CardTitle>Recent Courses</CardTitle>
+                <CardDescription>
+                  Courses you accessed recently.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {recentCourses.length === 0 ? (
+                    <div className="rounded-xl border border-dashed border-border p-10 text-center">
+                      <BookOpen className="mx-auto h-6 w-6 text-muted-foreground" />
+                      <p className="mt-2 text-muted-foreground">
+                        No recent courses yet.
+                      </p>
+                    </div>
+                  ) : (
+                    recentCourses.map((course) => {
+                      const termText = formatCourseTerm(
+                        course.academicYear,
+                        course.term,
+                        course.semester,
+                      );
+                      const progressValue =
+                        typeof course.progress === "number"
+                          ? Math.max(0, Math.min(100, course.progress))
+                          : 0;
 
-              <div>
-                <div className="space-y-6">
-                  {/* group by faculty */}
-                  {Object.entries(
-                    courses.reduce((acc: any, c: any) => {
-                      const f = c.faculty || "Other";
-                      (acc[f] || (acc[f] = [])).push(c);
-                      return acc;
-                    }, {}),
-                  ).map(([faculty, facultyCourses]: any) => (
-                    <div key={faculty}>
-                      <h3 className="text-lg font-medium mb-3">{faculty}</h3>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                        {facultyCourses.map((course: any, index: number) => (
-                          <Card
-                            key={course.id}
-                            className="overflow-hidden hover:shadow-md transition-shadow"
-                          >
-                            <div
-                              className={`h-24 ${["bg-gradient-to-br from-pink-400 to-pink-600", "bg-gradient-to-br from-purple-400 to-indigo-600", "bg-gradient-to-br from-blue-400 to-cyan-600", "bg-gradient-to-br from-green-400 to-emerald-600"][index % 4]} relative`}
-                            >
-                              <div className="absolute inset-0 bg-black/20" />
-                              <div className="absolute top-3 right-3">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  className="text-white hover:bg-white/20"
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
+                      return (
+                        <div
+                          key={course.id}
+                          className="rounded-xl border border-border/60 p-4"
+                        >
+                          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                            <div className="space-y-2">
+                              <div className="flex flex-wrap items-center gap-2">
+                                <h3 className="font-semibold text-foreground">
+                                  {safeLabel(course.name)}
+                                </h3>
+                                <Badge variant="secondary">
+                                  {safeLabel(course.code)}
+                                </Badge>
+                              </div>
+                              <p className="text-sm text-muted-foreground">
+                                {course.description ||
+                                  "No description provided for this course."}
+                              </p>
+                              <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
+                                <span className="inline-flex items-center gap-1">
+                                  <CalendarDays className="h-3.5 w-3.5" />
+                                  {termText}
+                                </span>
+                                <span className="inline-flex items-center gap-1">
+                                  <UserRound className="h-3.5 w-3.5" />
+                                  Lecturer: {safeLabel(course.lecturer?.fullName)}
+                                </span>
+                                <span>Credits: {course.credits ?? "N/A"}</span>
                               </div>
                             </div>
-                            <CardContent className="p-4">
-                              <div className="space-y-3">
-                                <div>
-                                  <h4 className="font-medium text-sm">
-                                    {course.code}
-                                  </h4>
-                                  <p className="text-sm text-muted-foreground line-clamp-2">
-                                    {course.name}
-                                  </p>
-                                </div>
-                                <div className="flex items-center gap-4 text-xs text-muted-foreground">
-                                  <div className="flex items-center gap-1">
-                                    <Users className="h-3 w-3" />
-                                    <span>
-                                      {course.enrolledStudents}/
-                                      {course.totalStudents}
-                                    </span>
-                                  </div>
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{course.lastAccessed}</span>
-                                  </div>
-                                </div>
-                                {course.progress != null && (
-                                  <div className="space-y-1">
-                                    <div className="flex justify-between text-xs">
-                                      <span>{course.progress}% complete</span>
-                                    </div>
-                                    <div className="w-full bg-gray-200 rounded-full h-1.5">
-                                      <div
-                                        className="bg-blue-600 h-1.5 rounded-full"
-                                        style={{ width: `${course.progress}%` }}
-                                      />
-                                    </div>
-                                  </div>
-                                )}
-                                <Button
-                                  asChild
-                                  variant="outline"
-                                  size="sm"
-                                  className="w-full"
-                                >
-                                  <Link to={`/student/courses/${course.id}`}>
-                                    View Details
-                                  </Link>
-                                </Button>
+
+                            <div className="min-w-[220px] space-y-2">
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-muted-foreground">
+                                  Progress
+                                </span>
+                                <span className="font-medium text-foreground">
+                                  {progressValue}%
+                                </span>
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                              <Progress value={progressValue} className="h-2" />
+                              <p className="text-xs text-muted-foreground">
+                                Last activity: {safeLabel(course.lastAccessed)}
+                              </p>
+                              <Button asChild className="w-full" size="sm">
+                                <Link to={`/student/courses/${course.id}`}>
+                                  View Course Detail
+                                </Link>
+                              </Button>
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })
+                  )}
                 </div>
-              </div>
-            </section>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Upcoming Exams */}

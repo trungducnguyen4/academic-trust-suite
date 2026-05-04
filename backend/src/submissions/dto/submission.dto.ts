@@ -26,10 +26,41 @@ export class SubmitExamDto {
   logs?: Array<{ type: string; details?: any; ts?: number }>;
 }
 
+export class AutosaveAnswerDto {
+  @IsString()
+  questionId: string;
+
+  @IsInt()
+  @Min(1)
+  sequence: number;
+
+  @IsObject()
+  answer: Record<string, any>;
+
+  @IsOptional()
+  @IsInt()
+  timeTaken?: number; // in seconds
+}
+
+export class AutosaveExamDto {
+  @IsOptional()
+  @IsString()
+  clientBatchId?: string;
+
+  @IsOptional()
+  @IsInt()
+  @Min(0)
+  baseSubmissionVersion?: number;
+
+  @IsArray()
+  answers: AutosaveAnswerDto[];
+}
+
 export class AddLogsDto {
   @IsArray()
   logs: Array<{ type: string; details?: any; ts?: number }>;
 }
+
 export class GradeAnswerDto {
   @IsString()
   submissionAnswerId: string;

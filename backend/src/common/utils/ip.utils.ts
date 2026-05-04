@@ -60,3 +60,19 @@ export function isIpInAnyCidr(ipRaw: string | null, cidrs: string[] | null | und
   }
   return false;
 }
+
+export function isValidIpOrCidr(value: string): boolean {
+  const raw = String(value || '').trim();
+  if (!raw) return false;
+  const [base, prefixRaw] = raw.split('/');
+  const normalizedBase = normalizeIp(base);
+  if (!normalizedBase || !/^\d+\.\d+\.\d+\.\d+$/.test(normalizedBase)) return false;
+
+  const parts = normalizedBase.split('.').map((p) => Number(p));
+  if (parts.length !== 4 || parts.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return false;
+
+  if (typeof prefixRaw === 'undefined') return true;
+  if (!/^\d+$/.test(prefixRaw)) return false;
+  const prefix = Number(prefixRaw);
+  return prefix >= 0 && prefix <= 32;
+}

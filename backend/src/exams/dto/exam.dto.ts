@@ -38,6 +38,15 @@ export class CreateExamDto {
   settings?: Record<string, any>;
 
   @IsOptional()
+  @IsEnum(['NORMAL', 'LAB'])
+  mode?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  ipWhitelist?: string[];
+
+  @IsOptional()
   @IsArray()
   questionIds?: string[];
 }
@@ -77,6 +86,15 @@ export class UpdateExamDto {
   @IsOptional()
   @IsObject()
   settings?: Record<string, any>;
+
+  @IsOptional()
+  @IsEnum(['NORMAL', 'LAB'])
+  mode?: string;
+
+  @IsOptional()
+  @IsArray()
+  @IsString({ each: true })
+  ipWhitelist?: string[];
 
   @IsOptional()
   @IsEnum(['DRAFT', 'PUBLISHED', 'ONGOING', 'COMPLETED', 'ARCHIVED'])

@@ -166,7 +166,7 @@ export default function QuestionEditor() {
 
     try {
       setLoading(true);
-      const questionData = await api.getQuestion(questionId);
+      const questionData = await api.getQuestionById(questionId);
       setQuestion(questionData);
       populateForm(questionData);
     } catch (error) {
@@ -422,17 +422,17 @@ export default function QuestionEditor() {
       };
 
       if (questionId) {
-        // Update DTO does not allow courseId.
-        delete (questionData as any).courseId;
-        // Update existing question
+        // Update by creating a V2 draft from existing question and publishing it.
         console.log("Updating question with data:", questionData);
-        await api.updateQuestion(questionId, questionData);
+        await api.saveQuestion({
+          sourceQuestionId: questionId,
+          ...questionData,
+        });
       } else {
-        // Create DTO accepts courseId.
+        // Create via V2 draft flow.
         (questionData as any).courseId = course || undefined;
-        // Create new question
         console.log("Creating question with data:", questionData);
-        await api.createQuestion(questionData);
+        await api.saveQuestion(questionData);
       }
 
       navigate(questionBankPath);
