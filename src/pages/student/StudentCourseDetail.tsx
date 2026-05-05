@@ -366,7 +366,7 @@ export default function StudentCourseDetail() {
                           </Button>
                           {exam.status === "COMPLETED" ? (
                             <Button asChild variant="outline">
-                              <Link to={`/student/results/${exam.id}`}>Result</Link>
+                              <Link to={`/student/grading?examId=${exam.id}`}>Result</Link>
                             </Button>
                           ) : null}
                         </div>

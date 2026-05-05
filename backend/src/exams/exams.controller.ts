@@ -75,28 +75,29 @@ export class ExamsController {
   async create(@Body() createExamDto: CreateExamDto, @Request() req) {
     const created = await this.examsService.create(createExamDto, req.user.id);
 
+    // Email notifications disabled per user request
     // After creating exam, attempt to notify enrolled students with join link
-    try {
-      const courseId = created?.course?.id || (created as any)?.courseId;
-      if (courseId) {
-        const enrollments = await this.enrollmentsService.findByCourse(courseId, req.user);
-        const studentEmails = (enrollments || [])
-          .map((enr: any) => enr?.student?.email)
-          .filter(Boolean) as string[];
-        const emails = Array.from(new Set(studentEmails));
-        if (emails.length > 0) {
-          const frontend = process.env.FRONTEND_URL || 'http://localhost:8080';
-          const link = `${frontend}/student/exam-ready?examId=${created.id}`;
-          const subject = `Invitation to exam: ${created?.title || 'Exam'}`;
-          const html = `<p>You have been invited to join the exam <strong>${created?.title || 'Exam'}</strong>.</p>
-            <p>Click to join: <a href="${link}">${link}</a></p>`;
-          await this.mailerService.sendExamLink(emails, subject, html);
-        }
-      }
-    } catch (err) {
-      // Do not block exam creation if email fails — just log and continue
-      console.error('Failed to send auto-notification emails for exam creation', err);
-    }
+    // try {
+    //   const courseId = created?.course?.id || (created as any)?.courseId;
+    //   if (courseId) {
+    //     const enrollments = await this.enrollmentsService.findByCourse(courseId, req.user);
+    //     const studentEmails = (enrollments || [])
+    //       .map((enr: any) => enr?.student?.email)
+    //       .filter(Boolean) as string[];
+    //     const emails = Array.from(new Set(studentEmails));
+    //     if (emails.length > 0) {
+    //       const frontend = process.env.FRONTEND_URL || 'http://localhost:8080';
+    //       const link = `${frontend}/student/exam-ready?examId=${created.id}`;
+    //       const subject = `Invitation to exam: ${created?.title || 'Exam'}`;
+    //       const html = `<p>You have been invited to join the exam <strong>${created?.title || 'Exam'}</strong>.</p>
+    //         <p>Click to join: <a href="${link}">${link}</a></p>`;
+    //       await this.mailerService.sendExamLink(emails, subject, html);
+    //     }
+    //   }
+    // } catch (err) {
+    //   // Do not block exam creation if email fails — just log and continue
+    //   console.error('Failed to send auto-notification emails for exam creation', err);
+    // }
 
     return created;
   }

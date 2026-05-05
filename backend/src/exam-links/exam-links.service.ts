@@ -181,7 +181,7 @@ export class ExamLinksService {
         where: {
           studentId: userId,
           courseId: link.exam.courseId,
-          status: 'ACTIVE',
+          status: 'active',
         },
       });
 

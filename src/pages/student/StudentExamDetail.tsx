@@ -241,7 +241,7 @@ export default function StudentExamDetail() {
                 <div className="flex flex-wrap gap-2">
                   {hasCompletedAttempt ? (
                     <Button asChild>
-                      <Link to={`/student/results/${exam?.id}`}>View Result Detail</Link>
+                      <Link to={`/student/grading?examId=${exam?.id}`}>View Result Detail</Link>
                     </Button>
                   ) : accessState === "open" ? (
                     <Button asChild>

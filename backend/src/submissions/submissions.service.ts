@@ -89,7 +89,7 @@ export class SubmissionsService {
       where: {
         studentId,
         courseId: exam.courseId,
-        status: 'ACTIVE',
+        status: 'active',
       },
     });
 

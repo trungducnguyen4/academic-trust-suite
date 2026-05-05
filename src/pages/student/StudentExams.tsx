@@ -21,7 +21,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { StatusBadge } from "@/components/ui/status-badge";
 import { Button } from "@/components/ui/button";
 import { Calendar, Loader2 } from "lucide-react";
 import api from "@/lib/api";
@@ -51,19 +51,39 @@ const statusText = (exam: StudentExamItem) => {
   return "Upcoming";
 };
 
+const getExamStatusKey = (exam: StudentExamItem) => {
+  if (exam.completed) return "completed";
+  const status = String(exam.status || "").toUpperCase();
+  if (status === "ONGOING") return "ongoing";
+  return "published";
+};
+
+const summaryCardClassByKey: Record<"upcoming" | "ongoing" | "completed", string> = {
+  upcoming:
+    "rounded-xl border border-info/25 bg-info/5 p-3 shadow-[0_0_0_1px_rgba(59,130,246,0.06)]",
+  ongoing:
+    "rounded-xl border border-warning/30 bg-warning/10 p-3 shadow-[0_0_0_1px_rgba(245,158,11,0.1)]",
+  completed:
+    "rounded-xl border border-success/25 bg-success/10 p-3 shadow-[0_0_0_1px_rgba(16,185,129,0.08)]",
+};
+
+const rowAccentByStatus: Record<string, string> = {
+  completed: "border-l-4 border-l-success/60",
+  ongoing: "border-l-4 border-l-warning/60",
+  published: "border-l-4 border-l-info/60",
+};
+
 export default function StudentExams() {
   const [exams, setExams] = useState<StudentExamItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchInput, setSearchInput] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [draftFilters, setDraftFilters] = useState<FilterValues>({
-    submissionState: "all",
     status: "all",
     courseCode: "all",
     startTime: { from: undefined, to: undefined },
   });
   const [appliedFilters, setAppliedFilters] = useState<FilterValues>({
-    submissionState: "all",
     status: "all",
     courseCode: "all",
     startTime: { from: undefined, to: undefined },
@@ -110,40 +130,13 @@ export default function StudentExams() {
           });
         });
 
-        submissions.forEach((submission: any) => {
-          const submissionStatus = String(submission.status || "").toUpperCase();
-          const examId = String(submission.examId ?? submission.exam?.id ?? "");
-          if (!examId) return;
-
-          const isCompleted = ["SUBMITTED", "GRADED", "FLAGGED", "FINALIZED"].includes(
-            submissionStatus,
-          );
-
-          const existing = byId.get(examId);
-          if (existing) {
-            byId.set(examId, {
-              ...existing,
-              submitted: existing.submitted || isCompleted,
-              completed: existing.completed || isCompleted,
-            });
-            return;
-          }
-
-          byId.set(examId, {
-            id: examId,
-            title: submission.exam?.title,
-            status: isCompleted ? "COMPLETED" : submissionStatus,
-            startTime: submission.submittedAt || submission.startedAt,
-            duration: undefined,
-            course: submission.exam?.course,
-            submitted: isCompleted,
-            completed: isCompleted,
-            source: "submission",
-          });
-        });
-
         if (mounted) {
-          setExams(Array.from(byId.values()));
+          // My Exams only shows pending/active exams. Completed attempts belong to Results.
+          setExams(
+            Array.from(byId.values()).filter(
+              (exam) => !submittedExamIds.has(exam.id),
+            ),
+          );
         }
       } catch (err) {
         console.error("Failed to load exams", err);
@@ -161,16 +154,6 @@ export default function StudentExams() {
   const examFilterDefinitions: FilterDefinition[] = useMemo(
     () => [
       {
-        key: "submissionState",
-        label: "Submission",
-        type: "select",
-        allLabel: "All",
-        options: [
-          { label: "Not Submitted", value: "notSubmitted" },
-          { label: "Submitted", value: "submitted" },
-        ],
-      },
-      {
         key: "status",
         label: "Status",
         type: "select",
@@ -178,7 +161,6 @@ export default function StudentExams() {
         options: [
           { label: "Upcoming", value: "PUBLISHED" },
           { label: "Ongoing", value: "ONGOING" },
-          { label: "Completed", value: "COMPLETED" },
         ],
       },
       {
@@ -205,7 +187,6 @@ export default function StudentExams() {
   const normalizedSearch = appliedSearch.trim().toLowerCase();
   const filteredExams = useMemo(() => {
     return exams.filter((exam) => {
-      const submissionState = appliedFilters.submissionState as string | undefined;
       const statusFilter = appliedFilters.status as string | undefined;
       const courseFilter = appliedFilters.courseCode as string | undefined;
       const startTimeFilter = appliedFilters.startTime as
@@ -219,9 +200,6 @@ export default function StudentExams() {
             .toLowerCase()
             .includes(normalizedSearch);
       if (!searchMatched) return false;
-
-      if (submissionState === "submitted" && !exam.submitted) return false;
-      if (submissionState === "notSubmitted" && exam.submitted) return false;
 
       const effectiveStatus = exam.completed
         ? "COMPLETED"
@@ -294,7 +272,6 @@ export default function StudentExams() {
 
   const clearFilters = () => {
     const empty: FilterValues = {
-      submissionState: "all",
       status: "all",
       courseCode: "all",
       startTime: { from: undefined, to: undefined },
@@ -308,7 +285,6 @@ export default function StudentExams() {
 
   const removeFilter = (key: string) => {
     const empty: FilterValues = {
-      submissionState: "all",
       status: "all",
       courseCode: "all",
       startTime: { from: undefined, to: undefined },
@@ -333,15 +309,15 @@ export default function StudentExams() {
         <div className="space-y-3">
           <ListPageHeader title="Exams" />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <div className="rounded-xl border border-border/60 p-3">
+            <div className={summaryCardClassByKey.upcoming}>
               <p className="text-xs text-muted-foreground">Upcoming</p>
               <p className="text-xl font-semibold text-foreground">{examSummary.upcoming}</p>
             </div>
-            <div className="rounded-xl border border-border/60 p-3">
+            <div className={summaryCardClassByKey.ongoing}>
               <p className="text-xs text-muted-foreground">Ongoing</p>
               <p className="text-xl font-semibold text-foreground">{examSummary.ongoing}</p>
             </div>
-            <div className="rounded-xl border border-border/60 p-3">
+            <div className={summaryCardClassByKey.completed}>
               <p className="text-xs text-muted-foreground">Completed</p>
               <p className="text-xl font-semibold text-foreground">{examSummary.completed}</p>
             </div>
@@ -405,7 +381,9 @@ export default function StudentExams() {
                   paginatedExams.map((exam) => (
                     <div
                       key={exam.id}
-                      className="flex flex-col gap-3 rounded-xl border border-border/50 p-4 md:flex-row md:items-center md:justify-between"
+                      className={`flex flex-col gap-3 rounded-xl border border-border/50 bg-background/80 p-4 transition-colors hover:bg-muted/20 md:flex-row md:items-center md:justify-between ${
+                        rowAccentByStatus[getExamStatusKey(exam)] || rowAccentByStatus.published
+                      }`}
                     >
                       <div>
                         <h4 className="font-semibold text-foreground">
@@ -420,8 +398,18 @@ export default function StudentExams() {
                           </p>
                         )}
                         <div className="mt-1 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">{statusText(exam)}</Badge>
-                          {exam.submitted ? <Badge variant="secondary">Submitted</Badge> : null}
+                          <StatusBadge
+                            status={getExamStatusKey(exam)}
+                            domain="exam"
+                            className={getExamStatusKey(exam) === "ongoing" ? "animate-pulse" : ""}
+                          >
+                            {statusText(exam)}
+                          </StatusBadge>
+                          {exam.submitted ? (
+                            <StatusBadge status="submitted" domain="submission">
+                              Submitted
+                            </StatusBadge>
+                          ) : null}
                         </div>
                       </div>
 
@@ -438,7 +426,7 @@ export default function StudentExams() {
 
                         {exam.submitted ? (
                           <Button asChild variant="outline" size="sm">
-                            <Link to={`/student/results/${exam.id}`}>Result</Link>
+                            <Link to={`/student/grading?examId=${exam.id}`}>Result</Link>
                           </Button>
                         ) : null}
                       </div>

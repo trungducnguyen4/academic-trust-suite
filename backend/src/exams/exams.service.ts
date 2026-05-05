@@ -329,7 +329,7 @@ export class ExamsService {
       where: {
         studentId,
         courseId: exam.courseId,
-        status: 'ACTIVE',
+        status: 'active',
       },
     });
 
@@ -848,7 +848,7 @@ export class ExamsService {
     const enrollments = await this.prisma.enrollment.findMany({
       where: {
         studentId,
-        status: 'ACTIVE',
+        status: 'active',
       },
       select: {
         courseId: true,
