@@ -9,6 +9,7 @@ import {
   CardHeader,
   CardTitle,
   CardDescription,
+  CardFooter,
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,11 +99,17 @@ export default function QuestionEditor() {
   const [course, setCourse] = useState("");
   const [topic, setTopic] = useState("");
   const [difficulty, setDifficulty] = useState([0.5]);
-  const [tags, setTags] = useState<string[]>([]);
-  const [tagInput, setTagInput] = useState("");
   const [hasMedia, setHasMedia] = useState(false);
   const [mediaType, setMediaType] = useState<"image" | "audio">("image");
   const [learningObjective, setLearningObjective] = useState("");
+
+  // Topic management
+  const [availableTopics, setAvailableTopics] = useState<
+    { id: string; code: string; name: string }[]
+  >([]);
+  const [showTopicDialog, setShowTopicDialog] = useState(false);
+  const [newTopicName, setNewTopicName] = useState("");
+  const [creatingTopic, setCreatingTopic] = useState(false);
 
   // AI Generation state
   const [aiPrompt, setAiPrompt] = useState("");
@@ -124,12 +131,91 @@ export default function QuestionEditor() {
   const [essayMaxScore, setEssayMaxScore] = useState("10");
   const [essayMaxScoreError, setEssayMaxScoreError] = useState("");
 
+  // Validation errors
+  const [validationErrors, setValidationErrors] = useState<string[]>([]);
+
+  // Autosave draft
+  const DRAFT_STORAGE_KEY = "question-draft";
+  const saveDraft = (state: any) => {
+    try {
+      localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify({
+        ...state,
+        savedAt: new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error("Failed to save draft:", err);
+    }
+  };
+
+  const loadDraft = () => {
+    try {
+      const draft = localStorage.getItem(DRAFT_STORAGE_KEY);
+      if (draft) {
+        const parsed = JSON.parse(draft);
+        // Only restore if no existing question being edited
+        if (!questionId && !question) {
+          return parsed;
+        }
+      }
+    } catch (err) {
+      console.error("Failed to load draft:", err);
+    }
+    return null;
+  };
+
   // Load courses from API
   const snapDifficulty = (value: number) => {
     const levels = [0.3, 0.5, 0.7];
     return levels.reduce((prev, curr) =>
       Math.abs(curr - value) < Math.abs(prev - value) ? curr : prev,
     );
+  };
+
+  // Validation by question type
+  const validateQuestion = (): boolean => {
+    const errors: string[] = [];
+
+    // Required fields
+    if (!content.trim()) {
+      errors.push("Question text is required");
+    }
+
+    if (!course) {
+      errors.push("Course is required");
+    }
+
+    if (questionType === "multiple_choice" || questionType === "single_choice") {
+      // Check minimum options
+      const filledOptions = options.filter(o => o.text.trim());
+      if (filledOptions.length < 2) {
+        errors.push("At least 2 answer options are required");
+      }
+      // Check for correct answer(s)
+      const correctOptions = filledOptions.filter(o => o.isCorrect);
+      if (correctOptions.length === 0) {
+        errors.push("Please select at least one correct answer");
+      }
+    }
+
+    if (questionType === "true_false") {
+      // True/False is always valid (either True or False is set)
+    }
+
+    if (questionType === "essay") {
+      if (!essayRubric.trim()) {
+        errors.push("Grading rubric is required for essay questions");
+      }
+    }
+
+    if (questionType === "matching") {
+      const filledPairs = options.filter(o => o.text.trim());
+      if (filledPairs.length < 2) {
+        errors.push("At least 2 matching pairs are required");
+      }
+    }
+
+    setValidationErrors(errors);
+    return errors.length === 0;
   };
 
   useEffect(() => {
@@ -153,6 +239,99 @@ export default function QuestionEditor() {
     };
     fetchCourses();
   }, []);
+
+  // Fetch all available topics when component mounts
+  useEffect(() => {
+    const fetchTopics = async () => {
+      try {
+        // Fetch all topics available in the system (not filtered by course)
+        const response = await api.listQuestionTopics({});
+        const topicsData = response?.data || [];
+        setAvailableTopics(topicsData);
+      } catch (err) {
+        console.error("Failed to fetch topics:", err);
+        setAvailableTopics([]);
+      }
+    };
+    fetchTopics();
+  }, []);
+
+  // Load question data if editing existing question
+  useEffect(() => {
+    if (questionId) {
+      loadQuestion();
+    } else {
+      // Try to restore draft if not editing
+      const draft = loadDraft();
+      if (draft) {
+        // Ask user if they want to restore
+        const shouldRestore = window.confirm(
+          "You have an unsaved draft. Do you want to restore it?"
+        );
+        if (shouldRestore) {
+          // Restore all form state from draft
+          if (draft.content) setContent(draft.content);
+          if (draft.explanation) setExplanation(draft.explanation);
+          if (draft.course) setCourse(draft.course);
+          if (draft.topic) setTopic(draft.topic);
+          if (draft.difficulty) setDifficulty(draft.difficulty);
+          if (draft.questionType) setQuestionType(draft.questionType);
+          if (draft.options) setOptions(draft.options);
+          if (draft.multipleAnswers !== undefined) setMultipleAnswers(draft.multipleAnswers);
+          if (draft.tfAnswer) setTfAnswer(draft.tfAnswer);
+          if (draft.essayRubric) setEssayRubric(draft.essayRubric);
+          if (draft.essayMaxScore) setEssayMaxScore(draft.essayMaxScore);
+          if (draft.learningObjective) setLearningObjective(draft.learningObjective);
+          if (draft.hasMedia !== undefined) setHasMedia(draft.hasMedia);
+          if (draft.mediaType) setMediaType(draft.mediaType);
+        } else {
+          // Clear draft if user declines
+          localStorage.removeItem(DRAFT_STORAGE_KEY);
+        }
+      }
+    }
+  }, [questionId]);
+
+  // Autosave draft on every form change
+  useEffect(() => {
+    if (!questionId) {
+      const timer = setTimeout(() => {
+        saveDraft({
+          content,
+          explanation,
+          course,
+          topic,
+          difficulty,
+          questionType,
+          options,
+          multipleAnswers,
+          tfAnswer,
+          essayRubric,
+          essayMaxScore,
+          learningObjective,
+          hasMedia,
+          mediaType,
+        });
+      }, 1000); // Save 1 second after last change
+      return () => clearTimeout(timer);
+    }
+  }, [
+    content,
+    explanation,
+    course,
+    topic,
+    difficulty,
+    questionType,
+    options,
+    multipleAnswers,
+    tfAnswer,
+    essayRubric,
+    essayMaxScore,
+    learningObjective,
+    hasMedia,
+    mediaType,
+    questionId,
+  ]);
 
   // Load question data if editing existing question
   useEffect(() => {
@@ -205,23 +384,6 @@ export default function QuestionEditor() {
           : Math.max(0, Math.min(1, questionData.difficulty))
         : 0.5;
     setDifficulty([snapDifficulty(uiDifficulty)]);
-
-    // Parse tags
-    if (questionData.tags) {
-      try {
-        const tagsArray = Array.isArray(questionData.tags)
-          ? questionData.tags
-          : typeof questionData.tags === "string"
-            ? questionData.tags
-                .split(",")
-                .map((t) => t.trim())
-                .filter(Boolean)
-            : [];
-        setTags(tagsArray);
-      } catch {
-        setTags([]);
-      }
-    }
 
     // Handle different question types
     if (
@@ -347,18 +509,15 @@ export default function QuestionEditor() {
     }
   };
 
-  const addTag = () => {
-    if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()]);
-      setTagInput("");
-    }
-  };
-
-  const removeTag = (t: string) => setTags(tags.filter((tag) => tag !== t));
-
   const handleSave = async () => {
     let questionData;
     try {
+      // Validate before saving
+      if (!validateQuestion()) {
+        toast.error("Please fix the validation errors below");
+        return;
+      }
+
       setSaving(true);
 
       // Backend accepts difficulty as integer 1..10.
@@ -396,7 +555,6 @@ export default function QuestionEditor() {
         explanation,
         difficulty: backendDifficulty,
         points: 10, // Default points
-        tags: tags, // Backend expects array
         options:
           questionType === "multiple_choice" || questionType === "single_choice"
             ? options
@@ -435,6 +593,8 @@ export default function QuestionEditor() {
         await api.saveQuestion(questionData);
       }
 
+      // Clear draft on successful save
+      localStorage.removeItem(DRAFT_STORAGE_KEY);
       navigate(questionBankPath);
     } catch (error) {
       console.error("Failed to save question:", error);
@@ -475,7 +635,6 @@ export default function QuestionEditor() {
       // Fill in the form with AI-generated content
       setContent(result.content);
       if (result.explanation) setExplanation(result.explanation);
-      if (result.tags && result.tags.length > 0) setTags(result.tags);
       if (result.difficulty !== undefined && result.difficulty !== null) {
         setDifficulty([
           snapDifficulty(Math.max(0, Math.min(1, result.difficulty))),
@@ -521,6 +680,29 @@ export default function QuestionEditor() {
       : difficulty[0] <= 0.5
         ? "text-yellow-600"
         : "text-red-600";
+
+  const handleCreateTopic = async () => {
+    if (!newTopicName.trim() || !course) return;
+    
+    try {
+      setCreatingTopic(true);
+      const newTopic = await api.createQuestionTopic({
+        name: newTopicName.trim(),
+        code: newTopicName.trim().toUpperCase().replace(/\s+/g, "_"),
+      });
+      
+      setAvailableTopics([...availableTopics, newTopic]);
+      setTopic(newTopic.id);
+      setNewTopicName("");
+      setShowTopicDialog(false);
+      toast.success("Topic created successfully!");
+    } catch (error) {
+      console.error("Failed to create topic:", error);
+      toast.error("Failed to create topic. Please try again.");
+    } finally {
+      setCreatingTopic(false);
+    }
+  };
 
   return (
     <DashboardLayout>
@@ -587,7 +769,7 @@ export default function QuestionEditor() {
                 </Button>
                 <Button
                   onClick={handleSave}
-                  disabled={saving || !content}
+                  disabled={saving}
                   size="sm"
                   className="gap-1.5 flex-1 sm:flex-initial"
                 >
@@ -603,6 +785,23 @@ export default function QuestionEditor() {
             )}
           </div>
         </div>
+
+        {/* Validation Errors */}
+        {validationErrors.length > 0 && (
+          <div className="mb-4 p-3 sm:p-4 bg-destructive/10 border border-destructive/30 rounded-lg">
+            <p className="text-sm font-semibold text-destructive mb-2">
+              ⚠️ Please fix these errors before saving:
+            </p>
+            <ul className="space-y-1">
+              {validationErrors.map((error, idx) => (
+                <li key={idx} className="text-sm text-destructive flex items-start gap-2">
+                  <span className="mt-0.5">•</span>
+                  <span>{error}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
 
         {loading ? (
           <div className="flex items-center justify-center py-12">
@@ -656,6 +855,7 @@ export default function QuestionEditor() {
                           disabled={isGenerating || !aiPrompt.trim() || !course}
                           className="gap-2 w-full sm:w-auto"
                           size="sm"
+                          title={!course ? "Select a course to use AI generation" : ""}
                         >
                           {isGenerating ? (
                             <Loader2 className="h-4 w-4 animate-spin" />
@@ -666,13 +866,12 @@ export default function QuestionEditor() {
                         </Button>
                       </div>
                       {!course && (
-                        <p className="text-[10px] text-destructive font-medium px-1">
-                          Select a course from the right panel before using AI.
+                        <p className="text-[10px] text-amber-600 font-medium px-1">
+                          ⚠️ Select a course from the right panel to enable AI generation.
                         </p>
                       )}
                       <p className="text-[10px] text-muted-foreground italic px-1">
-                        * Generated content will overwrite current question text
-                        and options.
+                        * Generated content will be shown in preview mode for you to approve before applying.
                       </p>
                     </CardContent>
                   </Card>
@@ -1101,21 +1300,19 @@ export default function QuestionEditor() {
 
                 {/* ── RIGHT: Metadata Sidebar ── */}
                 <div className="space-y-4 sm:space-y-6 lg:sticky lg:top-[4.5rem]">
-                  {/* Course - required */}
-                  <Card className={!course ? "border-destructive/50" : ""}>
+                  {/* Course - Required */}
+                  <Card>
                     <CardHeader className="pb-2 px-4 pt-4">
-                      <CardTitle className="text-sm flex items-center gap-1">
-                        Course <span className="text-destructive">*</span>
+                      <CardTitle className="text-sm">
+                        Course <span className="text-red-500">*</span>
                       </CardTitle>
-                      {!course && (
-                        <CardDescription className="text-xs text-destructive">
-                          Required for AI generation
-                        </CardDescription>
-                      )}
+                      <CardDescription className="text-xs">
+                        Required to organize questions and enable AI generation.
+                      </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 px-4 pb-4">
                       <Select value={course} onValueChange={setCourse}>
-                        <SelectTrigger className="text-sm">
+                        <SelectTrigger className={`text-sm ${!course ? "border-red-300 bg-red-50" : ""}`}>
                           <SelectValue placeholder="Select a course..." />
                         </SelectTrigger>
                         <SelectContent>
@@ -1130,16 +1327,30 @@ export default function QuestionEditor() {
                           ))}
                         </SelectContent>
                       </Select>
+                      {!course && (
+                        <p className="text-[10px] text-red-600 font-medium">
+                          ⚠️ Course selection is required to save a question.
+                        </p>
+                      )}
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">
                           Topic
                         </Label>
-                        <Input
-                          placeholder="e.g., Graph Algorithms"
-                          value={topic}
-                          onChange={(e) => setTopic(e.target.value)}
-                          className="text-sm"
-                        />
+                        <Button
+                          variant="outline"
+                          onClick={() => setShowTopicDialog(true)}
+                          disabled={!course}
+                          className="w-full justify-start text-left font-normal"
+                        >
+                          {topic
+                            ? availableTopics.find((t: any) => t.id === topic)?.name || "Unknown Topic"
+                            : "Select or create a topic..."}
+                        </Button>
+                        {!course && (
+                          <p className="text-[10px] text-amber-600">
+                            Select a course first to choose a topic.
+                          </p>
+                        )}
                       </div>
                       <div className="space-y-1.5">
                         <Label className="text-xs text-muted-foreground">
@@ -1182,56 +1393,6 @@ export default function QuestionEditor() {
                         <span>Easy</span>
                         <span>Medium</span>
                         <span>Hard</span>
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  {/* Tags */}
-                  <Card>
-                    <CardHeader className="pb-2 px-4 pt-4">
-                      <CardTitle className="text-sm">Tags</CardTitle>
-                    </CardHeader>
-                    <CardContent className="px-4 pb-4">
-                      <div className="flex gap-2 mb-2">
-                        <Input
-                          placeholder="Add a tag..."
-                          value={tagInput}
-                          onChange={(e) => setTagInput(e.target.value)}
-                          onKeyDown={(e) =>
-                            e.key === "Enter" && (e.preventDefault(), addTag())
-                          }
-                          className="flex-1 text-sm"
-                        />
-                        <Button
-                          variant="outline"
-                          onClick={addTag}
-                          size="sm"
-                          className="text-sm"
-                        >
-                          Add
-                        </Button>
-                      </div>
-                      <div className="flex flex-wrap gap-1.5">
-                        {tags.map((t) => (
-                          <span
-                            key={t}
-                            className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-xs bg-muted text-muted-foreground"
-                          >
-                            <Tag className="h-2.5 w-2.5" />
-                            {t}
-                            <button
-                              onClick={() => removeTag(t)}
-                              className="ml-0.5 hover:text-destructive"
-                            >
-                              ×
-                            </button>
-                          </span>
-                        ))}
-                        {tags.length === 0 && (
-                          <p className="text-xs text-muted-foreground">
-                            No tags added yet
-                          </p>
-                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1381,26 +1542,101 @@ export default function QuestionEditor() {
                           </div>
                         </>
                       )}
-
-                      {tags.length > 0 && (
-                        <div className="flex flex-wrap gap-1 sm:gap-1.5 pt-2">
-                          {tags.map((t) => (
-                            <span
-                              key={t}
-                              className="inline-flex items-center gap-1 px-1.5 sm:px-2 py-0.5 rounded text-[10px] sm:text-xs bg-muted text-muted-foreground"
-                            >
-                              <Tag className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-                      )}
                     </div>
                   )}
                 </CardContent>
               </Card>
             </TabsContent>
           </Tabs>
+        )}
+
+        {/* Topic Selection Dialog */}
+        {showTopicDialog && (
+          <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+            <Card className="w-full max-w-md mx-4">
+              <CardHeader>
+                <CardTitle>Select or Create Topic</CardTitle>
+                <CardDescription>
+                  Choose from existing topics or create a new one
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {availableTopics.length > 0 && (
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground">
+                      Available Topics
+                    </Label>
+                    <div className="max-h-48 overflow-y-auto space-y-1">
+                      {availableTopics.map((t: any) => (
+                        <Button
+                          key={t.id}
+                          variant={topic === t.id ? "default" : "outline"}
+                          className="w-full justify-start text-left"
+                          size="sm"
+                          onClick={() => {
+                            setTopic(t.id);
+                            setShowTopicDialog(false);
+                          }}
+                        >
+                          {t.name}
+                        </Button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                {availableTopics.length === 0 && !newTopicName && (
+                  <p className="text-sm text-muted-foreground">
+                    No topics created yet. Create the first one below.
+                  </p>
+                )}
+
+                <Separator />
+                
+                <div className="space-y-2">
+                  <Label htmlFor="topic-name" className="text-xs">
+                    Create New Topic
+                  </Label>
+                  <Input
+                    id="topic-name"
+                    placeholder="e.g., Graph Algorithms"
+                    value={newTopicName}
+                    onChange={(e) => setNewTopicName(e.target.value)}
+                    onKeyDown={(e) =>
+                      e.key === "Enter" && handleCreateTopic()
+                    }
+                    className="text-sm"
+                  />
+                </div>
+              </CardContent>
+              <CardFooter className="flex gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowTopicDialog(false);
+                    setNewTopicName("");
+                  }}
+                  className="flex-1"
+                >
+                  Cancel
+                </Button>
+                <Button
+                  onClick={handleCreateTopic}
+                  disabled={!newTopicName.trim() || creatingTopic}
+                  className="flex-1 gap-2"
+                >
+                  {creatingTopic ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Creating...
+                    </>
+                  ) : (
+                    "Create & Select"
+                  )}
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
         )}
       </div>
     </DashboardLayout>

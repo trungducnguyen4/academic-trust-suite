@@ -162,7 +162,7 @@ export default function QuestionBankManagement() {
         setLoading(true);
         const [coursesData, firstQuestionsPage] = await Promise.all([
           api.getCourses(),
-          api.listQuestions({ page: 1, limit: 200 }),
+          api.listQuestions({ page: 1, limit: 100 }),
         ]);
 
         const firstPageQuestions = unwrapPaginatedData<Question>(firstQuestionsPage);
@@ -173,7 +173,7 @@ export default function QuestionBankManagement() {
         } else {
           const requests: Promise<any>[] = [];
           for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
-            requests.push(api.listQuestions({ page: currentPage, limit: 200 }));
+            requests.push(api.listQuestions({ page: currentPage, limit: 100 }));
           }
 
           const remainingPages = await Promise.all(requests);

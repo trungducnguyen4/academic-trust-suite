@@ -379,7 +379,7 @@ class ApiClient {
         data: {
           difficulty: data.difficulty,
           points: data.points,
-          tags: data.tags || [],
+          tags: (Array.isArray(data.tags) && data.tags.length > 0) ? data.tags : ['uncategorized'],
           topic: data.topic,
           learningObjective: data.learningObjective,
           courseScopeIds: data.courseId ? [data.courseId] : [],
