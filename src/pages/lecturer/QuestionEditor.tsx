@@ -67,7 +67,6 @@ interface Question {
   explanation?: string;
   difficulty: number;
   points: number;
-  tags: string;
   course?: { id: string; code: string; name: string };
   learningObjectives?: string;
 }

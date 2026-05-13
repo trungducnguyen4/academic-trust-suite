@@ -120,7 +120,7 @@ async function run() {
       correctAnswer: { answer: '4' },
       difficulty: 3,
       points: 1,
-      tags: ['smoke'],
+        // tags removed
       courseId,
     })
   );

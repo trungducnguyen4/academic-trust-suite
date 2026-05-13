@@ -37,39 +37,17 @@ type LegacyQuestion = {
 	explanation: string | null;
 	difficulty: number | null;
 	points: number | null;
-	tags: string | null;
+	courseId: string | null;
 	courseId: string | null;
 	creatorId: string | null;
 	createdAt: Date;
 };
 
-function parseTags(raw: string | null): string[] {
-	if (!raw) return [];
-	const trimmed = raw.trim();
-	if (!trimmed) return [];
-
-	try {
-		const parsed = JSON.parse(trimmed);
-		if (Array.isArray(parsed)) {
-			return parsed
-				.map((x) => String(x || '').trim())
-				.filter(Boolean);
-		}
-	} catch {
-		// Fallback to CSV style tags
-	}
-
-	return trimmed
-		.split(',')
-		.map((x) => x.trim())
-		.filter(Boolean);
-}
-
 async function fetchBatch(cursorId?: string): Promise<LegacyQuestion[]> {
 	if (!cursorId) {
 		const rows = await prisma.$queryRawUnsafe(
 			`
-			SELECT id, type, content, options, correctAnswer, explanation, difficulty, points, tags, courseId, creatorId, createdAt
+			SELECT id, type, content, options, correctAnswer, explanation, difficulty, points, courseId, creatorId, createdAt
 			FROM questions
 			ORDER BY id ASC
 			LIMIT ?
@@ -81,7 +59,7 @@ async function fetchBatch(cursorId?: string): Promise<LegacyQuestion[]> {
 
 	const rows = await prisma.$queryRawUnsafe(
 		`
-		SELECT id, type, content, options, correctAnswer, explanation, difficulty, points, tags, courseId, creatorId, createdAt
+		SELECT id, type, content, options, correctAnswer, explanation, difficulty, points, courseId, creatorId, createdAt
 		FROM questions
 		WHERE id > ?
 		ORDER BY id ASC
@@ -129,30 +107,8 @@ async function getVersionOneId(questionId: string): Promise<string | null> {
 	return rows.length > 0 ? rows[0].id : null;
 }
 
-async function upsertTags(questionId: string, tags: string[]) {
-	for (const tag of tags) {
-		await prisma.$executeRawUnsafe(
-			`
-			INSERT INTO tags (id, name, createdAt)
-			VALUES (UUID(), ?, NOW(3))
-			ON DUPLICATE KEY UPDATE name = VALUES(name)
-			`,
-			tag,
-		);
+// tags removed from schema; tag upserts are no-ops
 
-		await prisma.$executeRawUnsafe(
-			`
-			INSERT INTO question_tags (questionId, tagId)
-			SELECT ?, t.id
-			FROM tags t
-			WHERE t.name = ?
-			ON DUPLICATE KEY UPDATE questionId = VALUES(questionId)
-			`,
-			questionId,
-			tag,
-		);
-	}
-}
 
 async function upsertCourseScope(questionId: string, courseId: string | null) {
 	if (!courseId) return;
@@ -214,8 +170,7 @@ async function processQuestion(q: LegacyQuestion) {
 			throw new Error(`Unable to load version 1 for question ${q.id}`);
 		}
 
-		const tags = parseTags(q.tags);
-		await upsertTags(q.id, tags);
+		// tags removed from schema - nothing to upsert
 		await upsertCourseScope(q.id, q.courseId);
 		await backfillUsageLinks(q.id, versionId);
 		await updateQuestionV2Meta(q.id);

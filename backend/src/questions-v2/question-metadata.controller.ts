@@ -4,7 +4,7 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { QuestionsService } from './questions-v2.service';
-import { CreateTagDto, CreateTopicDto, ListTagsQueryDto, ListTopicsQueryDto, SetCourseTopicsDto } from './dto/question-metadata.dto';
+import { CreateTopicDto, ListTopicsQueryDto, SetCourseTopicsDto } from './dto/question-metadata.dto';
 
 @ApiTags('Questions Metadata')
 @ApiBearerAuth('access-token')
@@ -13,16 +13,6 @@ import { CreateTagDto, CreateTopicDto, ListTagsQueryDto, ListTopicsQueryDto, Set
 @Roles('LECTURER', 'ADMIN')
 export class QuestionMetadataController {
   constructor(private readonly questionsService: QuestionsService) {}
-
-  @Get('tags')
-  listTags(@Query() query: ListTagsQueryDto) {
-    return this.questionsService.listTags(query);
-  }
-
-  @Post('tags')
-  createTag(@Body() dto: CreateTagDto) {
-    return this.questionsService.createOrGetTag(dto.name);
-  }
 
   @Get('topics')
   listTopics(@Query() query: ListTopicsQueryDto) {

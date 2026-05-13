@@ -643,9 +643,10 @@ export class ExamsService {
 
     const examQuestions: any[] = [];
 
-    for (const questionId of questionIds) {
+      for (const questionId of questionIds) {
       const question = await this.prisma.question.findUnique({
         where: { id: questionId },
+        select: { id: true, points: true },
       });
 
       if (!question) {
@@ -668,7 +669,7 @@ export class ExamsService {
             points: question.points || 1,
           },
           include: {
-            question: true,
+            question: { select: { id: true, points: true } },
           },
         });
         examQuestions.push(examQuestion);

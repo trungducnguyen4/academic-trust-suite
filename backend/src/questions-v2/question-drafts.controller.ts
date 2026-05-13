@@ -101,15 +101,6 @@ export class QuestionDraftsController {
     return this.questionsService.getQuestionStats(req.user);
   }
 
-  @Get('by-tags')
-  getQuestionsByTags(@Request() req, @Query('tags') tags: string) {
-    const tagArray = String(tags || '')
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean);
-    return this.questionsService.getQuestionsByTags(tagArray, req.user);
-  }
-
   @Get(':id')
   findQuestionById(@Param('id') id: string, @Request() req) {
     return this.questionsService.findQuestionById(id, req.user);

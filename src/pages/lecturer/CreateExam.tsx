@@ -240,20 +240,7 @@ const mapQuestionTypeToDb = (value: string) => {
   return map[normalized] || map[normalized.toUpperCase()] || "MULTIPLE_CHOICE";
 };
 
-const safeParseTags = (tags: unknown): string[] => {
-  if (!tags) return [];
-  if (Array.isArray(tags)) return tags.filter((t) => typeof t === "string");
-  if (typeof tags !== "string") return [];
-  try {
-    const parsed = JSON.parse(tags);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    return tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-  }
-};
+// Tags removed from question model
 
 const UNTAGGED_LABEL = "Untagged";
 
@@ -334,17 +321,8 @@ export default function CreateExam() {
           totalPages = Number(response?.totalPages || 1);
 
           items.forEach((q: any) => {
-            const tags = safeParseTags(q?.tags);
-            if (tags.length === 0) {
-              counts.set(UNTAGGED_LABEL, (counts.get(UNTAGGED_LABEL) || 0) + 1);
-              return;
-            }
-
-            tags.forEach((tag) => {
-              const key = tag.trim();
-              if (!key) return;
-              counts.set(key, (counts.get(key) || 0) + 1);
-            });
+            // Tags removed; count all questions as untagged
+            counts.set(UNTAGGED_LABEL, (counts.get(UNTAGGED_LABEL) || 0) + 1);
           });
 
           page += 1;
@@ -439,7 +417,6 @@ export default function CreateExam() {
               explanation: q.explanation || undefined,
               difficulty: normalizeDifficultyForQuestion(q.difficulty),
               points: Math.max(1, Number(q.points) || 1),
-              tags: Array.isArray(q.tags) ? q.tags : [],
               courseId: form.course,
             }),
           ),

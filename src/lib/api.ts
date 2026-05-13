@@ -331,7 +331,7 @@ class ApiClient {
     explanation?: string;
     difficulty?: number;
     points?: number;
-    tags?: string[];
+    
     courseId?: string;
     learningObjective?: string;
     topic?: string;
@@ -379,7 +379,7 @@ class ApiClient {
         data: {
           difficulty: data.difficulty,
           points: data.points,
-          tags: (Array.isArray(data.tags) && data.tags.length > 0) ? data.tags : ['uncategorized'],
+          
           topic: data.topic,
           learningObjective: data.learningObjective,
           courseScopeIds: data.courseId ? [data.courseId] : [],
@@ -480,14 +480,13 @@ class ApiClient {
     if (filters?.page) params.append('page', String(filters.page));
     if (filters?.limit) params.append('limit', String(filters.limit));
     const query = params.toString() ? `?${params.toString()}` : '';
-    return this.request<any>(`/questions/metadata/tags${query}`);
+    // Tags metadata endpoint removed
+    return { data: [], pagination: { page: 1, limit: 0, total: 0, totalPages: 0 } } as any;
   }
 
   async createQuestionTag(name: string) {
-    return this.request<any>('/questions/metadata/tags', {
-      method: 'POST',
-      body: { name },
-    });
+    // Tags creation removed
+    throw new Error('Tags are not supported');
   }
 
   async listQuestionTopics(filters?: { search?: string; courseId?: string; page?: number; limit?: number }) {
@@ -779,12 +778,11 @@ class ApiClient {
       explanation: string;
       difficulty: number;
       points: number;
-      tags: string[];
       topic?: string;
       learningObjective?: string;
       options: Record<string, string> | null;
       correctAnswer: Record<string, string> | null;
-    }>('/ai/generate-question', {
+      }>('/ai/generate-question', {
       method: 'POST',
       body: data,
     });
@@ -807,11 +805,10 @@ class ApiClient {
         explanation: string;
         difficulty: number;
         points: number;
-        tags: string[];
         options: Record<string, string> | null;
         correctAnswer: Record<string, string> | null;
       }>;
-    }>('/ai/generate-exam-questions', {
+      }>('/ai/generate-exam-questions', {
       method: 'POST',
       body: data,
     });

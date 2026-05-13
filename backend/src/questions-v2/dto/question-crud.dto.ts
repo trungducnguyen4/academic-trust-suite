@@ -31,11 +31,6 @@ export class CreateQuestionCrudDto {
   points?: number;
 
   @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  tags?: string[];
-
-  @IsOptional()
   @IsString()
   courseId?: string;
 }
@@ -71,9 +66,4 @@ export class UpdateQuestionCrudDto {
   @IsInt()
   @Min(1)
   points?: number;
-
-  @IsOptional()
-  @IsArray()
-  @IsString({ each: true })
-  tags?: string[];
 }

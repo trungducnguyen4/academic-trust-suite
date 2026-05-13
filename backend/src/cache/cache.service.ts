@@ -80,8 +80,18 @@ export class CacheService {
       },
       skip,
       take: limit,
-      include: {
-        tags: true,
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        options: true,
+        explanation: true,
+        difficulty: true,
+        points: true,
+        courseId: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
         versions: {
           take: 1,
           orderBy: { createdAt: 'desc' },
@@ -168,14 +178,6 @@ export class CacheService {
 
     if (filters.courseId) {
       result.courseId = filters.courseId;
-    }
-
-    if (filters.tags && filters.tags.length > 0) {
-      result.tags = {
-        some: {
-          id: { in: filters.tags },
-        },
-      };
     }
 
     if (filters.search) {

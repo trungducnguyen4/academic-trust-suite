@@ -70,7 +70,6 @@ interface Question {
   course?: { code: string; name: string };
   difficulty: number;
   points: number;
-  tags: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -101,26 +100,6 @@ const EMPTY_QUESTION_FILTERS: FilterValues = {
   type: "all",
   difficulty: "all",
   points: { min: undefined, max: undefined },
-  tags: { value: "", operator: "contains" },
-};
-
-// Safe parser for tags - handles arrays, JSON strings, comma-separated strings, or null
-const safeParseTags = (tags: unknown): string[] => {
-  if (!tags) return [];
-  // Already an array
-  if (Array.isArray(tags)) return tags.filter((t) => typeof t === "string");
-  // Not a string - can't parse
-  if (typeof tags !== "string") return [];
-  try {
-    const parsed = JSON.parse(tags);
-    return Array.isArray(parsed) ? parsed : [];
-  } catch {
-    // Not JSON - treat as comma-separated string
-    return tags
-      .split(",")
-      .map((t) => t.trim())
-      .filter(Boolean);
-  }
 };
 
 export default function QuestionBankManagement() {
@@ -254,29 +233,18 @@ export default function QuestionBankManagement() {
         max: 20,
         step: 1,
       },
-      {
-        key: "tags",
-        label: "Tags",
-        type: "text",
-        placeholder: "Filter by tag",
-        operators: ["contains", "startsWith", "equals"],
-      },
     ],
     [],
   );
 
   const filtered = questions
     .filter((q) => {
-      const tags = safeParseTags(q.tags);
       const normalizedQuestionSearch = appliedQuestionSearch
         .trim()
         .toLowerCase();
       const matchSearch =
         q.content.toLowerCase().includes(normalizedQuestionSearch) ||
-        q.id.toLowerCase().includes(normalizedQuestionSearch) ||
-        tags.some((t: string) =>
-          t.toLowerCase().includes(normalizedQuestionSearch),
-        );
+        q.id.toLowerCase().includes(normalizedQuestionSearch);
 
       const matchCourse = selectedCourse ? q.course?.code === selectedCourse : true;
 
@@ -285,9 +253,6 @@ export default function QuestionBankManagement() {
         appliedQuestionFilters.difficulty as string | undefined;
       const pointsFilter = appliedQuestionFilters.points as
         | { min?: number; max?: number }
-        | undefined;
-      const tagsFilter = appliedQuestionFilters.tags as
-        | TextFilterValue
         | undefined;
 
       const matchType = !typeValue || typeValue === "all" || q.type === typeValue;
@@ -310,26 +275,13 @@ export default function QuestionBankManagement() {
           return false;
         return true;
       })();
-      const matchTags = (() => {
-        if (!tagsFilter || !tagsFilter.value.trim()) return true;
-        const filterValue = tagsFilter.value.trim().toLowerCase();
-        const tagText = tags.join(" ").toLowerCase();
-        if (tagsFilter.operator === "startsWith") {
-          return tags.some((tag) => tag.toLowerCase().startsWith(filterValue));
-        }
-        if (tagsFilter.operator === "equals") {
-          return tags.some((tag) => tag.toLowerCase() === filterValue);
-        }
-        return tagText.includes(filterValue);
-      })();
 
       return (
         matchSearch &&
         matchCourse &&
         matchType &&
         matchDifficulty &&
-        matchPoints &&
-        matchTags
+        matchPoints
       );
     })
     .sort((a, b) => {
@@ -356,7 +308,6 @@ export default function QuestionBankManagement() {
         content: `[Copy] ${q.content}`,
         difficulty: q.difficulty,
         points: q.points,
-        tags: safeParseTags(q.tags),
         courseId: q.course?.code
           ? courses.find((c) => c.code === q.course?.code)?.id
           : undefined,
@@ -771,12 +722,12 @@ export default function QuestionBankManagement() {
                   value={questionSearchInput}
                   onChange={setQuestionSearchInput}
                   onSearch={runQuestionSearch}
-                  placeholder="Search questions, IDs, tags..."
+                  placeholder="Search questions or IDs..."
                   className="min-w-0 flex-1"
                 />
                 <FilterPanel
                   title="Question filters"
-                  description="Filter by type, difficulty, points, and tags."
+                  description="Filter by type, difficulty, and points."
                   filters={questionFilterDefinitions}
                   value={draftQuestionFilters}
                   onValueChange={(key, nextValue) =>
@@ -810,111 +761,102 @@ export default function QuestionBankManagement() {
 
               return (
                 <>
-                  {/* Question Cards */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                    {displayedQuestions.map((question, qIndex) => {
-                      const diff = difficultyLabel(question.difficulty || 1);
-                      const tags = safeParseTags(question.tags);
-                      return (
-                        <Card
-                          key={question.id}
-                          className="overflow-hidden hover:shadow-md transition-shadow"
-                        >
-                          <div
-                            className={`h-24 ${getGradientClass(qIndex)} relative`}
-                          >
-                            <div className="absolute inset-0 bg-black/20" />
-                            <div className="absolute top-3 right-3 flex gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-white hover:bg-white/20 h-6 w-6 p-0"
-                                onClick={() => setPreviewQuestion(question)}
-                              >
-                                <Eye className="h-3 w-3" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="text-white hover:bg-white/20 h-6 w-6 p-0"
-                                onClick={() =>
-                                  navigate(
-                                    `${questionEditorPath}?id=${question.id}&courseCode=${selectedCourse}`,
-                                  )
-                                }
-                              >
-                                <Edit2 className="h-3 w-3" />
-                              </Button>
-                            </div>
-                          </div>
-
-                          <CardContent className="p-4">
-                            <div className="space-y-3">
-                              <div>
-                                <div className="flex items-center justify-between mb-2">
-                                  <span className="text-xs font-mono text-muted-foreground">
-                                    {question.id.slice(0, 8)}
-                                  </span>
-                                  <span
-                                    className={`text-xs font-medium px-1.5 py-0.5 rounded ${diff.color}`}
+                  {/* Question Table */}
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table>
+                      <TableHeader>
+                        <TableRow className="bg-muted/50">
+                          <TableHead className="w-24">ID</TableHead>
+                          <TableHead className="flex-1 min-w-48">Content</TableHead>
+                          <TableHead className="w-28">Type</TableHead>
+                          <TableHead className="w-24 text-center">
+                            <button
+                              onClick={() => toggleSort("difficulty")}
+                              className="flex items-center justify-center gap-1 hover:text-foreground w-full"
+                            >
+                              Difficulty
+                              <ArrowUpDown className="h-3 w-3" />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-20 text-center">
+                            <button
+                              onClick={() => toggleSort("points")}
+                              className="flex items-center justify-center gap-1 hover:text-foreground w-full"
+                            >
+                              Points
+                              <ArrowUpDown className="h-3 w-3" />
+                            </button>
+                          </TableHead>
+                          <TableHead className="w-32 text-center">Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {displayedQuestions.map((question) => {
+                          const diff = difficultyLabel(question.difficulty || 1);
+                          return (
+                            <TableRow key={question.id} className="hover:bg-muted/50">
+                              <TableCell className="font-mono text-xs text-muted-foreground">
+                                {question.id.slice(0, 8)}
+                              </TableCell>
+                              <TableCell className="text-sm line-clamp-2">
+                                {question.content}
+                              </TableCell>
+                              <TableCell className="text-sm">
+                                {typeLabels[question.type] || question.type}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <span className={`text-xs font-medium px-2 py-1 rounded ${diff.color}`}>
+                                  {diff.text}
+                                </span>
+                              </TableCell>
+                              <TableCell className="text-center text-sm">
+                                {question.points || 1}
+                              </TableCell>
+                              <TableCell className="text-center">
+                                <div className="flex gap-1 justify-center">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => setPreviewQuestion(question)}
                                   >
-                                    {diff.text}
-                                  </span>
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() =>
+                                      navigate(
+                                        `${questionEditorPath}?id=${question.id}&courseCode=${selectedCourse}`,
+                                      )
+                                    }
+                                  >
+                                    <Edit2 className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0"
+                                    onClick={() => handleDuplicate(question)}
+                                  >
+                                    <Copy className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-8 w-8 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                                    onClick={() => handleDelete(question.id)}
+                                  >
+                                    <Trash2 className="h-4 w-4" />
+                                  </Button>
                                 </div>
-                                <p className="text-sm line-clamp-3 mb-2">
-                                  {question.content}
-                                </p>
-
-                                <div className="flex items-center gap-3 text-xs text-muted-foreground mb-2">
-                                  <span>
-                                    {typeLabels[question.type] || question.type}
-                                  </span>
-                                  <span>•</span>
-                                  <span>{question.points || 1} pts</span>
-                                </div>
-
-                                <div className="flex flex-wrap gap-1">
-                                  {tags.slice(0, 3).map((tag: string) => (
-                                    <span
-                                      key={tag}
-                                      className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] bg-muted text-muted-foreground"
-                                    >
-                                      <Tag className="h-2.5 w-2.5" />
-                                      {tag}
-                                    </span>
-                                  ))}
-                                  {tags.length > 3 && (
-                                    <span className="text-[10px] text-muted-foreground">
-                                      +{tags.length - 3}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-
-                              <div className="flex gap-1 pt-2">
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="flex-1 h-7 text-xs"
-                                  onClick={() => handleDuplicate(question)}
-                                >
-                                  <Copy className="h-3 w-3 mr-1" />
-                                  Copy
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  className="h-7 w-7 p-0 text-destructive hover:bg-destructive hover:text-destructive-foreground"
-                                  onClick={() => handleDelete(question.id)}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </Button>
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
-                      );
-                    })}
+                              </TableCell>
+                            </TableRow>
+                          );
+                        })}
+                      </TableBody>
+                    </Table>
                   </div>
 
                   {filtered.length === 0 && (
@@ -1001,17 +943,7 @@ export default function QuestionBankManagement() {
                     {new Date(previewQuestion.updatedAt).toLocaleDateString()}
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {safeParseTags(previewQuestion.tags).map((t: string) => (
-                    <span
-                      key={t}
-                      className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-muted text-muted-foreground"
-                    >
-                      <Tag className="h-3 w-3" />
-                      {t}
-                    </span>
-                  ))}
-                </div>
+                {/* Tags removed from questions */}
               </div>
             )}
           </DialogContent>

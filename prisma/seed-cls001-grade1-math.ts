@@ -14,7 +14,6 @@ type ChoiceQuestion = {
 type TopicSeed = {
   code: string;
   name: string;
-  tags: string[];
   questions: ChoiceQuestion[];
 };
 
@@ -24,7 +23,7 @@ const topics: TopicSeed[] = [
   {
     code: 'M1-COUNT-10',
     name: 'Toan lop 1 - Dem so den 10',
-    tags: ['toan-lop-1', 'dem-so', 'cls001-demo'],
+    // tags removed
     questions: [
       { content: 'So nao dung sau so 3?', options: { A: '4', B: '2', C: '5', D: '1' }, correct: 'A' },
       { content: 'Dem: 1, 2, 3, ... so tiep theo la?', options: { A: '5', B: '4', C: '2', D: '6' }, correct: 'B' },
@@ -43,7 +42,7 @@ const topics: TopicSeed[] = [
   {
     code: 'M1-ADD-10',
     name: 'Toan lop 1 - Cong trong pham vi 10',
-    tags: ['toan-lop-1', 'cong', 'cls001-demo'],
+    // tags removed
     questions: [
       { content: '2 + 3 = ?', options: { A: '4', B: '5', C: '6', D: '3' }, correct: 'B' },
       { content: '1 + 6 = ?', options: { A: '6', B: '7', C: '8', D: '5' }, correct: 'B' },
@@ -62,7 +61,7 @@ const topics: TopicSeed[] = [
   {
     code: 'M1-SUB-10',
     name: 'Toan lop 1 - Tru trong pham vi 10',
-    tags: ['toan-lop-1', 'tru', 'cls001-demo'],
+    // tags removed
     questions: [
       { content: '5 - 2 = ?', options: { A: '3', B: '2', C: '4', D: '1' }, correct: 'A' },
       { content: '9 - 1 = ?', options: { A: '7', B: '8', C: '9', D: '6' }, correct: 'B' },
@@ -81,7 +80,7 @@ const topics: TopicSeed[] = [
   {
     code: 'M1-COMPARE',
     name: 'Toan lop 1 - So sanh lon hon nho hon bang nhau',
-    tags: ['toan-lop-1', 'so-sanh', 'cls001-demo'],
+    // tags removed
     questions: [
       { content: 'So nao lon hon: 7 hay 5?', options: { A: '7', B: '5', C: 'Bang nhau', D: 'Khong biet' }, correct: 'A' },
       { content: 'So nao nho hon: 2 hay 9?', options: { A: '9', B: '2', C: 'Bang nhau', D: '10' }, correct: 'B' },
@@ -100,7 +99,7 @@ const topics: TopicSeed[] = [
   {
     code: 'M1-WORD-PROB',
     name: 'Toan lop 1 - Bai toan co loi van don gian',
-    tags: ['toan-lop-1', 'loi-van', 'cls001-demo'],
+    // tags removed
     questions: [
       { content: 'Lan co 3 cai keo, me cho them 2 cai. Lan co tat ca bao nhieu cai?', options: { A: '4', B: '5', C: '6', D: '3' }, correct: 'B' },
       { content: 'Minh co 8 qua bong, bi hong mat 1 qua. Con lai bao nhieu qua?', options: { A: '7', B: '8', C: '6', D: '9' }, correct: 'A' },
@@ -189,7 +188,7 @@ async function main() {
           explanation: q.explanation || 'Cau hoi demo Toan lop 1 cho CLS001',
           difficulty: q.difficulty ?? 2,
           points: q.points ?? 1,
-          tags: JSON.stringify(topic.tags),
+          // tags removed from schema
           courseId: course.id,
           creatorId: course.lecturerId,
           status: QuestionLifecycleStatus.PUBLISHED,

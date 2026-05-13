@@ -132,7 +132,7 @@ export class QuestionsService {
   }
 
   async createQuestion(dto: CreateQuestionCrudDto, user: AuthUser) {
-    const { tags, ...questionData } = dto;
+    const questionData = dto;
 
     if (questionData.courseId) {
       await this.assertCourseAccessible(questionData.courseId, user);
@@ -143,7 +143,6 @@ export class QuestionsService {
     return this.prisma.question.create({
       data: {
         ...questionData,
-        tags: tags ? JSON.stringify(tags) : null,
         creatorId: user.id,
       },
     });
@@ -152,21 +151,26 @@ export class QuestionsService {
   async findQuestionById(id: string, user: AuthUser) {
     const question = await this.prisma.question.findUnique({
       where: { id },
-      include: {
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        options: true,
+        correctAnswer: true,
+        explanation: true,
+        difficulty: true,
+        points: true,
+        courseId: true,
+        creatorId: true,
+        status: true,
+        latestVersionNo: true,
+        isReusable: true,
+        createdAt: true,
+        updatedAt: true,
         creator: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-          },
+          select: { id: true, fullName: true, email: true },
         },
-        course: {
-          select: {
-            id: true,
-            code: true,
-            name: true,
-          },
-        },
+        course: { select: { id: true, code: true, name: true } },
       },
     });
 
@@ -176,14 +180,30 @@ export class QuestionsService {
 
     this.assertCanAccessQuestion(question, user);
 
-    return {
-      ...question,
-      tags: this.parseJson(question.tags, []),
-    };
+    return question as any;
   }
 
   async updateQuestion(id: string, dto: UpdateQuestionCrudDto, user: AuthUser) {
-    const question = await this.prisma.question.findUnique({ where: { id } });
+    const question = await this.prisma.question.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        options: true,
+        correctAnswer: true,
+        explanation: true,
+        difficulty: true,
+        points: true,
+        courseId: true,
+        creatorId: true,
+        status: true,
+        latestVersionNo: true,
+        isReusable: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
     if (!question) {
       throw new NotFoundException('Question not found');
@@ -191,19 +211,37 @@ export class QuestionsService {
 
     this.assertCanAccessQuestion(question, user);
 
-    const { tags, ...questionData } = dto;
+    const questionData = dto;
 
     return this.prisma.question.update({
       where: { id },
       data: {
         ...questionData,
-        ...(tags !== undefined && { tags: JSON.stringify(tags) }),
       },
     });
   }
 
   async deleteQuestion(id: string, user: AuthUser) {
-    const question = await this.prisma.question.findUnique({ where: { id } });
+    const question = await this.prisma.question.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        options: true,
+        correctAnswer: true,
+        explanation: true,
+        difficulty: true,
+        points: true,
+        courseId: true,
+        creatorId: true,
+        status: true,
+        latestVersionNo: true,
+        isReusable: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    });
 
     if (!question) {
       throw new NotFoundException('Question not found');
@@ -212,25 +250,6 @@ export class QuestionsService {
     this.assertCanAccessQuestion(question, user);
     await this.prisma.question.delete({ where: { id } });
     return { message: 'Question deleted successfully' };
-  }
-
-  async getQuestionsByTags(tags: string[], user: AuthUser) {
-    const where = user.role === 'LECTURER' ? { creatorId: user.id } : undefined;
-    const questions = await this.prisma.question.findMany({
-      where,
-      orderBy: { createdAt: 'desc' },
-    });
-
-    return questions
-      .filter((q) => {
-        const questionTags = this.parseJson(q.tags, []);
-        if (!Array.isArray(questionTags)) return false;
-        return tags.some((tag) => questionTags.includes(tag));
-      })
-      .map((q) => ({
-        ...q,
-        tags: this.parseJson(q.tags, []),
-      }));
   }
 
   async getQuestionStats(user: AuthUser) {
@@ -301,10 +320,12 @@ export class QuestionsService {
         ? !!String(state?.answers?.explanation || '').trim()
         : hasEnoughOptions && hasAnswer;
 
-    const classification =
-      Array.isArray(state?.classification?.tags)
-        ? state.classification.tags.length > 0
-        : !!String(state?.classification?.tags || '').trim();
+    const classification = !!(
+      state?.classification?.difficulty ||
+      state?.classification?.topic ||
+      state?.classification?.learningObjective ||
+      (Array.isArray(state?.classification?.courseScopeIds) && state.classification.courseScopeIds.length > 0)
+    );
 
     return {
       intent,
@@ -352,7 +373,26 @@ export class QuestionsService {
     let linkedQuestionId: string | null = null;
 
     if (dto.sourceQuestionId) {
-      const source = await this.prisma.question.findUnique({ where: { id: dto.sourceQuestionId } });
+      const source = await this.prisma.question.findUnique({
+        where: { id: dto.sourceQuestionId },
+        select: {
+          id: true,
+          type: true,
+          content: true,
+          options: true,
+          correctAnswer: true,
+          explanation: true,
+          difficulty: true,
+          points: true,
+          courseId: true,
+          creatorId: true,
+          status: true,
+          latestVersionNo: true,
+          isReusable: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      });
       if (!source) {
         throw new NotFoundException('Source question not found');
       }
@@ -374,7 +414,6 @@ export class QuestionsService {
         ...(state.classification || {}),
         difficulty: source.difficulty,
         points: source.points,
-        tags: this.parseJson(source.tags, []),
         courseScopeIds: source.courseId ? [source.courseId] : [],
       };
     }
@@ -459,7 +498,7 @@ export class QuestionsService {
     if (section === AISection.EXPLANATION) {
       return `${head}\nGenerate explanation for the correct answer.`;
     }
-    return `${head}\nSuggest classification metadata: topic, learning objective, tags.`;
+    return `${head}\nSuggest classification metadata: topic and learning objective.`;
   }
 
   async aiGenerateSection(draftId: string, dto: AIGenerateSectionDto, user: AuthUser) {
@@ -505,7 +544,6 @@ export class QuestionsService {
       } else {
         candidates.push({
           id: 'cand-1',
-          tags: result.tags || [],
           topic: result.topic || '',
           learningObjective: result.learningObjective || '',
           difficulty: result.difficulty,
@@ -588,7 +626,6 @@ export class QuestionsService {
     } else {
       nextState.classification = {
         ...(nextState.classification || {}),
-        tags: candidate.tags || nextState.classification?.tags || [],
         topic: candidate.topic || nextState.classification?.topic || '',
         learningObjective: candidate.learningObjective || nextState.classification?.learningObjective || '',
         difficulty: typeof candidate.difficulty !== 'undefined'
@@ -653,14 +690,7 @@ export class QuestionsService {
       warnings.push({ code: 'MISSING_EXPLANATION', path: 'answers.explanation', message: 'Explanation is recommended' });
     }
 
-    const tags = state?.classification?.tags;
-    if (!Array.isArray(tags) || tags.length === 0) {
-      if (level === DraftValidationLevel.STRICT) {
-        errors.push({ code: 'MISSING_TAGS', path: 'classification.tags', message: 'At least one tag is required for strict validation' });
-      } else {
-        warnings.push({ code: 'MISSING_TAGS', path: 'classification.tags', message: 'Tags are recommended for discoverability' });
-      }
-    }
+    // Tags are no longer required or stored; skip tag validation
 
     const qualityScore = Math.max(0, 100 - errors.length * 18 - warnings.length * 6);
     const valid = errors.length === 0;
@@ -683,126 +713,11 @@ export class QuestionsService {
     return validationResult;
   }
 
-  private normalizeLegacyTags(tags: any): string[] {
-    if (Array.isArray(tags)) {
-      return tags.map((t) => String(t).trim()).filter(Boolean);
-    }
-    if (typeof tags === 'string') {
-      return tags.split(',').map((t) => t.trim()).filter(Boolean);
-    }
-    return [];
-  }
-
   private normalizeDifficultyRaw(input: any): number {
     const n = Number(input);
     if (Number.isNaN(n)) return 5;
     if (n <= 1) return Math.max(1, Math.min(10, Math.round(n * 10)));
     return Math.max(1, Math.min(10, Math.round(n)));
-  }
-
-  async listTags(params?: { search?: string; page?: number; limit?: number }) {
-    const page = Math.max(1, Number(params?.page || 1));
-    const limit = Math.max(1, Math.min(100, Number(params?.limit || 20)));
-    const search = String(params?.search || '').trim();
-
-    if (await this.hasTable('tags')) {
-      const whereClause = search ? 'WHERE t.name LIKE ?' : '';
-      const argsForWhere = search ? [`%${search}%`] : [];
-
-      const countRows = await this.prisma.$queryRawUnsafe(
-        `SELECT COUNT(*) AS total FROM tags t ${whereClause}`,
-        ...argsForWhere,
-      ) as Array<{ total: bigint | number }>;
-
-      const rows = await this.prisma.$queryRawUnsafe(
-        `
-        SELECT t.id, t.name, t.createdAt
-        FROM tags t
-        ${whereClause}
-        ORDER BY t.name ASC
-        LIMIT ? OFFSET ?
-        `,
-        ...argsForWhere,
-        limit,
-        (page - 1) * limit,
-      ) as Array<{ id: string; name: string; createdAt: Date }>;
-
-      const total = Number(countRows?.[0]?.total || 0);
-      return {
-        data: rows,
-        pagination: {
-          page,
-          limit,
-          total,
-          totalPages: Math.ceil(total / limit),
-        },
-      };
-    }
-
-    // Legacy fallback when tags table does not exist yet.
-    const legacyRows = await this.prisma.question.findMany({
-      where: { tags: { not: null } },
-      select: { tags: true },
-      orderBy: { updatedAt: 'desc' },
-      take: 2000,
-    });
-
-    const unique = new Set<string>();
-    for (const row of legacyRows) {
-      const parsed = this.parseJson(row.tags, []);
-      if (Array.isArray(parsed)) {
-        parsed.forEach((t) => {
-          const tag = String(t || '').trim();
-          if (tag) unique.add(tag);
-        });
-      }
-    }
-
-    let all = Array.from(unique).map((name) => ({ id: name, name, createdAt: null }));
-    if (search) {
-      const keyword = search.toLowerCase();
-      all = all.filter((x) => x.name.toLowerCase().includes(keyword));
-    }
-
-    all.sort((a, b) => a.name.localeCompare(b.name));
-    const total = all.length;
-    const data = all.slice((page - 1) * limit, page * limit);
-    return {
-      data,
-      pagination: {
-        page,
-        limit,
-        total,
-        totalPages: Math.ceil(total / limit),
-      },
-    };
-  }
-
-  async createOrGetTag(name: string) {
-    const normalized = String(name || '').trim();
-    if (!normalized) {
-      throw new BadRequestException('Tag name is required');
-    }
-
-    if (!(await this.hasTable('tags'))) {
-      throw new BadRequestException('Tags table is unavailable. Apply phase-01 schema first.');
-    }
-
-    await this.prisma.$executeRawUnsafe(
-      `INSERT INTO tags (id, name, createdAt) VALUES (UUID(), ?, NOW(3)) ON DUPLICATE KEY UPDATE name = VALUES(name)`,
-      normalized,
-    );
-
-    const rows = await this.prisma.$queryRawUnsafe(
-      `SELECT id, name, createdAt FROM tags WHERE name = ? LIMIT 1`,
-      normalized,
-    ) as Array<{ id: string; name: string; createdAt: Date }>;
-
-    if (rows.length === 0) {
-      throw new BadRequestException('Failed to create tag');
-    }
-
-    return rows[0];
   }
 
   async listTopics(params?: { search?: string; page?: number; limit?: number; courseId?: string }) {
@@ -971,13 +886,7 @@ export class QuestionsService {
       }
     }
 
-    if (query.tagId) {
-      if (!(await this.hasTable('question_tags'))) {
-        throw new BadRequestException('QuestionTags table is unavailable. Apply phase-01 schema first.');
-      }
-      where.push('EXISTS (SELECT 1 FROM question_tags qt WHERE qt.questionId = q.id AND qt.tagId = ?)');
-      args.push(query.tagId);
-    }
+    // tagId filtering removed (tags normalized storage removed)
 
     if (query.topicId) {
       if (!(await this.hasTable('question_topics'))) {
@@ -1042,7 +951,6 @@ export class QuestionsService {
     const explanation = String(state?.answers?.explanation || '').trim() || null;
     const difficulty = this.normalizeDifficultyRaw(state?.classification?.difficulty);
     const points = Math.max(1, Number(state?.classification?.points || 1));
-    const tags = this.normalizeLegacyTags(state?.classification?.tags || []);
 
     const courseScopeIds = Array.isArray(state?.classification?.courseScopeIds)
       ? state.classification.courseScopeIds.map((x: any) => String(x)).filter(Boolean)
@@ -1053,7 +961,10 @@ export class QuestionsService {
     let questionId = draft.questionId;
 
     if (questionId) {
-      const existing = await this.prisma.question.findUnique({ where: { id: questionId } });
+      const existing = await this.prisma.question.findUnique({
+        where: { id: questionId },
+        select: { id: true, creatorId: true },
+      });
       if (!existing) throw new NotFoundException('Linked question not found');
 
       await this.prisma.question.update({
@@ -1066,7 +977,6 @@ export class QuestionsService {
           explanation,
           difficulty,
           points,
-          tags: JSON.stringify(tags),
           courseId: legacyCourseId,
         },
       });
@@ -1080,9 +990,11 @@ export class QuestionsService {
           explanation,
           difficulty,
           points,
-          tags: JSON.stringify(tags),
           courseId: legacyCourseId,
           creatorId: user.id,
+        },
+        select: {
+          id: true,
         },
       });
       questionId = created.id;
@@ -1118,22 +1030,7 @@ export class QuestionsService {
       user.id,
     );
 
-    for (const tag of tags) {
-      await this.prisma.$executeRawUnsafe(
-        `INSERT INTO tags (id, name, createdAt) VALUES (UUID(), ?, NOW(3)) ON DUPLICATE KEY UPDATE name = VALUES(name)`,
-        tag,
-      );
-
-      await this.prisma.$executeRawUnsafe(
-        `
-        INSERT INTO question_tags (questionId, tagId)
-        SELECT ?, t.id FROM tags t WHERE t.name = ?
-        ON DUPLICATE KEY UPDATE questionId = VALUES(questionId)
-        `,
-        questionId,
-        tag,
-      );
-    }
+    // Tags are no longer stored in the DB; skip tag upsert and linking
 
     if (courseScopeIds.length > 0) {
       for (const courseId of courseScopeIds) {
@@ -1204,10 +1101,20 @@ export class QuestionsService {
 
     const items = await this.prisma.question.findMany({
       where: { id: { in: questionIds } },
-      include: {
-        course: {
-          select: { id: true, code: true, name: true },
-        },
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        options: true,
+        correctAnswer: true,
+        explanation: true,
+        difficulty: true,
+        points: true,
+        courseId: true,
+        creatorId: true,
+        createdAt: true,
+        updatedAt: true,
+        course: { select: { id: true, code: true, name: true } },
       },
     });
 
@@ -1242,26 +1149,7 @@ export class QuestionsService {
       }]));
     }
 
-    let tagsByQuestionId = new Map<string, string[]>();
-    if (await this.hasTable('question_tags')) {
-      const placeholders = questionIds.map(() => '?').join(',');
-      const rows = await this.prisma.$queryRawUnsafe(
-        `
-        SELECT qt.questionId, t.name
-        FROM question_tags qt
-        INNER JOIN tags t ON t.id = qt.tagId
-        WHERE qt.questionId IN (${placeholders})
-        `,
-        ...questionIds,
-      ) as Array<{ questionId: string; name: string }>;
-
-      const map = new Map<string, string[]>();
-      for (const r of rows) {
-        if (!map.has(r.questionId)) map.set(r.questionId, []);
-        map.get(r.questionId)!.push(r.name);
-      }
-      tagsByQuestionId = map;
-    }
+    // Tags were removed from question model; no tag joins needed
 
     const data = items.map((q: any) => ({
       id: q.id,
@@ -1270,7 +1158,6 @@ export class QuestionsService {
       explanation: q.explanation,
       difficulty: q.difficulty,
       points: q.points,
-      tags: tagsByQuestionId.get(q.id) || this.parseJson(q.tags, []),
       course: q.course,
       creatorId: q.creatorId,
       createdAt: q.createdAt,
