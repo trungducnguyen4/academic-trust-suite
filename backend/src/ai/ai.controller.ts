@@ -1,6 +1,6 @@
 import { Controller, Post, Body, UseGuards } from '@nestjs/common';
 import { AiService } from './ai.service';
-import { GenerateQuestionDto, GenerateExamQuestionsDto } from './dto/generate-question.dto';
+import { GenerateQuestionDto, GenerateExamQuestionsDto, SuggestSimilarTopicsDto } from './dto/generate-question.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
@@ -37,5 +37,15 @@ export class AiController {
       useCase: dto.useCase,
     });
     return { questions };
+  }
+
+  @Post('suggest-similar-topics')
+  async suggestSimilarTopics(@Body() dto: SuggestSimilarTopicsDto) {
+    return this.aiService.suggestSimilarTopics({
+      topicName: dto.topicName,
+      existingTopics: dto.existingTopics,
+      language: dto.language,
+      courseName: dto.courseName,
+    });
   }
 }

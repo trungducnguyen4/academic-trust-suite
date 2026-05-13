@@ -419,9 +419,9 @@ export function BulkStudentImport({ courseId, onImportSuccess }: BulkStudentImpo
           <Button
             onClick={parseAndValidate}
             className="w-full gap-2"
-            disabled={state === "validating"}
+            disabled={state as ImportState === "validating"}
           >
-            {state === "validating" ? (
+            { (state as ImportState) === "validating" ? (
               <>
                 <Loader2 className="h-4 w-4 animate-spin" /> Validating...
               </>

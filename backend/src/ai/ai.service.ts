@@ -317,6 +317,149 @@ ${typeInstruction}
     }
   }
 
+  async suggestSimilarTopics(params: {
+    topicName: string;
+    existingTopics: string[];
+    language?: string;
+    courseName?: string;
+  }) {
+    const topicName = String(params.topicName || '').trim();
+    const existingTopics = Array.from(
+      new Set((params.existingTopics || []).map((topic) => String(topic || '').trim()).filter(Boolean)),
+    ).slice(0, 50);
+
+    if (!topicName) {
+      return { matches: [] };
+    }
+
+    const normalize = (value: string) =>
+      value
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[\u0300-\u036f]/g, '')
+        .replace(/[^a-z0-9\s]/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+    const heuristicMatches = existingTopics
+      .map((candidate) => {
+        const normalizedCandidate = normalize(candidate);
+        const normalizedTopic = normalize(topicName);
+        if (!normalizedCandidate || !normalizedTopic) {
+          return { name: candidate, score: 0 };
+        }
+
+        let score = 0;
+        if (normalizedCandidate === normalizedTopic) {
+          score = 1;
+        } else if (
+          normalizedCandidate.includes(normalizedTopic) ||
+          normalizedTopic.includes(normalizedCandidate)
+        ) {
+          score = 0.92;
+        } else {
+          const candidateTokens = new Set(normalizedCandidate.split(' '));
+          const topicTokens = new Set(normalizedTopic.split(' '));
+          let overlap = 0;
+          topicTokens.forEach((token) => {
+            if (candidateTokens.has(token)) overlap += 1;
+          });
+          const union = new Set([...candidateTokens, ...topicTokens]).size || 1;
+          score = overlap / union;
+        }
+
+        return { name: candidate, score };
+      })
+      .filter((item) => item.score > 0)
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name))
+      .slice(0, 5)
+      .map((item) => ({
+        name: item.name,
+        score: Number(item.score.toFixed(2)),
+        reason: 'Heuristic similarity based on topic text',
+      }));
+
+    const prompt = `${this.buildAppProfilePrompt({
+      useCase: 'question_bank',
+      courseName: params.courseName,
+      targetLanguage: params.language || this.defaultLanguage,
+      questionType: 'TOPIC_MATCHING',
+      questionCount: 1,
+    })}
+
+You are helping a lecturer find an existing topic similar to a proposed new topic.
+Proposed topic: "${topicName}"
+
+Existing topics:
+${existingTopics.map((item, index) => `${index + 1}. ${item}`).join('\n')}
+
+Return ONLY JSON in this exact structure:
+{
+  "matches": [
+    {
+      "name": "closest existing topic name",
+      "score": 0.0,
+      "reason": "short reason"
+    }
+  ]
+}
+
+Rules:
+- Only include topics that are genuinely similar to the proposed topic.
+- Sort from most similar to least similar.
+- Score must be a number between 0 and 1.
+- Return at most 5 matches.
+- If nothing is similar, return an empty matches array.`;
+
+    try {
+      let responseText: string | null = null;
+
+      if (this.provider === 'ollama') {
+        responseText = await this._callOllama(prompt);
+      } else if (this.provider === 'local' && this.localUrl) {
+        const resp = await fetch(this.localUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt }),
+        });
+        if (!resp.ok) throw new Error(`Local model server returned ${resp.status}`);
+        responseText = await resp.text();
+      } else if (this.provider === 'mock') {
+        responseText = JSON.stringify({ matches: heuristicMatches });
+      } else if (this.model) {
+        const result = await this.model.generateContent(prompt);
+        responseText = result.response.text();
+      }
+
+      if (!responseText) {
+        return { matches: heuristicMatches };
+      }
+
+      const cleaned = responseText
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/gi, '')
+        .trim();
+
+      const parsed = JSON.parse(cleaned);
+      const matches = Array.isArray(parsed.matches) ? parsed.matches : [];
+
+      const normalized = matches
+        .map((item: any) => ({
+          name: String(item?.name || '').trim(),
+          score: Math.max(0, Math.min(1, Number(item?.score ?? 0))),
+          reason: String(item?.reason || 'AI similarity match').trim(),
+        }))
+        .filter((item: any) => item.name)
+        .sort((a: any, b: any) => b.score - a.score || a.name.localeCompare(b.name))
+        .slice(0, 5);
+
+      return { matches: normalized.length > 0 ? normalized : heuristicMatches };
+    } catch (error: any) {
+      this.logger.warn(`Falling back to heuristic topic matching: ${error.message}`);
+      return { matches: heuristicMatches };
+    }
+  }
+
   /**
    * Call Ollama's HTTP API and return the generated text.
    * Ollama exposes POST /api/generate — we use streaming=false for simplicity.

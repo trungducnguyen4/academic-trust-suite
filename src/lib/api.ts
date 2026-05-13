@@ -506,6 +506,18 @@ class ApiClient {
     });
   }
 
+  async suggestSimilarTopics(data: {
+    topicName: string;
+    existingTopics: string[];
+    language?: string;
+    courseName?: string;
+  }) {
+    return this.request<any>('/ai/suggest-similar-topics', {
+      method: 'POST',
+      body: data,
+    });
+  }
+
   async setCourseTopics(courseId: string, topicIds: string[]) {
     return this.request<any>(`/questions/metadata/courses/${courseId}/topics`, {
       method: 'PUT',

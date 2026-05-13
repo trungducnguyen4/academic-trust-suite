@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { api, unwrapPaginatedData } from "@/lib/api";
@@ -16,7 +16,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
-import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { StatusBadge } from "@/components/ui/status-badge";
 import {
@@ -47,6 +46,8 @@ import {
   Loader2,
   Sparkles,
   Wand2,
+  Pin,
+  PinOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
@@ -108,6 +109,11 @@ export default function QuestionEditor() {
   >([]);
   const [showTopicDialog, setShowTopicDialog] = useState(false);
   const [newTopicName, setNewTopicName] = useState("");
+  const [topicSearch, setTopicSearch] = useState("");
+  const [topicSuggestions, setTopicSuggestions] = useState<
+    { id: string; code: string; name: string; score: number; reason?: string }[]
+  >([]);
+  const [checkingTopicSimilarity, setCheckingTopicSimilarity] = useState(false);
   const [creatingTopic, setCreatingTopic] = useState(false);
 
   // AI Generation state
@@ -122,6 +128,9 @@ export default function QuestionEditor() {
     { id: "D", text: "", isCorrect: false },
   ]);
 
+  // Track pinned options to prevent shuffling
+  const [pinnedOptions, setPinnedOptions] = useState<Set<string>>(new Set());
+
   // True/False answer
   const [tfAnswer, setTfAnswer] = useState<"true" | "false">("true");
 
@@ -134,6 +143,25 @@ export default function QuestionEditor() {
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
 
   // Autosave draft
+  const contentRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const insertBlankAtCursor = () => {
+    const textarea = contentRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart ?? textarea.value.length;
+    const end = textarea.selectionEnd ?? textarea.value.length;
+    const before = content.slice(0, start);
+    const after = content.slice(end);
+    const insert = "[[]]";
+    const newContent = before + insert + after;
+    setContent(newContent);
+    // focus and place cursor between the inner brackets
+    const cursorPos = start + 2;
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(cursorPos, cursorPos);
+    }, 0);
+  };
   const DRAFT_STORAGE_KEY = "question-draft";
   const saveDraft = (state: any) => {
     try {
@@ -183,7 +211,7 @@ export default function QuestionEditor() {
       errors.push("Course is required");
     }
 
-    if (questionType === "multiple_choice" || questionType === "single_choice") {
+    if (questionType === "multiple_choice") {
       // Check minimum options
       const filledOptions = options.filter(o => o.text.trim());
       if (filledOptions.length < 2) {
@@ -193,6 +221,10 @@ export default function QuestionEditor() {
       const correctOptions = filledOptions.filter(o => o.isCorrect);
       if (correctOptions.length === 0) {
         errors.push("Please select at least one correct answer");
+      }
+      // If not allowing multiple answers, ensure only one is correct
+      if (!multipleAnswers && correctOptions.length > 1) {
+        errors.push("Only one answer can be correct when 'Allow Multiple Answers' is disabled");
       }
     }
 
@@ -359,7 +391,7 @@ export default function QuestionEditor() {
     const typeMapping: { [key: string]: string } = {
       MULTIPLE_CHOICE: "multiple_choice",
       MULTI_SELECT: "multiple_choice",
-      SINGLE_CHOICE: "single_choice",
+      SINGLE_CHOICE: "multiple_choice",
       TRUE_FALSE: "true_false",
       SHORT_ANSWER: "essay",
       ESSAY: "essay",
@@ -532,8 +564,6 @@ export default function QuestionEditor() {
       let backendType: string;
       if (questionType === "multiple_choice") {
         backendType = multipleAnswers ? "MULTI_SELECT" : "MULTIPLE_CHOICE";
-      } else if (questionType === "single_choice") {
-        backendType = "MULTIPLE_CHOICE";
       } else if (questionType === "true_false") {
         backendType = "TRUE_FALSE";
       } else if (questionType === "essay") {
@@ -555,7 +585,7 @@ export default function QuestionEditor() {
         difficulty: backendDifficulty,
         points: 10, // Default points
         options:
-          questionType === "multiple_choice" || questionType === "single_choice"
+          questionType === "multiple_choice"
             ? options
                 .filter((opt) => opt.text.trim())
                 .reduce((acc, opt, idx) => {
@@ -564,10 +594,8 @@ export default function QuestionEditor() {
                 }, {} as any) // Send as object {A: "text", B: "text"}
             : {},
         correctAnswer:
-          questionType === "single_choice"
-            ? { answer: options.find((opt) => opt.isCorrect)?.id || "A" } // Format: {answer: "B"}
-            : questionType === "multiple_choice"
-              ? {
+          questionType === "multiple_choice"
+            ? {
                   answer: options
                     .filter((opt) => opt.isCorrect)
                     .map((opt) => opt.id)
@@ -615,7 +643,6 @@ export default function QuestionEditor() {
       // Map frontend type to backend type for the AI prompt
       const backendTypeMap: Record<string, string> = {
         multiple_choice: "MULTIPLE_CHOICE",
-        single_choice: "MULTIPLE_CHOICE",
         true_false: "TRUE_FALSE",
         essay: "ESSAY",
         fill_blank: "FILL_IN_BLANK",
@@ -647,7 +674,6 @@ export default function QuestionEditor() {
       if (
         result.options &&
         (questionType === "multiple_choice" ||
-          questionType === "single_choice" ||
           questionType === "true_false")
       ) {
         const newOptions = Object.entries(result.options).map(
@@ -693,6 +719,8 @@ export default function QuestionEditor() {
       setAvailableTopics([...availableTopics, newTopic]);
       setTopic(newTopic.id);
       setNewTopicName("");
+      setTopicSearch("");
+      setTopicSuggestions([]);
       setShowTopicDialog(false);
       toast.success("Topic created successfully!");
     } catch (error) {
@@ -701,6 +729,113 @@ export default function QuestionEditor() {
     } finally {
       setCreatingTopic(false);
     }
+  };
+
+  const handleCheckSimilarTopics = async () => {
+    const query = newTopicName.trim();
+    if (!query) {
+      setTopicSuggestions([]);
+      return;
+    }
+
+    try {
+      setCheckingTopicSimilarity(true);
+      const response = await api.suggestSimilarTopics({
+        topicName: query,
+        existingTopics: availableTopics.map((item) => item.name),
+        courseName: courses.find((item) => item.id === course)?.name,
+        language: "vi",
+      });
+      const rankedTopics = (response?.matches || [])
+        .map((item: any) => {
+          const match = availableTopics.find(
+            (topic) => topic.name.toLowerCase() === String(item.name || '').toLowerCase() ||
+              topic.code.toLowerCase() === String(item.name || '').toLowerCase(),
+          );
+          return {
+            id: match?.id || String(item.name || item.code || Math.random()),
+            code: match?.code || String(item.code || item.name || ""),
+            name: match?.name || String(item.name || item.code || ""),
+            score: Number(item.score ?? 0),
+            reason: String(item.reason || ""),
+          };
+        })
+        .filter((item: any) => item.name)
+        .slice(0, 5);
+
+      setTopicSuggestions(rankedTopics);
+    } catch (error) {
+      console.error("Failed to check similar topics:", error);
+      setTopicSuggestions([]);
+    } finally {
+      setCheckingTopicSimilarity(false);
+    }
+  };
+
+  useEffect(() => {
+    const query = newTopicName.trim();
+
+    if (!query) {
+      setTopicSuggestions([]);
+      return;
+    }
+
+    const suggestionTimer = window.setTimeout(() => {
+      if (query.length >= 2) {
+        handleCheckSimilarTopics();
+      } else {
+        setTopicSuggestions([]);
+      }
+    }, 450);
+
+    return () => window.clearTimeout(suggestionTimer);
+  }, [newTopicName]);
+
+  const filteredTopics = availableTopics.filter((item) => {
+    const query = topicSearch
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    if (!query) return true;
+    const name = item.name
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    const code = item.code
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+    return name.includes(query) || code.includes(query);
+  });
+
+  // Deduplicate topics case-insensitively (so 'SQL' and 'sql' are treated the same)
+  const dedupedFilteredTopics = (() => {
+    const seen = new Set<string>();
+    const out: { id: string; code: string; name: string }[] = [];
+    for (const t of filteredTopics) {
+      const key = String(t.name || t.code || '').toLowerCase().trim();
+      if (!key) continue;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(t);
+    }
+    return out;
+  })();
+
+  const handleCloseTopicDialog = () => {
+    setShowTopicDialog(false);
+    setNewTopicName("");
+    setTopicSearch("");
+    setTopicSuggestions([]);
   };
 
   return (
@@ -887,34 +1022,13 @@ export default function QuestionEditor() {
                         value={questionType}
                         onValueChange={(val) => {
                           setQuestionType(val);
-                          if (val === "single_choice") {
-                            setMultipleAnswers(false);
-                            // Keep only the first correct option if switching to single choice
-                            const firstCorrectIndex = options.findIndex(
-                              (o) => o.isCorrect,
-                            );
-                            setOptions(
-                              options.map((o, idx) => ({
-                                ...o,
-                                isCorrect:
-                                  idx ===
-                                  (firstCorrectIndex !== -1
-                                    ? firstCorrectIndex
-                                    : 0),
-                              })),
-                            );
-                          } else if (val === "multiple_choice") {
-                            setMultipleAnswers(true);
-                          }
+                          setPinnedOptions(new Set());
                         }}
                       >
                         <SelectTrigger className="w-full sm:w-[240px]">
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="single_choice">
-                            Single Choice
-                          </SelectItem>
                           <SelectItem value="multiple_choice">
                             Multiple Choice
                           </SelectItem>
@@ -950,14 +1064,13 @@ export default function QuestionEditor() {
                       </CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-3 sm:space-y-4 px-3 sm:px-6 pb-3 sm:pb-6">
-                      {(questionType === "multiple_choice" ||
-                        questionType === "single_choice") && (
+                      {questionType === "multiple_choice" && (
                         <div className="mb-3 sm:mb-4 p-2 sm:p-3 bg-blue-50 border border-blue-200 rounded-lg">
                           <p className="text-xs sm:text-sm text-blue-800 font-medium mb-0.5 sm:mb-1">
                             💡 How to select correct answers:
                           </p>
                           <p className="text-[11px] sm:text-xs text-blue-700">
-                            {questionType === "multiple_choice"
+                            {multipleAnswers
                               ? "Click the circles (A, B, C, D) to mark multiple correct answers"
                               : "Click the circles (A, B, C, D) to select the single correct answer"}
                           </p>
@@ -978,6 +1091,21 @@ export default function QuestionEditor() {
                         <Label htmlFor="content" className="text-sm">
                           Question Text
                         </Label>
+
+                        {/* Insert fill-in-the-blank helper into Question Content for better discoverability */}
+                        {questionType === "fill_blank" && (
+                          <div className="mb-3 p-3 rounded-md border border-muted/30 bg-muted/3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <p className="text-sm font-medium">How to create blanks</p>
+                                <p className="text-xs text-muted-foreground mt-1">Use double square brackets to mark blanks in the question text.</p>
+                                <div className="mt-2 text-sm text-muted-foreground">Example: <span className="font-medium">The capital of France is [[Paris]].</span></div>
+                                <div className="text-xs text-muted-foreground mt-1">When students answer, they'll fill in the bracketed part.</div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
                         <Textarea
                           id="content"
                           placeholder="Enter your question here..."
@@ -985,7 +1113,18 @@ export default function QuestionEditor() {
                           onChange={(e) => setContent(e.target.value)}
                           rows={3}
                           className="text-sm sm:text-base resize-none"
+                          ref={contentRef}
                         />
+                        <div className="flex justify-end mt-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={insertBlankAtCursor}
+                            className="gap-1"
+                          >
+                            <Plus className="h-3.5 w-3.5" /> Add Blank
+                          </Button>
+                        </div>
                       </div>
 
                       <div className="flex items-center gap-4">
@@ -1039,25 +1178,23 @@ export default function QuestionEditor() {
                     </CardContent>
                   </Card>
 
-                  {/* Answer Options */}
-                  <Card>
+                  {/* Answer Options - hide entirely for Fill-in-the-Blank (helper moved above) */}
+                  {questionType !== "fill_blank" && (
+                    <Card>
                     <CardHeader className="pb-2 sm:pb-3 px-3 sm:px-6 pt-3 sm:pt-6">
                       <div className="flex items-center justify-between gap-2">
                         <CardTitle className="text-sm sm:text-base">
-                          {(questionType === "multiple_choice" ||
-                            questionType === "single_choice") &&
+                          {questionType === "multiple_choice" &&
                             "Answer Options"}
                           {questionType === "true_false" && "Correct Answer"}
                           {questionType === "essay" && "Grading Rubric"}
-                          {questionType === "fill_blank" &&
-                            "Blank Configurations"}
+                          {/* Removed Blank Configurations label for fill_blank as helper now lives in Question Content */}
                           {questionType === "matching" && "Matching Pairs"}
                           {questionType === "find_error" && "Code Segments"}
                           {questionType === "ordering" && "Sequence Items"}
                         </CardTitle>
                         <div className="flex items-center gap-2">
                           {(questionType === "multiple_choice" ||
-                            questionType === "single_choice" ||
                             questionType === "ordering" ||
                             questionType === "matching") &&
                             options.length < 8 && (
@@ -1075,8 +1212,27 @@ export default function QuestionEditor() {
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-2 sm:space-y-3 px-3 sm:px-6 pb-3 sm:pb-6">
+                      {/* Moved fill-in-the-blank helper into Question Content per UX request */}
+                      {questionType === "multiple_choice" && (
+                        <div className="mb-2">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-3">
+                              <Label className="text-sm">Allow multiple correct answers</Label>
+                              <Switch
+                                checked={multipleAnswers}
+                                onCheckedChange={setMultipleAnswers}
+                              />
+                            </div>
+                          </div>
+                          {multipleAnswers && (
+                            <p className="text-xs text-muted-foreground italic mt-2">
+                              Students can select multiple answers. Check all that are correct.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
                       {(questionType === "multiple_choice" ||
-                        questionType === "single_choice" ||
                         questionType === "ordering" ||
                         questionType === "matching") &&
                         options.map((opt, idx) => (
@@ -1084,9 +1240,14 @@ export default function QuestionEditor() {
                             key={opt.id}
                             className="flex items-center gap-2 sm:gap-3"
                           >
-                            <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground cursor-move flex-shrink-0" />
-                            {(questionType === "multiple_choice" ||
-                              questionType === "single_choice") && (
+                            {/* Drag handle - only for draggable types */}
+                            {(questionType === "ordering" ||
+                              questionType === "matching") && (
+                              <GripVertical className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-muted-foreground cursor-move flex-shrink-0" />
+                            )}
+
+                            {/* Correct/Incorrect toggle - only for multiple choice */}
+                            {questionType === "multiple_choice" && (
                               <TooltipProvider>
                                 <Tooltip>
                                   <TooltipTrigger asChild>
@@ -1120,11 +1281,15 @@ export default function QuestionEditor() {
                                 </Tooltip>
                               </TooltipProvider>
                             )}
+
+                            {/* Sequence number - only for ordering */}
                             {questionType === "ordering" && (
                               <div className="h-7 w-7 sm:h-8 sm:w-8 rounded-lg bg-primary/10 flex items-center justify-center text-xs font-bold text-primary flex-shrink-0">
                                 {idx + 1}
                               </div>
                             )}
+
+                            {/* Option text input */}
                             <Input
                               placeholder={
                                 questionType === "matching"
@@ -1137,6 +1302,8 @@ export default function QuestionEditor() {
                               }
                               className="flex-1 text-sm min-w-0"
                             />
+
+                            {/* Matching pair input */}
                             {questionType === "matching" && (
                               <>
                                 <span className="text-muted-foreground text-sm flex-shrink-0">
@@ -1148,6 +1315,45 @@ export default function QuestionEditor() {
                                 />
                               </>
                             )}
+
+                            {/* Pin button - only for multiple choice */}
+                            {questionType === "multiple_choice" && (
+                              <TooltipProvider>
+                                <Tooltip>
+                                  <TooltipTrigger asChild>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className={pinnedOptions.has(opt.id) ? "text-amber-600" : "text-muted-foreground"}
+                                      onClick={() => {
+                                        const newPinned = new Set(pinnedOptions);
+                                        if (newPinned.has(opt.id)) {
+                                          newPinned.delete(opt.id);
+                                        } else {
+                                          newPinned.add(opt.id);
+                                        }
+                                        setPinnedOptions(newPinned);
+                                      }}
+                                    >
+                                      {pinnedOptions.has(opt.id) ? (
+                                        <Pin className="h-4 w-4" />
+                                      ) : (
+                                        <PinOff className="h-4 w-4" />
+                                      )}
+                                    </Button>
+                                  </TooltipTrigger>
+                                  <TooltipContent>
+                                    <p>
+                                      {pinnedOptions.has(opt.id)
+                                        ? "📌 Pinned - won't be shuffled"
+                                        : "📍 Click to pin - prevent shuffling"}
+                                    </p>
+                                  </TooltipContent>
+                                </Tooltip>
+                              </TooltipProvider>
+                            )}
+
+                            {/* Delete button */}
                             <Button
                               variant="ghost"
                               size="sm"
@@ -1187,23 +1393,7 @@ export default function QuestionEditor() {
                         </div>
                       )}
 
-                      {questionType === "fill_blank" && (
-                        <div className="space-y-4">
-                          <div className="p-4 border rounded-lg bg-secondary/20">
-                            <p className="text-sm text-muted-foreground mb-2 italic">
-                              Tip: Use double brackets like [[answer]] in the
-                              question text above to create blanks.
-                            </p>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="gap-2"
-                            >
-                              <Plus className="h-4 w-4" /> Add Blank Manually
-                            </Button>
-                          </div>
-                        </div>
-                      )}
+                      {/* Removed duplicate Blank Configuration box — helper now lives in Question Content above */}
 
                       {questionType === "find_error" && (
                         <div className="space-y-4">
@@ -1273,6 +1463,7 @@ export default function QuestionEditor() {
                       )}
                     </CardContent>
                   </Card>
+                  )}
 
                   {/* Explanation */}
                   <Card>
@@ -1365,36 +1556,41 @@ export default function QuestionEditor() {
                     </CardContent>
                   </Card>
 
-                  {/* Difficulty */}
+                  {/* Difficulty - Button Group */}
                   <Card>
                     <CardHeader className="pb-2 px-4 pt-4">
-                      <CardTitle className="text-sm flex items-center justify-between">
-                        Difficulty
-                        <span
-                          className={`text-xs font-semibold ${difficultyColor}`}
-                        >
-                          {difficultyLabel}
-                        </span>
-                      </CardTitle>
+                      <CardTitle className="text-sm">Difficulty</CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
-                      <Slider
-                        value={difficulty}
-                        onValueChange={(value) =>
-                          setDifficulty([snapDifficulty(value[0] ?? 0.5)])
-                        }
-                        min={0.3}
-                        max={0.7}
-                        step={0.2}
-                        className="py-1"
-                      />
-                      <div className="flex justify-between text-[10px] text-muted-foreground mt-1">
-                        <span>Easy</span>
-                        <span>Medium</span>
-                        <span>Hard</span>
+                      <div className="flex gap-2">
+                        <Button
+                          variant={difficulty[0] <= 0.4 ? "default" : "outline"}
+                          className="flex-1 text-sm"
+                          onClick={() => setDifficulty([0.3])}
+                        >
+                          Easy
+                        </Button>
+                        <Button
+                          variant={difficulty[0] > 0.4 && difficulty[0] < 0.6 ? "default" : "outline"}
+                          className="flex-1 text-sm"
+                          onClick={() => setDifficulty([0.5])}
+                        >
+                          Medium
+                        </Button>
+                        <Button
+                          variant={difficulty[0] >= 0.6 ? "default" : "outline"}
+                          className="flex-1 text-sm"
+                          onClick={() => setDifficulty([0.7])}
+                        >
+                          Hard
+                        </Button>
                       </div>
                     </CardContent>
                   </Card>
+
+                  {/* Difficulty card remains above. The Allow multiple answers toggle
+                      should always appear inside the Answer Options card below; removed
+                      the separate card here. */}
                 </div>
                 {/* end metadata sidebar */}
               </div>
@@ -1442,7 +1638,6 @@ export default function QuestionEditor() {
                       <Separator />
 
                       {(questionType === "multiple_choice" ||
-                        questionType === "single_choice" ||
                         questionType === "ordering" ||
                         questionType === "matching") && (
                         <div className="space-y-2">
@@ -1451,8 +1646,7 @@ export default function QuestionEditor() {
                               key={opt.id}
                               className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border text-sm ${
                                 opt.isCorrect &&
-                                (questionType === "multiple_choice" ||
-                                  questionType === "single_choice")
+                                questionType === "multiple_choice"
                                   ? "border-green-500 bg-green-50"
                                   : "border-muted"
                               }`}
@@ -1474,8 +1668,7 @@ export default function QuestionEditor() {
                                 </>
                               )}
                               {opt.isCorrect &&
-                                (questionType === "multiple_choice" ||
-                                  questionType === "single_choice") && (
+                                questionType === "multiple_choice" && (
                                   <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600 ml-auto flex-shrink-0" />
                                 )}
                             </div>
@@ -1552,69 +1745,170 @@ export default function QuestionEditor() {
         {/* Topic Selection Dialog */}
         {showTopicDialog && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <Card className="w-full max-w-md mx-4">
-              <CardHeader>
-                <CardTitle>Select or Create Topic</CardTitle>
-                <CardDescription>
-                  Choose from existing topics or create a new one
-                </CardDescription>
+            <Card className="w-[min(96vw,1100px)] max-w-none mx-4 overflow-hidden">
+              <CardHeader className="border-b bg-gradient-to-r from-background to-muted/30">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <CardTitle>Select or Create Topic</CardTitle>
+                    <CardDescription>
+                      Search existing topics, check for similar ones, or create a new topic.
+                    </CardDescription>
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={handleCloseTopicDialog} className="text-muted-foreground">
+                    Cancel
+                  </Button>
+                </div>
               </CardHeader>
-              <CardContent className="space-y-4">
-                {availableTopics.length > 0 && (
+              <CardContent className="grid gap-5 lg:grid-cols-[1fr_1fr] p-5 sm:p-7 lg:p-8">
+                <div className="space-y-4 rounded-2xl border bg-muted/20 p-5 shadow-sm min-h-[420px]">
+                  <div>
+                    <Label
+                      htmlFor="topic-name"
+                      className="text-xs uppercase tracking-wide text-muted-foreground"
+                    >
+                      New Topic
+                    </Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Create a new topic if it doesn't already exist.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <Input
+                      id="topic-name"
+                      placeholder="e.g., Graph Algorithms"
+                      value={newTopicName}
+                      onChange={(e) => setNewTopicName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          handleCreateTopic();
+                        }
+                      }}
+                      className="text-sm flex-1"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleCheckSimilarTopics}
+                      disabled={!newTopicName.trim() || checkingTopicSimilarity}
+                      className="gap-2 shrink-0"
+                    >
+                      {checkingTopicSimilarity ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-4 w-4" />
+                      )}
+                      AI Check
+                    </Button>
+                    <Button
+                      onClick={handleCreateTopic}
+                      disabled={!newTopicName.trim() || creatingTopic}
+                      className="gap-2 shrink-0"
+                    >
+                      {creatingTopic ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Plus className="h-4 w-4" />
+                      )}
+                      Create
+                    </Button>
+                  </div>
+
+                  {topicSuggestions.length > 0 && (
+                    <div className="space-y-2 pt-1">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-xs font-medium text-muted-foreground uppercase tracking-wide">
+                          Similar existing topics
+                        </p>
+                        <span className="text-[10px] text-muted-foreground">
+                          AI ranked
+                        </span>
+                      </div>
+                      <div className="space-y-2">
+                        {topicSuggestions.map((item) => (
+                          <button
+                            key={item.id}
+                            type="button"
+                            className="w-full rounded-xl border bg-background px-3 py-2.5 text-left transition-colors hover:border-primary hover:bg-primary/5"
+                            onClick={() => {
+                              if (item.id) {
+                                setTopic(item.id);
+                                handleCloseTopicDialog();
+                              }
+                            }}
+                          >
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="truncate text-sm font-medium">
+                                {item.name}
+                              </span>
+                              <span className="shrink-0 rounded-full bg-muted px-2 py-0.5 text-[10px] text-muted-foreground">
+                                {Math.round(item.score * 100)}%
+                              </span>
+                            </div>
+                            {item.reason && (
+                              <p className="mt-1 text-xs text-muted-foreground line-clamp-2">
+                                {item.reason}
+                              </p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-4 rounded-2xl border bg-background p-5 shadow-sm min-h-[420px]">
                   <div className="space-y-2">
-                    <Label className="text-xs text-muted-foreground">
+                    <div className="flex items-center justify-between gap-2">
+                      <Label className="text-xs text-muted-foreground uppercase tracking-wide">
+                        Search Topics
+                      </Label>
+                      <span className="text-[10px] text-muted-foreground">
+                        {dedupedFilteredTopics.length} result(s)
+                      </span>
+                    </div>
+                    <Input
+                      placeholder="Search by topic name or code..."
+                      value={topicSearch}
+                      onChange={(e) => setTopicSearch(e.target.value)}
+                      className="text-sm"
+                    />
+                  </div>
+
+                  <Separator />
+
+                  <div className="space-y-2">
+                    <Label className="text-xs text-muted-foreground uppercase tracking-wide">
                       Available Topics
                     </Label>
-                    <div className="max-h-48 overflow-y-auto space-y-1">
-                      {availableTopics.map((t: any) => (
-                        <Button
-                          key={t.id}
-                          variant={topic === t.id ? "default" : "outline"}
-                          className="w-full justify-start text-left"
-                          size="sm"
-                          onClick={() => {
-                            setTopic(t.id);
-                            setShowTopicDialog(false);
-                          }}
-                        >
-                          {t.name}
-                        </Button>
-                      ))}
+                    <div className="max-h-[420px] overflow-y-auto space-y-2.5 pr-1">
+                      {dedupedFilteredTopics.length > 0 ? (
+                        dedupedFilteredTopics.map((t: any) => (
+                          <Button
+                            key={t.id}
+                            variant={topic === t.id ? "default" : "outline"}
+                            className="w-full justify-start text-left h-auto py-2.5 rounded-xl"
+                            size="sm"
+                            onClick={() => {
+                              setTopic(t.id);
+                              handleCloseTopicDialog();
+                            }}
+                          >
+                            <span className="truncate">{t.name}</span>
+                          </Button>
+                        ))
+                      ) : (
+                        <p className="text-sm text-muted-foreground py-2">
+                          No topics match your search.
+                        </p>
+                      )}
                     </div>
                   </div>
-                )}
-                
-                {availableTopics.length === 0 && !newTopicName && (
-                  <p className="text-sm text-muted-foreground">
-                    No topics created yet. Create the first one below.
-                  </p>
-                )}
-
-                <Separator />
-                
-                <div className="space-y-2">
-                  <Label htmlFor="topic-name" className="text-xs">
-                    Create New Topic
-                  </Label>
-                  <Input
-                    id="topic-name"
-                    placeholder="e.g., Graph Algorithms"
-                    value={newTopicName}
-                    onChange={(e) => setNewTopicName(e.target.value)}
-                    onKeyDown={(e) =>
-                      e.key === "Enter" && handleCreateTopic()
-                    }
-                    className="text-sm"
-                  />
                 </div>
               </CardContent>
-              <CardFooter className="flex gap-2">
+              <CardFooter className="flex flex-col sm:flex-row gap-3 border-t bg-muted/20 p-5 sm:p-6 lg:p-7">
                 <Button
                   variant="outline"
-                  onClick={() => {
-                    setShowTopicDialog(false);
-                    setNewTopicName("");
-                  }}
+                  onClick={handleCloseTopicDialog}
                   className="flex-1"
                 >
                   Cancel
