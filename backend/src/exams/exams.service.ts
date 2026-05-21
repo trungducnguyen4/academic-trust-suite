@@ -6,6 +6,7 @@ import {
   ConflictException,
   InternalServerErrorException,
 } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AccessPolicyService } from '../common/services/access-policy.service';
 import { isValidIpOrCidr } from '../common/utils/ip.utils';
@@ -15,6 +16,8 @@ import { NotificationsService } from '../notifications/notifications.service';
 
 @Injectable()
 export class ExamsService {
+  private examQuestionVersionColumnExists: boolean | null = null;
+
   constructor(
     private prisma: PrismaService,
     private notificationsService: NotificationsService,
@@ -29,8 +32,140 @@ export class ExamsService {
     return enrollments.map((e) => e.studentId);
   }
 
+  private async hasExamQuestionVersionColumn(client: any): Promise<boolean> {
+    if (this.examQuestionVersionColumnExists !== null) {
+      return this.examQuestionVersionColumnExists;
+    }
+
+    const rows = await client.$queryRawUnsafe(
+      `
+      SELECT 1 AS ok
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'exam_questions'
+        AND column_name = 'questionVersionId'
+      LIMIT 1
+      `,
+    ) as Array<{ ok: number }>;
+
+    this.examQuestionVersionColumnExists = rows.length > 0;
+    return this.examQuestionVersionColumnExists;
+  }
+
+  private async insertExamQuestionCompat(
+    client: any,
+    data: { examId: string; questionId: string; orderIndex: number; points?: number | null; questionVersionId?: string | null },
+  ): Promise<string> {
+    const id = randomUUID();
+    const hasVersionColumn = await this.hasExamQuestionVersionColumn(client);
+
+    if (hasVersionColumn) {
+      await client.$executeRawUnsafe(
+        `
+        INSERT INTO exam_questions (id, examId, questionId, questionVersionId, orderIndex, points)
+        VALUES (?, ?, ?, ?, ?, ?)
+        `,
+        id,
+        data.examId,
+        data.questionId,
+        data.questionVersionId ?? null,
+        data.orderIndex,
+        data.points ?? 1,
+      );
+    } else {
+      await client.$executeRawUnsafe(
+        `
+        INSERT INTO exam_questions (id, examId, questionId, orderIndex, points)
+        VALUES (?, ?, ?, ?, ?)
+        `,
+        id,
+        data.examId,
+        data.questionId,
+        data.orderIndex,
+        data.points ?? 1,
+      );
+    }
+
+    return id;
+  }
+
+  private parseRawJson(value: any) {
+    if (value === null || typeof value === 'undefined') return null;
+    if (typeof value === 'object') return value;
+    try {
+      return JSON.parse(String(value));
+    } catch {
+      return null;
+    }
+  }
+
+  private async loadExamQuestionsCompat(examId: string, includeCorrectAnswer: boolean) {
+    const rows = await this.prisma.$queryRawUnsafe(
+      `
+      SELECT
+        eq.id,
+        eq.examId,
+        eq.questionId,
+        eq.orderIndex,
+        eq.points,
+        q.type,
+        q.content,
+        q.options,
+        q.correctAnswer,
+        q.explanation,
+        q.difficulty,
+        q.points AS questionPoints,
+        q.courseId,
+        q.creatorId,
+        q.createdAt,
+        q.updatedAt
+      FROM exam_questions eq
+      INNER JOIN questions q
+        ON q.id COLLATE utf8mb4_unicode_ci = eq.questionId COLLATE utf8mb4_unicode_ci
+      WHERE eq.examId COLLATE utf8mb4_unicode_ci = ?
+      ORDER BY eq.orderIndex ASC
+      `,
+      examId,
+    ) as Array<any>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      examId: row.examId,
+      questionId: row.questionId,
+      orderIndex: Number(row.orderIndex || 0),
+      points: row.points ?? 1,
+      question: {
+        id: row.questionId,
+        type: row.type,
+        content: row.content,
+        options: this.parseRawJson(row.options),
+        correctAnswer: includeCorrectAnswer ? this.parseRawJson(row.correctAnswer) : undefined,
+        explanation: row.explanation,
+        difficulty: row.difficulty,
+        points: row.questionPoints,
+        courseId: row.courseId,
+        creatorId: row.creatorId,
+        createdAt: row.createdAt,
+        updatedAt: row.updatedAt,
+      },
+    }));
+  }
+
   async create(createExamDto: CreateExamDto, creatorId: string) {
     const { questionIds, ...examData } = createExamDto;
+    const settings = (createExamDto as any).settings || (examData as any).settings || {};
+    const requestedCount = Number(settings.requestedQuestionCount || 0);
+    const sourceMethod = settings.sourceMethod || 'bank';
+    const normalizedType = this.normalizeQuestionType(settings.questionType);
+    const bankDifficulty = settings.bankDifficulty;
+    const topicAllocations = Array.isArray(settings.topicAllocations)
+      ? settings.topicAllocations
+          .map((item: any) => ({
+            topicId: String(item?.topicId || '').trim(),
+            count: Math.max(0, Number(item?.count || 0)),
+          }))
+          .filter((item: any) => item.topicId && item.count > 0)
+      : [];
 
     if (Array.isArray((createExamDto as any).ipWhitelist)) {
       const invalidRule = (createExamDto as any).ipWhitelist.find((rule: string) => !isValidIpOrCidr(rule));
@@ -83,12 +218,11 @@ export class ExamsService {
       // Add questions if provided
       if (questionIds && questionIds.length > 0) {
         for (let i = 0; i < questionIds.length; i++) {
-          await tx.examQuestion.create({
-            data: {
-              examId: exam.id,
-              questionId: questionIds[i],
-              orderIndex: i + 1,
-            },
+          await this.insertExamQuestionCompat(tx, {
+            examId: exam.id,
+            questionId: questionIds[i],
+            orderIndex: i + 1,
+            points: 1,
           });
         }
       } else {
@@ -100,54 +234,125 @@ export class ExamsService {
           (examData as any).settings?.sourceMethod || 'bank';
 
         // Only auto-fill for bank source and a positive requestedCount
-        if (!questionIds && sourceMethod === 'bank' && requestedCount > 0) {
-          // Build basic where clause: same course
-          const qWhere: any = { courseId: createExamDto.courseId };
+        if (!questionIds && sourceMethod === 'bank' && (requestedCount > 0 || topicAllocations.length > 0)) {
+            // Build base where clause: same course
+            const baseWhere: any = { courseId: createExamDto.courseId };
 
-          // Optionally filter by questionType if provided in settings
-          const qType = (createExamDto as any).settings?.questionType || (examData as any).settings?.questionType;
-          const normalizedType = this.normalizeQuestionType(qType);
-          if (normalizedType) {
-            qWhere.type = normalizedType;
-          }
-
-          // Optionally filter by target difficulty from settings (0.3 / 0.5 / 0.7)
-          const bankDifficulty = (createExamDto as any).settings?.bankDifficulty || (examData as any).settings?.bankDifficulty;
-          if (bankDifficulty && bankDifficulty !== 'mixed') {
-            const parsed = Number(bankDifficulty);
-            if (!Number.isNaN(parsed)) {
-              // Convert 0..1 scale to 1..5 and allow a small band around the center.
-              const center = Math.max(1, Math.min(5, Math.round(parsed * 4 + 1)));
-              qWhere.difficulty = {
-                gte: Math.max(1, center - 1),
-                lte: Math.min(5, center + 1),
-              };
+            // Optionally filter by questionType if provided in settings
+            if (normalizedType) {
+              baseWhere.type = normalizedType;
             }
-          }
 
-          const selected = await tx.question.findMany({
-            where: qWhere,
-            take: Math.max(0, Number(requestedCount)),
-            orderBy: { createdAt: 'desc' },
-          });
+            // Optionally filter by target difficulty from settings (0.3 / 0.5 / 0.7)
+            if (bankDifficulty && bankDifficulty !== 'mixed') {
+              const parsed = Number(bankDifficulty);
+              if (!Number.isNaN(parsed)) {
+                const center = Math.max(1, Math.min(5, Math.round(parsed * 4 + 1)));
+                baseWhere.difficulty = {
+                  gte: Math.max(1, center - 1),
+                  lte: Math.min(5, center + 1),
+                };
+              }
+            }
 
-          if (selected.length === 0) {
-            throw new BadRequestException(
-              'No matching questions found in question bank for selected course/type/difficulty. Please adjust filters or add questions first.',
-            );
-          }
+            const pickRandomQuestions = (items: any[], count: number) => {
+              const shuffled = [...items];
+              for (let i = shuffled.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+              }
+              return shuffled.slice(0, count);
+            };
 
-          for (let i = 0; i < selected.length; i++) {
-            const question = selected[i];
-            await tx.examQuestion.create({
-              data: {
+            const selectedQuestions: any[] = [];
+            const usedQuestionIds = new Set<string>();
+
+            if (topicAllocations.length > 0) {
+              const difficultyGte = Number((baseWhere as any)?.difficulty?.gte);
+              const difficultyLte = Number((baseWhere as any)?.difficulty?.lte);
+              const hasDifficultyRange = !Number.isNaN(difficultyGte) && !Number.isNaN(difficultyLte);
+
+              const totalRequestedFromTopics = topicAllocations.reduce((sum, item) => sum + item.count, 0);
+              if (requestedCount > 0 && totalRequestedFromTopics !== requestedCount) {
+                throw new BadRequestException(
+                  `Topic allocations must add up to ${requestedCount} questions. Current total is ${totalRequestedFromTopics}.`,
+                );
+              }
+
+              for (const allocation of topicAllocations) {
+                const topicWhereParts: string[] = [
+                  'q.courseId COLLATE utf8mb4_unicode_ci = CAST(? AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_ci',
+                  'qt.topicId COLLATE utf8mb4_unicode_ci = CAST(? AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_ci',
+                ];
+                const topicArgs: any[] = [createExamDto.courseId, allocation.topicId];
+
+                if (normalizedType) {
+                  topicWhereParts.push(
+                    'q.type COLLATE utf8mb4_unicode_ci = CAST(? AS CHAR CHARACTER SET utf8mb4) COLLATE utf8mb4_unicode_ci',
+                  );
+                  topicArgs.push(normalizedType);
+                }
+
+                if (hasDifficultyRange) {
+                  topicWhereParts.push('q.difficulty BETWEEN ? AND ?');
+                  topicArgs.push(difficultyGte, difficultyLte);
+                }
+
+                const questionsForTopic = await tx.$queryRawUnsafe(
+                  `
+                  SELECT q.id, q.points
+                  FROM questions q
+                  INNER JOIN question_topics qt
+                    ON qt.questionId COLLATE utf8mb4_unicode_ci = q.id COLLATE utf8mb4_unicode_ci
+                  WHERE ${topicWhereParts.join(' AND ')}
+                  `,
+                  ...topicArgs,
+                ) as Array<{ id: string; points: number | null }>;
+
+                const available = questionsForTopic.filter((question) => !usedQuestionIds.has(question.id));
+                if (available.length < allocation.count) {
+                  throw new BadRequestException(
+                    `Not enough questions for the selected topic quota (${allocation.count}) in topic ${allocation.topicId}. Available: ${available.length}.`,
+                  );
+                }
+
+                const chosen = pickRandomQuestions(available, allocation.count);
+                chosen.forEach((question) => {
+                  usedQuestionIds.add(question.id);
+                  selectedQuestions.push(question);
+                });
+              }
+            } else {
+              const selected = await tx.question.findMany({
+                where: baseWhere,
+                take: Math.max(0, Number(requestedCount)),
+                orderBy: { createdAt: 'desc' },
+              });
+
+              if (selected.length === 0) {
+                throw new BadRequestException(
+                  'No matching questions found in question bank for selected course/type/difficulty. Please adjust filters or add questions first.',
+                );
+              }
+
+              selectedQuestions.push(...selected);
+            }
+
+            if (selectedQuestions.length === 0) {
+              throw new BadRequestException(
+                'No matching questions found in question bank for the selected settings.',
+              );
+            }
+
+            for (let i = 0; i < selectedQuestions.length; i++) {
+              const question = selectedQuestions[i];
+              await this.insertExamQuestionCompat(tx, {
                 examId: exam.id,
                 questionId: question.id,
                 orderIndex: i + 1,
                 points: question.points || 1,
-              },
-            });
-          }
+              });
+            }
         }
       }
 
@@ -270,12 +475,6 @@ export class ExamsService {
             fullName: true,
           },
         },
-        examQuestions: {
-          include: {
-            question: true,
-          },
-          orderBy: { orderIndex: 'asc' },
-        },
         _count: {
           select: {
             submissions: true,
@@ -288,7 +487,11 @@ export class ExamsService {
       throw new NotFoundException('Exam not found');
     }
 
-    return exam;
+    const examQuestions = await this.loadExamQuestionsCompat(id, true);
+    return {
+      ...exam,
+      examQuestions,
+    };
   }
 
   async findForStudent(id: string, studentId: string, clientIp?: string | null) {
@@ -301,21 +504,6 @@ export class ExamsService {
             code: true,
             name: true,
           },
-        },
-        examQuestions: {
-          include: {
-            question: {
-              select: {
-                id: true,
-                type: true,
-                content: true,
-                options: true,
-                points: true,
-                // Don't include correctAnswer for students
-              },
-            },
-          },
-          orderBy: { orderIndex: 'asc' },
         },
       },
     });
@@ -361,7 +549,20 @@ export class ExamsService {
       throw new ForbiddenException('Access restricted by network policy');
     }
 
-    return exam;
+    const examQuestions = await this.loadExamQuestionsCompat(id, false);
+    return {
+      ...exam,
+      examQuestions: examQuestions.map((eq) => ({
+        ...eq,
+        question: {
+          id: eq.question.id,
+          type: eq.question.type,
+          content: eq.question.content,
+          options: eq.question.options,
+          points: eq.question.points,
+        },
+      })),
+    };
   }
 
   async update(id: string, updateExamDto: UpdateExamDto) {
@@ -661,18 +862,20 @@ export class ExamsService {
       });
 
       if (!existing) {
-        const examQuestion = await this.prisma.examQuestion.create({
-          data: {
-            examId,
-            questionId,
-            orderIndex,
-            points: question.points || 1,
-          },
-          include: {
-            question: { select: { id: true, points: true } },
-          },
+        const createdId = await this.insertExamQuestionCompat(this.prisma, {
+          examId,
+          questionId,
+          orderIndex,
+          points: question.points || 1,
         });
-        examQuestions.push(examQuestion);
+        examQuestions.push({
+          id: createdId,
+          examId,
+          questionId,
+          orderIndex,
+          points: question.points || 1,
+          question,
+        });
         orderIndex++;
       }
     }
@@ -860,7 +1063,7 @@ export class ExamsService {
 
     const now = new Date();
 
-    return this.prisma.exam.findMany({
+    const exams = await this.prisma.exam.findMany({
       where: {
         courseId: { in: courseIds },
         status: { in: ['PUBLISHED', 'ONGOING'] },
@@ -892,6 +1095,13 @@ export class ExamsService {
         },
       },
       orderBy: { startTime: 'asc' },
+    });
+
+    return exams.filter((exam) => {
+      const allowLateSubmission = Boolean((exam.settings as any)?.allowLateSubmission);
+      if (allowLateSubmission) return true;
+      if (!exam.endTime) return true;
+      return exam.endTime >= now;
     });
   }
 

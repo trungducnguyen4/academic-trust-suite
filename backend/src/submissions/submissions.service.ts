@@ -31,11 +31,41 @@ export class SubmissionsService {
     private readonly queueService: QueueService,
   ) {}
 
+  private async getLatestExamSnapshotId(examId: string): Promise<string | null> {
+    try {
+      const latestSnapshot = await this.prisma.examSnapshot.findFirst({
+        where: { examId },
+        orderBy: { publishedAt: 'desc' },
+        select: { id: true },
+      });
+      return latestSnapshot?.id ?? null;
+    } catch (error: any) {
+      if (error?.code === 'P2021') {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   private getRealtimeSeverity(eventType: string): 'low' | 'medium' | 'high' {
     const e = String(eventType || '').toLowerCase();
     if (e.includes('fullscreen') || e.includes('face')) return 'high';
     if (e.includes('tab') || e.includes('paste')) return 'medium';
     return 'low';
+  }
+
+  private clampPercent(value: number): number {
+    if (!Number.isFinite(value)) return 0;
+    return Math.max(0, Math.min(100, value));
+  }
+
+  private parseLogDetails(details: string | null | undefined): any {
+    if (!details) return null;
+    try {
+      return JSON.parse(details);
+    } catch {
+      return null;
+    }
   }
 
   private publishRealtimeLogs(
@@ -107,7 +137,8 @@ export class SubmissionsService {
       throw new ForbiddenException('Exam has not started yet');
     }
 
-    if (exam.endTime && exam.endTime < now) {
+    const allowLateSubmission = Boolean((exam.settings as any)?.allowLateSubmission);
+    if (!allowLateSubmission && exam.endTime && exam.endTime < now) {
       throw new ForbiddenException('Exam has ended');
     }
 
@@ -175,11 +206,8 @@ export class SubmissionsService {
     }
 
     // Create new submission with idempotency (attemptNo versioning)
-    // attach the latest exam snapshot (materialized at publish time) if exists
-    const latestSnapshot = await this.prisma.examSnapshot.findFirst({
-      where: { examId: startExamDto.examId },
-      orderBy: { publishedAt: 'desc' },
-    });
+    // attach the latest exam snapshot (materialized at publish time) if the table exists
+    const latestSnapshotId = await this.getLatestExamSnapshotId(startExamDto.examId);
 
     const startedSubmission = await this.prisma.examSubmission.create({
       data: {
@@ -188,7 +216,7 @@ export class SubmissionsService {
         attemptNo: nextAttemptNo,
         status: 'IN_PROGRESS',
         startedAt: now,
-        examSnapshotId: latestSnapshot?.id ?? null,
+        examSnapshotId: latestSnapshotId,
       },
       include: {
         exam: {
@@ -408,10 +436,20 @@ export class SubmissionsService {
             },
           },
           exam: {
-            include: {
+            select: {
+              id: true,
+              title: true,
               examQuestions: {
-                include: {
-                  question: true,
+                select: {
+                  questionId: true,
+                  points: true,
+                  question: {
+                    select: {
+                      type: true,
+                      correctAnswer: true,
+                      points: true,
+                    },
+                  },
                 },
               },
             },
@@ -1319,6 +1357,321 @@ export class SubmissionsService {
       },
       scoreDistribution: bins,
       anomalies,
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async getExamIntelligence(examId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: { id: examId },
+      select: {
+        id: true,
+        title: true,
+        courseId: true,
+        passingScore: true,
+        totalPoints: true,
+      },
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    const [examQuestions, submissions, integrityLogs] = await Promise.all([
+      this.prisma.$queryRaw<Array<{
+        questionId: string;
+        orderIndex: number;
+        questionType: string;
+        questionContent: string;
+      }>>`
+        SELECT eq.questionId, eq.orderIndex, q.type AS questionType, q.content AS questionContent
+        FROM exam_questions eq
+        INNER JOIN questions q ON q.id = eq.questionId
+        WHERE eq.examId = ${examId}
+        ORDER BY eq.orderIndex ASC
+      `,
+      this.prisma.examSubmission.findMany({
+        where: { examId },
+        select: {
+          id: true,
+          status: true,
+          score: true,
+          submittedAt: true,
+          createdAt: true,
+        },
+      }),
+      this.prisma.integrityLog.findMany({
+        where: {
+          proctoring: {
+            submission: {
+              examId,
+            },
+          },
+        },
+        select: {
+          eventType: true,
+          details: true,
+        },
+      }),
+    ]);
+
+    const topicByQuestionId = new Map<string, { topicId: string; topicName: string }>();
+    try {
+      const topicRows = await this.prisma.$queryRaw<Array<{
+        questionId: string;
+        topicId: string;
+        topicName: string;
+      }>>`
+        SELECT qt.questionId, t.id AS topicId, t.name AS topicName
+        FROM question_topics qt
+        INNER JOIN topics t ON t.id = qt.topicId
+        WHERE qt.questionId IN (
+          SELECT eq.questionId FROM exam_questions eq WHERE eq.examId = ${examId}
+        )
+      `;
+
+      for (const row of topicRows) {
+        if (!topicByQuestionId.has(row.questionId)) {
+          topicByQuestionId.set(row.questionId, { topicId: row.topicId, topicName: row.topicName });
+        }
+      }
+    } catch {
+      // Legacy databases may not have question_topics/topics in expected shape.
+    }
+
+    const completedSubmissions = submissions.filter((s) =>
+      ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(String(s.status).toUpperCase()),
+    );
+    const completedSubmissionIds = completedSubmissions.map((s) => s.id);
+
+    const answers = completedSubmissionIds.length
+      ? await this.prisma.submissionAnswer.findMany({
+          where: { submissionId: { in: completedSubmissionIds } },
+          select: {
+            questionId: true,
+            isCorrect: true,
+            timeTaken: true,
+          },
+        })
+      : [];
+
+    const attemptsPerQuestion = Math.max(1, completedSubmissions.length);
+    const byQuestion = new Map<string, Array<{ isCorrect: boolean; timeTaken: number | null }>>();
+    for (const row of answers) {
+      const list = byQuestion.get(row.questionId) || [];
+      list.push({ isCorrect: Boolean(row.isCorrect), timeTaken: row.timeTaken ?? null });
+      byQuestion.set(row.questionId, list);
+    }
+
+    const flaggedByQuestion = new Map<string, number>();
+    for (const log of integrityLogs) {
+      const eventType = String(log.eventType || '').toLowerCase();
+      if (!eventType.includes('flag')) continue;
+      const parsed = this.parseLogDetails(log.details);
+      const questionId = parsed?.questionId ? String(parsed.questionId) : null;
+      if (!questionId) continue;
+      flaggedByQuestion.set(questionId, (flaggedByQuestion.get(questionId) || 0) + 1);
+    }
+
+    const questionMetrics = examQuestions.map((eq) => {
+      const rows = byQuestion.get(eq.questionId) || [];
+      const answeredCount = rows.length;
+      const correctCount = rows.filter((r) => r.isCorrect).length;
+      const incorrectCount = Math.max(0, answeredCount - correctCount);
+      const skippedCount = Math.max(0, attemptsPerQuestion - answeredCount);
+      const avgTimeSeconds = rows.length
+        ? Number((rows.reduce((sum, r) => sum + Number(r.timeTaken || 0), 0) / rows.length).toFixed(1))
+        : 0;
+      const topic = topicByQuestionId.get(eq.questionId);
+      return {
+        questionId: eq.questionId,
+        orderIndex: eq.orderIndex,
+        questionType: eq.questionType,
+        topicId: topic?.topicId || null,
+        topicName: topic?.topicName || 'Untagged',
+        questionText: String(eq.questionContent || '').slice(0, 180),
+        incorrectRate: this.clampPercent((incorrectCount / attemptsPerQuestion) * 100),
+        skipRate: this.clampPercent((skippedCount / attemptsPerQuestion) * 100),
+        avgTimeSeconds,
+        flaggedCount: flaggedByQuestion.get(eq.questionId) || 0,
+        correctCount,
+        incorrectCount,
+        skippedCount,
+        action: {
+          path: '/lecturer/question-bank',
+          params: {
+            courseId: exam.courseId,
+            topicId: topic?.topicId || undefined,
+            type: eq.questionType,
+          },
+        },
+      };
+    });
+
+    const topicRollup = new Map<string, { topicId: string | null; topicName: string; incorrect: number; skipped: number; denominator: number }>();
+    const typeRollup = new Map<string, { type: string; incorrect: number; skipped: number; denominator: number; timeTotal: number; count: number }>();
+
+    for (const q of questionMetrics) {
+      const topicKey = q.topicId || q.topicName;
+      const t = topicRollup.get(topicKey) || {
+        topicId: q.topicId,
+        topicName: q.topicName,
+        incorrect: 0,
+        skipped: 0,
+        denominator: 0,
+      };
+      t.incorrect += q.incorrectCount;
+      t.skipped += q.skippedCount;
+      t.denominator += attemptsPerQuestion;
+      topicRollup.set(topicKey, t);
+
+      const type = typeRollup.get(q.questionType) || {
+        type: q.questionType,
+        incorrect: 0,
+        skipped: 0,
+        denominator: 0,
+        timeTotal: 0,
+        count: 0,
+      };
+      type.incorrect += q.incorrectCount;
+      type.skipped += q.skippedCount;
+      type.denominator += attemptsPerQuestion;
+      type.timeTotal += q.avgTimeSeconds;
+      type.count += 1;
+      typeRollup.set(q.questionType, type);
+    }
+
+    const weakestTopics = Array.from(topicRollup.values())
+      .map((t) => ({
+        topicId: t.topicId,
+        topicName: t.topicName,
+        incorrectRate: this.clampPercent((t.incorrect / Math.max(1, t.denominator)) * 100),
+        skipRate: this.clampPercent((t.skipped / Math.max(1, t.denominator)) * 100),
+        action: {
+          path: '/lecturer/question-bank',
+          params: { courseId: exam.courseId, topicId: t.topicId || undefined },
+        },
+      }))
+      .sort((a, b) => b.incorrectRate - a.incorrectRate)
+      .slice(0, 8);
+
+    const slowestQuestionTypes = Array.from(typeRollup.values())
+      .map((t) => ({
+        type: t.type,
+        avgTimeSeconds: Number((t.timeTotal / Math.max(1, t.count)).toFixed(1)),
+        incorrectRate: this.clampPercent((t.incorrect / Math.max(1, t.denominator)) * 100),
+        skipRate: this.clampPercent((t.skipped / Math.max(1, t.denominator)) * 100),
+        action: {
+          path: '/lecturer/question-bank',
+          params: { courseId: exam.courseId, type: t.type },
+        },
+      }))
+      .sort((a, b) => b.avgTimeSeconds - a.avgTimeSeconds);
+
+    const mostIncorrectQuestions = [...questionMetrics]
+      .sort((a, b) => b.incorrectRate - a.incorrectRate)
+      .slice(0, 10);
+    const mostFlaggedQuestions = [...questionMetrics]
+      .filter((q) => q.flaggedCount > 0)
+      .sort((a, b) => b.flaggedCount - a.flaggedCount)
+      .slice(0, 10);
+    const abnormalSkips = [...questionMetrics]
+      .filter((q) => q.skipRate >= 40)
+      .sort((a, b) => b.skipRate - a.skipRate)
+      .slice(0, 10);
+
+    const scoreRows = completedSubmissions.map((s) => {
+      const raw = Number(s.score || 0);
+      const pct = Number(exam.totalPoints || 0) > 0
+        ? this.clampPercent((raw / Number(exam.totalPoints || 1)) * 100)
+        : this.clampPercent(raw);
+      return {
+        date: new Date(s.submittedAt || s.createdAt).toISOString().slice(0, 10),
+        scorePct: pct,
+      };
+    });
+
+    const trendMap = new Map<string, { total: number; count: number }>();
+    for (const row of scoreRows) {
+      const prev = trendMap.get(row.date) || { total: 0, count: 0 };
+      prev.total += row.scorePct;
+      prev.count += 1;
+      trendMap.set(row.date, prev);
+    }
+    const trendSeries = Array.from(trendMap.entries())
+      .map(([date, v]) => ({ date, avgScorePct: Number((v.total / Math.max(1, v.count)).toFixed(1)) }))
+      .sort((a, b) => a.date.localeCompare(b.date));
+
+    const avgScorePct = scoreRows.length
+      ? Number((scoreRows.reduce((sum, r) => sum + r.scorePct, 0) / scoreRows.length).toFixed(1))
+      : 0;
+    const passingScore = Number(exam.passingScore || 50);
+    const passRate = this.clampPercent(
+      (scoreRows.filter((r) => r.scorePct >= passingScore).length / Math.max(1, scoreRows.length)) * 100,
+    );
+
+    const weakestTopic = weakestTopics[0];
+    const slowestType = slowestQuestionTypes[0];
+    const aiSummary = `Performance is strongest on straightforward items, but weakness concentrates in ${weakestTopic ? `${weakestTopic.topicName} (${weakestTopic.incorrectRate.toFixed(0)}% incorrect)` : 'mixed topics'}. Time pressure is highest on ${slowestType ? `${slowestType.type} (${slowestType.avgTimeSeconds}s avg)` : 'long-form questions'}. Prioritize targeted timed practice before the next full test.`;
+
+    const aiRecommendations = [
+      {
+        title: 'Target weak-topic remediation',
+        detail: weakestTopic
+          ? `Build a retry set focused on ${weakestTopic.topicName} with medium difficulty under timed constraints.`
+          : 'Build a retry set for the lowest-performing topic cluster.',
+        action: weakestTopic?.action || { path: '/lecturer/question-bank', params: { courseId: exam.courseId } },
+      },
+      {
+        title: 'Reduce time-pressure misses',
+        detail: slowestType
+          ? `Learners slow down on ${slowestType.type}. Add 5-8 question timed mini-sets before full exam sessions.`
+          : 'Add short timed mini-sets for high-latency question types.',
+        action: slowestType?.action || { path: '/lecturer/question-bank', params: { courseId: exam.courseId } },
+      },
+    ];
+
+    const creatorQualityAlerts = questionMetrics
+      .filter((q) => q.incorrectRate >= 75 || q.skipRate >= 50 || q.flaggedCount >= 3)
+      .slice(0, 8)
+      .map((q) => ({
+        questionId: q.questionId,
+        questionLabel: `Q${q.orderIndex + 1}`,
+        signal: `${q.incorrectRate.toFixed(0)}% incorrect · ${q.skipRate.toFixed(0)}% skipped · ${q.flaggedCount} flags`,
+        suggestion: 'Potential ambiguity detected. Review wording, distractors, and difficulty calibration.',
+        action: q.action,
+      }));
+
+    return {
+      exam,
+      kpis: {
+        totalSubmissions: submissions.length,
+        completedSubmissions: completedSubmissions.length,
+        completionRate: this.clampPercent((completedSubmissions.length / Math.max(1, submissions.length)) * 100),
+        avgScorePct,
+        passRate,
+      },
+      visualizations: {
+        correctVsIncorrect: {
+          correct: questionMetrics.reduce((sum, q) => sum + q.correctCount, 0),
+          incorrect: questionMetrics.reduce((sum, q) => sum + q.incorrectCount, 0),
+          skipped: questionMetrics.reduce((sum, q) => sum + q.skippedCount, 0),
+        },
+        trendSeries,
+      },
+      mostIncorrectQuestions,
+      weakestTopics,
+      slowestQuestionTypes,
+      mostFlaggedQuestions,
+      abnormalSkips,
+      aiSummary,
+      aiRecommendations,
+      creatorQualityAlerts,
+      trackingPlan: {
+        experimentName: 'analytics-practice-loop-v1',
+        primaryMetrics: ['retry_click_rate', 'practice_completion_rate', 'score_uplift_next_attempt'],
+        eventKeys: ['analytics_open', 'analytics_action_click', 'practice_start_from_analytics'],
+      },
       updatedAt: new Date().toISOString(),
     };
   }

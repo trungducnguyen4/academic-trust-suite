@@ -18,16 +18,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Clock,
   Flag,
   ChevronLeft,
@@ -397,6 +387,7 @@ export default function ExamTaking() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const examId = searchParams.get("examId") || undefined;
+  const isPreviewMode = searchParams.get("mode") === "preview";
 
   const [questions, setQuestions] = useState<Question[]>([]);
   const [examTitle, setExamTitle] = useState("Exam Session");
@@ -409,8 +400,8 @@ export default function ExamTaking() {
   const [answers, setAnswers] = useState<AnswerMap>({});
   const [flagged, setFlagged] = useState<Record<number, boolean>>({});
   const [timeLeft, setTimeLeft] = useState(EXAM_DURATION);
-  const [showSubmitDialog, setShowSubmitDialog] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [fullscreenCountdown, setFullscreenCountdown] = useState(15);
   const [isAudioPlaying, setIsAudioPlaying] = useState(false);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -605,6 +596,26 @@ export default function ExamTaking() {
   });
 
   useEffect(() => {
+    if (!isSecurityBlocked || isSubmitting) {
+      setFullscreenCountdown(15);
+      return;
+    }
+
+    const startedAt = Date.now();
+    const id = window.setInterval(() => {
+      const elapsed = Math.floor((Date.now() - startedAt) / 1000);
+      const remaining = Math.max(0, 15 - elapsed);
+      setFullscreenCountdown(remaining);
+      if (remaining === 0) {
+        window.clearInterval(id);
+        doSubmit();
+      }
+    }, 200);
+
+    return () => window.clearInterval(id);
+  }, [isSecurityBlocked, isSubmitting, doSubmit]);
+
+  useEffect(() => {
     const id = setInterval(() => {
       setTimeLeft((t) => {
         if (t <= 1) {
@@ -726,6 +737,58 @@ export default function ExamTaking() {
       return next;
     });
 
+  const goToPreview = () => {
+    const params = new URLSearchParams(searchParams);
+    params.set("mode", "preview");
+    navigate(`/student/exam-taking?${params.toString()}`);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const leavePreview = () => {
+    const params = new URLSearchParams(searchParams);
+    params.delete("mode");
+    navigate(`/student/exam-taking?${params.toString()}`);
+  };
+
+  const renderAnswerPreview = (question: Question) => {
+    const answer = answers[question.id];
+    if (!isAnswered(question, answers)) {
+      return <span className="text-red-600 font-medium">Unanswered</span>;
+    }
+
+    if (question.type === "single-choice") {
+      const idx = Number(answer);
+      const opt = question.options[idx];
+      return <span>{opt ? `${String.fromCharCode(65 + idx)}. ${opt}` : "Answered"}</span>;
+    }
+
+    if (question.type === "multi-choice") {
+      const indices = Array.isArray(answer) ? (answer as number[]) : [];
+      const labels = indices
+        .map((idx) => {
+          const opt = question.options[idx];
+          return opt ? `${String.fromCharCode(65 + idx)}. ${opt}` : null;
+        })
+        .filter(Boolean);
+      return <span>{labels.join("; ")}</span>;
+    }
+
+    if (question.type === "true-false") {
+      return <span>{answer ? "True" : "False"}</span>;
+    }
+
+    if (question.type === "fill-blank") {
+      const blanks = Array.isArray(answer) ? (answer as string[]) : [];
+      return <span>{blanks.filter((v) => v?.trim()).join(" | ")}</span>;
+    }
+
+    if (question.type === "short-answer") {
+      return <span>{String(answer)}</span>;
+    }
+
+    return <span>Answered</span>;
+  };
+
   // ─── Dispatch to sub-renderers ────────────────────────────────
   const renderQuestion = (q: Question) => {
     switch (q.type) {
@@ -808,6 +871,7 @@ export default function ExamTaking() {
         violationCount={violationCount}
         maxViolations={MAX_VIOLATIONS}
         isEscalated={isEscalated}
+        countdownSeconds={fullscreenCountdown}
         lastViolation={lastViolation}
         canFullscreen={canFullscreen}
         onReturnToExam={returnToExam}
@@ -870,13 +934,28 @@ export default function ExamTaking() {
             </div>
           </div>
 
+          <div className="grid grid-cols-3 gap-2 mb-3 text-center text-xs">
+            <div className="rounded-md border bg-green-50 text-green-700 py-2">
+              <div className="font-semibold text-sm">{answeredCount}</div>
+              <div>Answered</div>
+            </div>
+            <div className="rounded-md border bg-yellow-50 text-yellow-700 py-2">
+              <div className="font-semibold text-sm">{flaggedCount}</div>
+              <div>Flagged</div>
+            </div>
+            <div className="rounded-md border bg-red-50 text-red-700 py-2">
+              <div className="font-semibold text-sm">{total - answeredCount}</div>
+              <div>Unanswered</div>
+            </div>
+          </div>
+
           <div className="mt-auto">
             <Button
               className="w-full gap-2"
-              variant="destructive"
-              onClick={() => setShowSubmitDialog(true)}
+              onClick={isPreviewMode ? leavePreview : goToPreview}
             >
-              <Send className="h-4 w-4" /> Finish & Submit
+              <Send className="h-4 w-4" />
+              {isPreviewMode ? "Back to Questions" : "Finish and Preview"}
             </Button>
           </div>
         </aside>
@@ -884,163 +963,158 @@ export default function ExamTaking() {
         {/* ── Main Question Area ────────────────────────────────── */}
         <main className="md:ml-60 ml-0 flex-1 p-6 flex justify-center">
           <div className="w-full max-w-3xl">
-            <Card>
-              <CardHeader className="pb-3">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xs text-muted-foreground font-mono">
-                      Q{current + 1} / {total}
-                    </span>
-                    <span
-                      className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${typeBadgeColor[q.type]}`}
-                    >
-                      {typeLabel[q.type]}
-                    </span>
-                    <span className="text-[11px] text-muted-foreground">
-                      {q.points} pts
-                    </span>
-                  </div>
-                  {flagged[q.id] && (
-                    <StatusBadge status="flagged" domain="submission">
-                      Flagged
-                    </StatusBadge>
-                  )}
-                </div>
-                <h2 className="text-lg font-semibold mt-2">{q.title}</h2>
-              </CardHeader>
+            {isPreviewMode ? (
+              <Card>
+                <CardHeader className="pb-3">
+                  <h2 className="text-lg font-semibold">Preview Mode</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Review all questions, selected answers, flagged items, and unanswered items before final submission.
+                  </p>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {questions.map((item, idx) => {
+                    const answered = isAnswered(item, answers);
+                    const isFlagged = Boolean(flagged[item.id]);
+                    return (
+                      <div key={item.id} className="border rounded-lg p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2 flex-wrap">
+                          <div className="text-sm font-medium">
+                            Q{idx + 1}. {item.title}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isFlagged && (
+                              <StatusBadge status="flagged" domain="submission">
+                                Flagged
+                              </StatusBadge>
+                            )}
+                            {!answered && (
+                              <StatusBadge tone="warning">Unanswered</StatusBadge>
+                            )}
+                          </div>
+                        </div>
+                        <p className="text-xs text-muted-foreground">{item.type.replace("-", " ")}</p>
+                        <p className="text-sm">{renderAnswerPreview(item)}</p>
+                      </div>
+                    );
+                  })}
 
-              <CardContent>
-                {q.audioUrl && (
-                  <div className="mb-4 flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border">
-                    <Volume2 className="h-5 w-5 text-primary shrink-0" />
-                    <span className="text-sm flex-1">
-                      Audio resource attached
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={isAudioPlaying}
-                      onClick={() => {
-                        audioRef.current?.pause();
-                        audioRef.current = new Audio(q.audioUrl);
-                        audioRef.current.play();
-                        setIsAudioPlaying(true);
-                        audioRef.current.onended = () =>
-                          setIsAudioPlaying(false);
-                      }}
-                    >
-                      {isAudioPlaying ? "Playing…" : "Play Audio"}
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-3 text-sm">
+                    Please review all information carefully before submitting your exam.
+                  </div>
+
+                  <div className="flex items-center justify-between gap-3">
+                    <Button variant="outline" onClick={leavePreview}>
+                      Continue Editing
+                    </Button>
+                    <Button variant="destructive" onClick={doSubmit} disabled={isSubmitting}>
+                      {isSubmitting ? "Submitting…" : "Submit Exam"}
                     </Button>
                   </div>
-                )}
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="text-xs text-muted-foreground font-mono">
+                        Q{current + 1} / {total}
+                      </span>
+                      <span
+                        className={`text-[11px] px-2 py-0.5 rounded-full font-medium ${typeBadgeColor[q.type]}`}
+                      >
+                        {typeLabel[q.type]}
+                      </span>
+                      <span className="text-[11px] text-muted-foreground">
+                        {q.points} pts
+                      </span>
+                    </div>
+                    {flagged[q.id] && (
+                      <StatusBadge status="flagged" domain="submission">
+                        Flagged
+                      </StatusBadge>
+                    )}
+                  </div>
+                  <h2 className="text-lg font-semibold mt-2">{q.title}</h2>
+                </CardHeader>
 
-                {renderQuestion(q)}
+                <CardContent>
+                  {q.audioUrl && (
+                    <div className="mb-4 flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border">
+                      <Volume2 className="h-5 w-5 text-primary shrink-0" />
+                      <span className="text-sm flex-1">
+                        Audio resource attached
+                      </span>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={isAudioPlaying}
+                        onClick={() => {
+                          audioRef.current?.pause();
+                          audioRef.current = new Audio(q.audioUrl);
+                          audioRef.current.play();
+                          setIsAudioPlaying(true);
+                          audioRef.current.onended = () =>
+                            setIsAudioPlaying(false);
+                        }}
+                      >
+                        {isAudioPlaying ? "Playing…" : "Play Audio"}
+                      </Button>
+                    </div>
+                  )}
 
-                {/* Per-question actions */}
-                <div className="flex items-center gap-2 mt-5">
-                  <Button
-                    variant={flagged[q.id] ? "destructive" : "outline"}
-                    size="sm"
-                    onClick={handleFlag}
-                    className="gap-1.5"
-                  >
-                    <Flag className="h-3.5 w-3.5" />
-                    {flagged[q.id] ? "Unflag" : "Flag for Review"}
-                  </Button>
-                  {q.type !== "ordering" && (
+                  {renderQuestion(q)}
+
+                  <div className="flex items-center gap-2 mt-5">
                     <Button
-                      variant="ghost"
+                      variant={flagged[q.id] ? "destructive" : "outline"}
                       size="sm"
-                      onClick={handleClear}
+                      onClick={handleFlag}
                       className="gap-1.5"
                     >
-                      <X className="h-3.5 w-3.5" /> Clear Answer
+                      <Flag className="h-3.5 w-3.5" />
+                      {flagged[q.id] ? "Unflag" : "Flag for Review"}
                     </Button>
-                  )}
-                </div>
+                    {q.type !== "ordering" && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={handleClear}
+                        className="gap-1.5"
+                      >
+                        <X className="h-3.5 w-3.5" /> Clear Answer
+                      </Button>
+                    )}
+                  </div>
 
-                <Separator className="my-4" />
+                  <Separator className="my-4" />
 
-                <div className="flex justify-between">
-                  <Button
-                    variant="outline"
-                    onClick={() => setCurrent((c) => c - 1)}
-                    disabled={current === 0}
-                    className="gap-2"
-                  >
-                    <ChevronLeft className="h-4 w-4" /> Previous
-                  </Button>
-                  {current === total - 1 ? (
+                  <div className="flex justify-between">
                     <Button
-                      onClick={() => setShowSubmitDialog(true)}
+                      variant="outline"
+                      onClick={() => setCurrent((c) => c - 1)}
+                      disabled={current === 0}
                       className="gap-2"
                     >
-                      <Send className="h-4 w-4" /> Finish Exam
+                      <ChevronLeft className="h-4 w-4" /> Previous
                     </Button>
-                  ) : (
                     <Button
-                      onClick={() => setCurrent((c) => c + 1)}
+                      onClick={() =>
+                        current === total - 1
+                          ? goToPreview()
+                          : setCurrent((c) => c + 1)
+                      }
                       className="gap-2"
                     >
-                      Save & Continue <ChevronRight className="h-4 w-4" />
+                      Next <ChevronRight className="h-4 w-4" />
                     </Button>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </main>
       </div>
-
-      {/* ── Submit Dialog ────────────────────────────────────────── */}
-      <AlertDialog open={showSubmitDialog} onOpenChange={setShowSubmitDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Submit Exam?</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3 text-sm">
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
-                  <div className="p-3 rounded-lg bg-green-50 dark:bg-green-950">
-                    <p className="text-xl font-bold text-green-700">
-                      {answeredCount}
-                    </p>
-                    <p className="text-xs text-green-600">Answered</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950">
-                    <p className="text-xl font-bold text-yellow-700">
-                      {flaggedCount}
-                    </p>
-                    <p className="text-xs text-yellow-600">Flagged</p>
-                  </div>
-                  <div className="p-3 rounded-lg bg-red-50 dark:bg-red-950">
-                    <p className="text-xl font-bold text-red-700">
-                      {total - answeredCount}
-                    </p>
-                    <p className="text-xs text-red-600">Unanswered</p>
-                  </div>
-                </div>
-                <p className="text-muted-foreground">
-                  Time remaining:{" "}
-                  <strong className="text-foreground">
-                    {formatTime(timeLeft)}
-                  </strong>
-                </p>
-                <p className="text-muted-foreground text-xs">
-                  Once submitted, your exam cannot be modified.
-                </p>
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isSubmitting}>
-              Continue Exam
-            </AlertDialogCancel>
-            <AlertDialogAction onClick={doSubmit} disabled={isSubmitting}>
-              {isSubmitting ? "Submitting…" : "Submit Exam"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </div>
   );
 }

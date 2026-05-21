@@ -1,15 +1,14 @@
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
   Card,
   CardContent,
+  CardDescription,
   CardHeader,
   CardTitle,
-  CardDescription,
 } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import {
   Select,
   SelectContent,
@@ -17,396 +16,423 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useState } from "react";
-import {
-  BarChart2,
-  TrendingUp,
-  TrendingDown,
-  Users,
-  Clock,
-  Award,
-  AlertTriangle,
-  CheckCircle2,
-  BookOpen,
-  FileText,
-} from "lucide-react";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, ExternalLink, Sparkles, TrendingUp, AlertTriangle } from "lucide-react";
+import api from "@/lib/api";
+import { unwrapPaginatedData } from "@/lib/api";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 
-// ─── Mock data ────────────────────────────────────────────────────
-const exams = [
-  {
-    id: "e1",
-    title: "Midterm – Database Systems",
-    course: "CS301",
-    date: "2026-02-10",
-    students: 38,
-    avgScore: 74.2,
-    passRate: 82,
-    avgTime: "52 min",
-  },
-  {
-    id: "e2",
-    title: "Quiz 1 – Data Structures",
-    course: "CS201",
-    date: "2026-01-28",
-    students: 45,
-    avgScore: 68.5,
-    passRate: 71,
-    avgTime: "23 min",
-  },
-  {
-    id: "e3",
-    title: "Final – Operating Systems",
-    course: "CS401",
-    date: "2026-01-15",
-    students: 31,
-    avgScore: 61.0,
-    passRate: 65,
-    avgTime: "87 min",
-  },
-  {
-    id: "e4",
-    title: "Quiz 2 – Computer Networks",
-    course: "CS350",
-    date: "2025-12-20",
-    students: 27,
-    avgScore: 79.4,
-    passRate: 89,
-    avgTime: "18 min",
-  },
-];
-
-const questionStats = [
-  {
-    q: "Q1: Relational Algebra – Natural Join",
-    correct: 88,
-    type: "Single Choice",
-  },
-  { q: "Q2: SQL – GROUP BY with HAVING", correct: 61, type: "Multi Choice" },
-  { q: "Q3: 3NF Normalization", correct: 44, type: "Fill Blank" },
-  { q: "Q4: ACID Properties – True/False", correct: 92, type: "True / False" },
-  { q: "Q5: ER Diagram – Matching", correct: 53, type: "Matching" },
-  {
-    q: "Q6: Transaction deadlock – Find Error",
-    correct: 37,
-    type: "Find Error",
-  },
-  { q: "Q7: Index types ordering", correct: 69, type: "Ordering" },
-  { q: "Q8: Explain MVCC – Essay", correct: 55, type: "Short Answer" },
-];
-
-const scoreDistribution = [
-  { range: "0–49", count: 4 },
-  { range: "50–59", count: 5 },
-  { range: "60–69", count: 7 },
-  { range: "70–79", count: 11 },
-  { range: "80–89", count: 8 },
-  { range: "90–100", count: 3 },
-];
-
-const integrityEvents = [
-  {
-    student: "Nguyen Van A",
-    event: "Tab switch detected",
-    count: 3,
-    risk: "high",
-  },
-  {
-    student: "Tran Thi B",
-    event: "Unusual submission speed",
-    count: 1,
-    risk: "medium",
-  },
-  {
-    student: "Le Van C",
-    event: "IP address mismatch",
-    count: 1,
-    risk: "medium",
-  },
-  {
-    student: "Pham Thi D",
-    event: "Fullscreen exit detected",
-    count: 2,
-    risk: "low",
-  },
-];
-
-const riskColor: Record<string, string> = {
-  high: "bg-red-100 text-red-700",
-  medium: "bg-yellow-100 text-yellow-700",
-  low: "bg-blue-100 text-blue-700",
+type ExamOption = {
+  id: string;
+  title: string;
+  course?: { code?: string; name?: string };
 };
 
+type IntelligencePayload = {
+  exam: { id: string; title: string; courseId: string };
+  kpis: {
+    totalSubmissions: number;
+    completedSubmissions: number;
+    completionRate: number;
+    avgScorePct: number;
+    passRate: number;
+  };
+  visualizations: {
+    correctVsIncorrect: {
+      correct: number;
+      incorrect: number;
+      skipped: number;
+    };
+    trendSeries: Array<{ date: string; avgScorePct: number }>;
+  };
+  mostIncorrectQuestions: Array<{
+    questionId: string;
+    orderIndex: number;
+    questionText: string;
+    incorrectRate: number;
+    skipRate: number;
+    flaggedCount: number;
+    action?: { path: string; params?: Record<string, string> };
+  }>;
+  weakestTopics: Array<{
+    topicId?: string | null;
+    topicName: string;
+    incorrectRate: number;
+    skipRate: number;
+    action?: { path: string; params?: Record<string, string> };
+  }>;
+  slowestQuestionTypes: Array<{
+    type: string;
+    avgTimeSeconds: number;
+    incorrectRate: number;
+    action?: { path: string; params?: Record<string, string> };
+  }>;
+  mostFlaggedQuestions: Array<{
+    questionId: string;
+    orderIndex: number;
+    flaggedCount: number;
+    questionText: string;
+    action?: { path: string; params?: Record<string, string> };
+  }>;
+  abnormalSkips: Array<{
+    questionId: string;
+    orderIndex: number;
+    skipRate: number;
+    questionText: string;
+    action?: { path: string; params?: Record<string, string> };
+  }>;
+  aiSummary: string;
+  aiRecommendations: Array<{
+    title: string;
+    detail: string;
+    action?: { path: string; params?: Record<string, string> };
+  }>;
+  creatorQualityAlerts: Array<{
+    questionId: string;
+    questionLabel: string;
+    signal: string;
+    suggestion: string;
+    action?: { path: string; params?: Record<string, string> };
+  }>;
+  trackingPlan?: {
+    experimentName: string;
+    primaryMetrics: string[];
+    eventKeys: string[];
+  };
+};
+
+function toQuery(params?: Record<string, string>) {
+  const search = new URLSearchParams();
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && String(value).length > 0) {
+      search.set(key, String(value));
+    }
+  });
+  const query = search.toString();
+  return query ? `?${query}` : "";
+}
+
 export default function ExamAnalytics() {
-  const [selectedExam, setSelectedExam] = useState("e1");
-  const exam = exams.find((e) => e.id === selectedExam) ?? exams[0];
-  const totalStudents = exam.students;
-  const maxCount = Math.max(...scoreDistribution.map((d) => d.count));
+  const navigate = useNavigate();
+  const [examOptions, setExamOptions] = useState<ExamOption[]>([]);
+  const [selectedExamId, setSelectedExamId] = useState<string>("");
+  const [loading, setLoading] = useState(true);
+  const [loadingIntelligence, setLoadingIntelligence] = useState(false);
+  const [data, setData] = useState<IntelligencePayload | null>(null);
+
+  useEffect(() => {
+    const loadExams = async () => {
+      try {
+        setLoading(true);
+        const response = await api.getExams({ page: 1, limit: 100 });
+        const items = unwrapPaginatedData<ExamOption>(response);
+        setExamOptions(items);
+        if (items.length > 0) {
+          setSelectedExamId(items[0].id);
+        }
+      } catch (error) {
+        console.error("Failed to load exams for analytics:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadExams();
+  }, []);
+
+  useEffect(() => {
+    if (!selectedExamId) return;
+
+    const loadIntelligence = async () => {
+      try {
+        setLoadingIntelligence(true);
+        const payload = await api.getExamIntelligence(selectedExamId);
+        setData(payload as IntelligencePayload);
+      } catch (error) {
+        console.error("Failed to load exam intelligence:", error);
+        setData(null);
+      } finally {
+        setLoadingIntelligence(false);
+      }
+    };
+
+    loadIntelligence();
+  }, [selectedExamId]);
+
+  const distribution = useMemo(() => {
+    const total = (data?.visualizations.correctVsIncorrect.correct || 0)
+      + (data?.visualizations.correctVsIncorrect.incorrect || 0)
+      + (data?.visualizations.correctVsIncorrect.skipped || 0);
+    return {
+      total,
+      correctPct: total ? ((data?.visualizations.correctVsIncorrect.correct || 0) / total) * 100 : 0,
+      incorrectPct: total ? ((data?.visualizations.correctVsIncorrect.incorrect || 0) / total) * 100 : 0,
+      skippedPct: total ? ((data?.visualizations.correctVsIncorrect.skipped || 0) / total) * 100 : 0,
+    };
+  }, [data]);
+
+  const openAction = (action?: { path: string; params?: Record<string, string> }) => {
+    if (!action?.path) return;
+    navigate(`${action.path}${toQuery(action.params)}`);
+  };
+
+  const trackAction = async (name: string) => {
+    try {
+      await api.sendExamLogs(
+        "analytics",
+        [{ type: "analytics_action_click", details: JSON.stringify({ event: name, examId: selectedExamId }), ts: Date.now() }],
+      );
+    } catch {
+      // Non-blocking tracking.
+    }
+  };
+
+  if (loading) {
+    return (
+      <DashboardLayout>
+        <div className="min-h-[40vh] flex items-center justify-center text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading analytics setup...
+        </div>
+      </DashboardLayout>
+    );
+  }
 
   return (
     <DashboardLayout>
       <AdminPageShell backTo="/lecturer">
-        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
-
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
-            <h1 className="text-2xl font-bold">Exam Analytics</h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Detailed performance insights for your exams
+            <h1 className="text-2xl font-bold">Performance Intelligence</h1>
+            <p className="text-sm text-muted-foreground">
+              Analyze - Practice - Improve loop per exam.
             </p>
           </div>
-          <Select value={selectedExam} onValueChange={setSelectedExam}>
-            <SelectTrigger className="w-72">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {exams.map((e) => (
-                <SelectItem key={e.id} value={e.id}>
-                  {e.title}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* KPI cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 justify-center">
-          <AdminStatCard
-            icon={Users}
-            value={exam.students}
-            label="Students"
-            iconWrapClassName="bg-blue-50"
-            iconClassName="text-blue-600"
-            className="w-full"
-          />
-          <AdminStatCard
-            icon={Award}
-            value={`${exam.avgScore}%`}
-            label="Avg. Score"
-            iconWrapClassName="bg-violet-50"
-            iconClassName="text-violet-600"
-            className="w-full"
-          />
-          <AdminStatCard
-            icon={CheckCircle2}
-            value={`${exam.passRate}%`}
-            label="Pass Rate"
-            iconWrapClassName="bg-green-50"
-            iconClassName="text-green-600"
-            className="w-full"
-          />
-          <AdminStatCard
-            icon={Clock}
-            value={exam.avgTime}
-            label="Avg. Time"
-            iconWrapClassName="bg-amber-50"
-            iconClassName="text-amber-600"
-            className="w-full"
-          />
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Score Distribution */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <BarChart2 className="h-4 w-4 text-primary" /> Score
-                Distribution
-              </CardTitle>
-              <CardDescription>
-                {exam.title} — {totalStudents} students
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {scoreDistribution.map((d) => {
-                const pct = Math.round((d.count / maxCount) * 100);
-                return (
-                  <div key={d.range} className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-14 shrink-0 text-right">
-                      {d.range}
-                    </span>
-                    <div className="flex-1">
-                      <div className="h-6 bg-muted rounded-sm overflow-hidden">
-                        <div
-                          className="h-full bg-primary/80 rounded-sm transition-all"
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                    </div>
-                    <span className="text-xs font-medium w-6 text-right">
-                      {d.count}
-                    </span>
-                  </div>
-                );
-              })}
-              <Separator className="mt-2" />
-              <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                <span className="flex items-center gap-1">
-                  <TrendingDown className="h-3.5 w-3.5 text-red-500" />
-                  Failed:{" "}
-                  {scoreDistribution
-                    .filter(
-                      (d) =>
-                        d.range.startsWith("0") ||
-                        d.range.startsWith("5–") ||
-                        d.range === "50–59",
-                    )
-                    .reduce((a, b) => a + b.count, 0)}{" "}
-                  students
-                </span>
-                <span className="flex items-center gap-1">
-                  <TrendingUp className="h-3.5 w-3.5 text-green-500" />
-                  Passed:{" "}
-                  {exam.students -
-                    scoreDistribution
-                      .slice(0, 2)
-                      .reduce((a, b) => a + b.count, 0)}{" "}
-                  students
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Per-question accuracy */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base flex items-center gap-2">
-                <BookOpen className="h-4 w-4 text-primary" /> Question Accuracy
-              </CardTitle>
-              <CardDescription>
-                % of students who answered correctly
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {questionStats.map((qs, i) => (
-                <div key={i} className="space-y-1">
-                  <div className="flex items-center justify-between text-xs">
-                    <span className="truncate text-muted-foreground max-w-[70%]">
-                      {qs.q}
-                    </span>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <Badge variant="outline" className="text-[10px] py-0">
-                        {qs.type}
-                      </Badge>
-                      <span
-                        className={`font-semibold ${qs.correct < 50 ? "text-red-600" : qs.correct >= 80 ? "text-green-600" : "text-amber-600"}`}
-                      >
-                        {qs.correct}%
-                      </span>
-                    </div>
-                  </div>
-                  <Progress
-                    value={qs.correct}
-                    className={`h-1.5 ${qs.correct < 50 ? "[&>div]:bg-red-500" : qs.correct >= 80 ? "[&>div]:bg-green-500" : "[&>div]:bg-amber-500"}`}
-                  />
-                </div>
-              ))}
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Integrity flags */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" /> Integrity
-              Flags
-            </CardTitle>
-            <CardDescription>
-              Suspicious events detected during the exam
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            {integrityEvents.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-6">
-                No integrity events detected.
-              </p>
-            ) : (
-              <div className="space-y-2">
-                {integrityEvents.map((ev, i) => (
-                  <div
-                    key={i}
-                    className="flex items-center gap-4 border rounded-lg px-4 py-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium">{ev.student}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {ev.event}
-                      </p>
-                    </div>
-                    <Badge variant="outline">{ev.count}×</Badge>
-                    <span
-                      className={`text-xs px-2 py-0.5 rounded-full font-medium capitalize ${riskColor[ev.risk]}`}
-                    >
-                      {ev.risk}
-                    </span>
-                  </div>
+          <div className="w-full sm:w-80">
+            <Select value={selectedExamId} onValueChange={setSelectedExamId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select an exam" />
+              </SelectTrigger>
+              <SelectContent>
+                {examOptions.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.title}
+                  </SelectItem>
                 ))}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* All exams overview */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2">
-              <FileText className="h-4 w-4 text-primary" /> All Exams Overview
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b text-muted-foreground text-xs">
-                    <th className="text-left py-2 pr-4 font-medium">Exam</th>
-                    <th className="text-left py-2 pr-4 font-medium">Course</th>
-                    <th className="text-right py-2 pr-4 font-medium">
-                      Students
-                    </th>
-                    <th className="text-right py-2 pr-4 font-medium">
-                      Avg Score
-                    </th>
-                    <th className="text-right py-2 font-medium">Pass Rate</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y">
-                  {exams.map((e) => (
-                    <tr
-                      key={e.id}
-                      className={`cursor-pointer hover:bg-muted/40 transition-colors ${selectedExam === e.id ? "bg-primary/5" : ""}`}
-                      onClick={() => setSelectedExam(e.id)}
-                    >
-                      <td className="py-2.5 pr-4 font-medium">{e.title}</td>
-                      <td className="py-2.5 pr-4">
-                        <Badge variant="outline">{e.course}</Badge>
-                      </td>
-                      <td className="py-2.5 pr-4 text-right">{e.students}</td>
-                      <td className="py-2.5 pr-4 text-right font-semibold">
-                        {e.avgScore}%
-                      </td>
-                      <td className="py-2.5 text-right">
-                        <span
-                          className={`font-semibold ${e.passRate >= 80 ? "text-green-600" : e.passRate >= 60 ? "text-amber-600" : "text-red-600"}`}
-                        >
-                          {e.passRate}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </CardContent>
-        </Card>
-
-        <div className="flex justify-end pb-4">
-          <Button variant="outline" size="sm" className="gap-2">
-            <FileText className="h-4 w-4" /> Export Report
-          </Button>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
+
+        {loadingIntelligence ? (
+          <div className="min-h-[35vh] flex items-center justify-center text-muted-foreground">
+            <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading intelligence data...
+          </div>
+        ) : !data ? (
+          <Card>
+            <CardContent className="py-8 text-center text-muted-foreground">
+              No intelligence data available for this exam yet.
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              <AdminStatCard icon={TrendingUp} value={data.kpis.avgScorePct.toFixed(1) + "%"} label="Average Score" />
+              <AdminStatCard icon={TrendingUp} value={data.kpis.passRate.toFixed(1) + "%"} label="Pass Rate" />
+              <AdminStatCard icon={TrendingUp} value={data.kpis.completionRate.toFixed(1) + "%"} label="Completion" />
+              <AdminStatCard icon={AlertTriangle} value={String(data.creatorQualityAlerts.length)} label="Quality Alerts" />
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Correct vs Incorrect vs Skipped</CardTitle>
+                  <CardDescription>Quick scan of answer outcomes.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div>
+                    <div className="flex justify-between text-xs mb-1"><span>Correct</span><span>{distribution.correctPct.toFixed(1)}%</span></div>
+                    <Progress value={distribution.correctPct} className="h-2" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs mb-1"><span>Incorrect</span><span>{distribution.incorrectPct.toFixed(1)}%</span></div>
+                    <Progress value={distribution.incorrectPct} className="h-2 [&>div]:bg-red-500" />
+                  </div>
+                  <div>
+                    <div className="flex justify-between text-xs mb-1"><span>Skipped</span><span>{distribution.skippedPct.toFixed(1)}%</span></div>
+                    <Progress value={distribution.skippedPct} className="h-2 [&>div]:bg-amber-500" />
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Progress Over Time</CardTitle>
+                  <CardDescription>Average score by submission date.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {(data.visualizations.trendSeries || []).map((row) => (
+                    <div key={row.date} className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-24 shrink-0">{row.date}</span>
+                      <div className="flex-1">
+                        <Progress value={row.avgScorePct} className="h-2" />
+                      </div>
+                      <span className="text-xs font-medium w-12 text-right">{row.avgScorePct}%</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-primary" /> AI Summary</CardTitle>
+                <CardDescription>Short insight narrative generated from exam performance patterns.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <p className="text-sm leading-relaxed">{data.aiSummary}</p>
+              </CardContent>
+            </Card>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Weakest Topics</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {data.weakestTopics.map((item) => (
+                    <div key={`${item.topicId}-${item.topicName}`} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">{item.topicName}</p>
+                        <Badge variant="outline">{item.incorrectRate.toFixed(0)}% incorrect</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">Skip rate: {item.skipRate.toFixed(0)}%</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 gap-1"
+                        onClick={() => {
+                          trackAction("weakest_topic_open_practice");
+                          openAction(item.action);
+                        }}
+                      >
+                        Open Related Practice Set <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Most Incorrect Questions</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {data.mostIncorrectQuestions.map((item) => (
+                    <div key={item.questionId} className="border rounded-lg p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">Q{item.orderIndex + 1}</p>
+                        <Badge variant="outline">{item.incorrectRate.toFixed(0)}% incorrect</Badge>
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{item.questionText}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 gap-1"
+                        onClick={() => {
+                          trackAction("most_incorrect_open_bank");
+                          openAction(item.action);
+                        }}
+                      >
+                        Open in Question Bank <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>AI Recommendations</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {data.aiRecommendations.map((item, idx) => (
+                    <div key={`${item.title}-${idx}`} className="border rounded-lg p-3">
+                      <p className="text-sm font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{item.detail}</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 gap-1"
+                        onClick={() => {
+                          trackAction("ai_recommendation_action");
+                          openAction(item.action);
+                        }}
+                      >
+                        Take Action <ExternalLink className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle>Question Quality Alerts</CardTitle>
+                  <CardDescription>Support for content creators/admins.</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {data.creatorQualityAlerts.length === 0 ? (
+                    <p className="text-sm text-muted-foreground">No high-risk question quality alerts detected.</p>
+                  ) : (
+                    data.creatorQualityAlerts.map((item) => (
+                      <div key={item.questionId} className="border rounded-lg p-3">
+                        <p className="text-sm font-medium">{item.questionLabel}</p>
+                        <p className="text-xs text-muted-foreground mt-1">{item.signal}</p>
+                        <p className="text-xs mt-1">{item.suggestion}</p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 gap-1"
+                          onClick={() => {
+                            trackAction("quality_alert_open_question_bank");
+                            openAction(item.action);
+                          }}
+                        >
+                          Review in Question Bank <ExternalLink className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    ))
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Experiment Tracking (Sprint 4)</CardTitle>
+                <CardDescription>{data.trackingPlan?.experimentName || "analytics-practice-loop-v1"}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-2 text-sm">
+                <p className="font-medium">Primary metrics</p>
+                <ul className="list-disc pl-5 text-muted-foreground">
+                  {(data.trackingPlan?.primaryMetrics || []).map((m) => (
+                    <li key={m}>{m}</li>
+                  ))}
+                </ul>
+                <p className="font-medium pt-2">Event keys</p>
+                <ul className="list-disc pl-5 text-muted-foreground">
+                  {(data.trackingPlan?.eventKeys || []).map((e) => (
+                    <li key={e}>{e}</li>
+                  ))}
+                </ul>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </AdminPageShell>
     </DashboardLayout>
   );

@@ -293,13 +293,17 @@ model QuestionVersion {
 
 model Topic {
   id        String   @id @default(uuid())
-  code      String   @unique
+  code      String
   name      String
+  courseId  String?
+  course    Course?  @relation(fields: [courseId], references: [id])
   createdAt DateTime @default(now())
 
   questionLinks QuestionTopic[]
   courseLinks   CourseTopic[]
 
+  @@index([courseId])
+  @@unique([courseId, code])
   @@map("topics")
 }
 

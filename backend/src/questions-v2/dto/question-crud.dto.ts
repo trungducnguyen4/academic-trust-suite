@@ -33,6 +33,10 @@ export class CreateQuestionCrudDto {
   @IsOptional()
   @IsString()
   courseId?: string;
+
+  @IsOptional()
+  @IsString()
+  topicId?: string;
 }
 
 export class UpdateQuestionCrudDto {
@@ -66,4 +70,8 @@ export class UpdateQuestionCrudDto {
   @IsInt()
   @Min(1)
   points?: number;
+
+  @IsOptional()
+  @IsString()
+  topicId?: string;
 }

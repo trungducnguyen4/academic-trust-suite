@@ -15,6 +15,7 @@ interface ExamSecurityModalProps {
   violationCount: number;
   maxViolations: number;
   isEscalated: boolean;
+  countdownSeconds: number;
   lastViolation: ViolationLog | null;
   canFullscreen: boolean;
   onReturnToExam: () => void;
@@ -25,6 +26,7 @@ export function ExamSecurityModal({
   violationCount,
   maxViolations,
   isEscalated,
+  countdownSeconds,
   lastViolation,
   canFullscreen,
   onReturnToExam,
@@ -35,7 +37,7 @@ export function ExamSecurityModal({
 
   return (
     <div
-      className="fixed inset-0 z-[80] bg-black/80 flex items-center justify-center"
+      className="fixed inset-0 z-[120] bg-black flex items-center justify-center"
       role="dialog"
       aria-modal="true"
     >
@@ -43,6 +45,9 @@ export function ExamSecurityModal({
         <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
         <h2 className="text-xl font-semibold mb-2">Fullscreen Required</h2>
         <p className="text-muted-foreground mb-1">The exam is paused until fullscreen is restored.</p>
+        <p className="text-sm mb-2">
+          Return to fullscreen within <strong>{countdownSeconds}s</strong> or your exam will be submitted automatically.
+        </p>
         {reason && (
           <p className="text-muted-foreground text-sm mb-2">
             Reason: <strong>{reason}</strong>

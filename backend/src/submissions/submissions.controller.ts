@@ -149,6 +149,13 @@ export class SubmissionsController {
     return this.submissionsService.getExamOverview(examId);
   }
 
+  @Get('exam/:examId/intelligence')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  getExamIntelligence(@Param('examId') examId: string) {
+    return this.submissionsService.getExamIntelligence(examId);
+  }
+
   @Get('exam/:examId/export')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('LECTURER', 'ADMIN')

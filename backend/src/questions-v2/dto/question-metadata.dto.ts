@@ -27,6 +27,10 @@ export class CreateTopicDto {
 
   @IsString()
   name: string;
+
+  @IsOptional()
+  @IsString()
+  courseId?: string;
 }
 
 export class SetCourseTopicsDto {

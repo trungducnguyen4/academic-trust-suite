@@ -168,7 +168,8 @@ export class ExamLinksService {
       throw new ForbiddenException('Exam has not started yet');
     }
 
-    if (link.exam.endTime && new Date(link.exam.endTime).getTime() < Date.now()) {
+    const allowLateSubmission = Boolean((link.exam.settings as any)?.allowLateSubmission);
+    if (!allowLateSubmission && link.exam.endTime && new Date(link.exam.endTime).getTime() < Date.now()) {
       throw new ForbiddenException('Exam has ended');
     }
 

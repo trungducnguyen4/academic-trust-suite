@@ -333,6 +333,7 @@ class ApiClient {
     points?: number;
     
     courseId?: string;
+    topicId?: string;
     learningObjective?: string;
     topic?: string;
   }) {
@@ -342,6 +343,7 @@ class ApiClient {
       questionType,
       sourceQuestionId: data.sourceQuestionId,
       initialContext: {
+        topicId: data.topicId || data.topic,
         topic: data.topic,
         learningObjective: data.learningObjective,
       },
@@ -380,6 +382,7 @@ class ApiClient {
           difficulty: data.difficulty,
           points: data.points,
           
+          topicId: data.topicId || data.topic,
           topic: data.topic,
           learningObjective: data.learningObjective,
           courseScopeIds: data.courseId ? [data.courseId] : [],
@@ -499,7 +502,7 @@ class ApiClient {
     return this.request<any>(`/questions/metadata/topics${query}`);
   }
 
-  async createQuestionTopic(data: { code: string; name: string }) {
+  async createQuestionTopic(data: { code: string; name: string; courseId?: string }) {
     return this.request<any>('/questions/metadata/topics', {
       method: 'POST',
       body: data,
@@ -717,6 +720,10 @@ class ApiClient {
 
   async getExamOverview(examId: string) {
     return this.request<any>(`/submissions/exam/${examId}/overview`);
+  }
+
+  async getExamIntelligence(examId: string) {
+    return this.request<any>(`/submissions/exam/${examId}/intelligence`);
   }
 
   async getSubmission(id: string) {

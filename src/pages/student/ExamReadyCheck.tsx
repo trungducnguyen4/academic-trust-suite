@@ -17,8 +17,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import api from "@/lib/api";
 import { toast } from "sonner";
 import {
-  Camera,
-  Mic,
   Wifi,
   Monitor,
   Shield,
@@ -99,18 +97,6 @@ export default function ExamReadyCheck() {
   // System check state
   const [agreed, setAgreed] = useState(false);
   const [checks, setChecks] = useState<SystemCheck[]>([
-    {
-      id: "camera",
-      label: "Camera",
-      icon: <Camera className="h-4 w-4" />,
-      status: "pending",
-    },
-    {
-      id: "microphone",
-      label: "Microphone",
-      icon: <Mic className="h-4 w-4" />,
-      status: "pending",
-    },
     {
       id: "internet",
       label: "Internet Connection",
@@ -208,32 +194,6 @@ export default function ExamReadyCheck() {
       })),
     );
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      stream.getTracks().forEach((t) => t.stop());
-      updateCheck("camera", "passed", "Camera accessible");
-    } catch {
-      updateCheck(
-        "camera",
-        "failed",
-        "Camera access denied. Please allow camera permission.",
-      );
-    }
-    await new Promise((r) => setTimeout(r, 400));
-
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      stream.getTracks().forEach((t) => t.stop());
-      updateCheck("microphone", "passed", "Microphone accessible");
-    } catch {
-      updateCheck(
-        "microphone",
-        "failed",
-        "Microphone access denied. Please allow microphone permission.",
-      );
-    }
-    await new Promise((r) => setTimeout(r, 400));
-
     if (navigator.onLine) {
       updateCheck("internet", "passed", "Connection stable");
     } else {
@@ -242,12 +202,16 @@ export default function ExamReadyCheck() {
     await new Promise((r) => setTimeout(r, 400));
 
     if (document.documentElement.requestFullscreen) {
-      updateCheck("browser", "passed", "Fullscreen supported");
+      updateCheck(
+        "browser",
+        "passed",
+        "Fullscreen supported by this browser/environment",
+      );
     } else {
       updateCheck(
         "browser",
         "failed",
-        "Your browser does not support fullscreen mode",
+        "Fullscreen is not available in this browser/environment",
       );
     }
 
@@ -531,8 +495,8 @@ export default function ExamReadyCheck() {
                       System Readiness Check
                     </CardTitle>
                     <CardDescription>
-                      Your system must pass all checks before you can start the
-                      exam
+                      We only verify internet connectivity and fullscreen
+                      support before you can start the exam.
                     </CardDescription>
                   </div>
                   <Button
@@ -555,6 +519,11 @@ export default function ExamReadyCheck() {
                 <p className="text-xs text-muted-foreground mt-1">
                   {passedCount}/{checks.length} checks passed
                   {failedCount > 0 && ` · ${failedCount} failed`}
+                </p>
+                <p className="text-xs text-muted-foreground mt-2 leading-relaxed">
+                  Fullscreen usually fails when the browser is outdated, the
+                  page is opened inside an embedded webview/iframe, or a site,
+                  browser, kiosk, or enterprise policy blocks fullscreen.
                 </p>
               </CardHeader>
               <CardContent>
@@ -614,29 +583,31 @@ export default function ExamReadyCheck() {
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <p>
-                      You must be alone in a quiet room with no unauthorized
-                      materials.
+                      If fullscreen is unavailable, switch to a normal browser
+                      window on a supported browser and make sure no policy or
+                      embedded view is blocking fullscreen.
                     </p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <p>
-                      The use of AI assistants, external search engines, or
-                      messaging apps is strictly prohibited.
+                      Fullscreen support is most likely to fail in old browsers,
+                      in-app browsers, webviews, iframe embeds, or restricted
+                      kiosk/managed-device environments.
                     </p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <p>
-                      Your screen, webcam, and microphone will be monitored for
-                      the duration of the exam.
+                      Internet must stay connected for the exam session to
+                      proceed smoothly.
                     </p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
                     <p>
-                      Any detected irregularities will be flagged for secondary
-                      review by the department board.
+                      If the browser says fullscreen is not supported, the exam
+                      cannot enter proctored start mode until this is resolved.
                     </p>
                   </div>
                 </div>

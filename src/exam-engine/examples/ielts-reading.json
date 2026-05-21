@@ -1,0 +1,24 @@
+{
+  "id": "ielts-sample-1",
+  "title": "IELTS Reading Sample",
+  "sections": [
+    {
+      "id": "sec-1",
+      "title": "Section 1",
+      "passages": [
+        { "id": "pass-A", "content": "Paragraph A\n\nParagraph B\n\nParagraph C" }
+      ],
+      "groups": [
+        {
+          "id": "g-match",
+          "title": "Matching Headings",
+          "group_type": "matching",
+          "fixed_sequence": false,
+          "questions": [
+            { "id": "q1", "content": "Which paragraph?", "reference_anchor": { "paragraph": "A" }, "answers": [{ "id": "a1", "text": "X" }] }
+          ]
+        }
+      ]
+    }
+  ]
+}

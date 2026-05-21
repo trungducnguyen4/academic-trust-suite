@@ -131,6 +131,35 @@ export class QuestionsService {
     }
   }
 
+  private async assertTopicBelongsToCourse(topicId: string, courseId: string) {
+    if (!(await this.hasTable('course_topics'))) {
+      throw new BadRequestException('CourseTopics table is unavailable. Apply phase-01 schema first.');
+    }
+
+    const rows = await this.prisma.$queryRawUnsafe(
+      `SELECT 1 AS ok FROM course_topics WHERE courseId COLLATE utf8mb4_unicode_ci = ? AND topicId COLLATE utf8mb4_unicode_ci = ? LIMIT 1`,
+      courseId,
+      topicId,
+    ) as Array<{ ok: number }>;
+
+    if (rows.length === 0) {
+      throw new BadRequestException('Selected topic does not belong to the selected course');
+    }
+  }
+
+  private async syncSingleQuestionTopic(questionId: string, topicId: string) {
+    if (!(await this.hasTable('question_topics'))) {
+      throw new BadRequestException('QuestionTopics table is unavailable. Apply phase-01 schema first.');
+    }
+
+    await this.prisma.$executeRawUnsafe(`DELETE FROM question_topics WHERE questionId = ?`, questionId);
+    await this.prisma.$executeRawUnsafe(
+      `INSERT INTO question_topics (questionId, topicId) VALUES (?, ?)`,
+      questionId,
+      topicId,
+    );
+  }
+
   async createQuestion(dto: CreateQuestionCrudDto, user: AuthUser) {
     const questionData = dto;
 
@@ -140,12 +169,34 @@ export class QuestionsService {
       throw new BadRequestException('Course is required for lecturer-created questions');
     }
 
-    return this.prisma.question.create({
+    const topicId = String(questionData.topicId || '').trim();
+    if (!topicId) {
+      throw new BadRequestException('Topic is required for question creation');
+    }
+
+    if (!questionData.courseId) {
+      throw new BadRequestException('Course is required for question creation');
+    }
+
+    await this.assertTopicBelongsToCourse(topicId, questionData.courseId);
+
+    const created = await this.prisma.question.create({
       data: {
-        ...questionData,
+        type: questionData.type,
+        content: questionData.content,
+        options: questionData.options,
+        correctAnswer: questionData.correctAnswer,
+        explanation: questionData.explanation,
+        difficulty: questionData.difficulty,
+        points: questionData.points,
+        courseId: questionData.courseId,
         creatorId: user.id,
       },
     });
+
+    await this.syncSingleQuestionTopic(created.id, topicId);
+
+    return created;
   }
 
   async findQuestionById(id: string, user: AuthUser) {
@@ -171,6 +222,14 @@ export class QuestionsService {
           select: { id: true, fullName: true, email: true },
         },
         course: { select: { id: true, code: true, name: true } },
+        topicLinks: {
+          select: {
+            topic: {
+              select: { id: true, code: true, name: true },
+            },
+          },
+          take: 1,
+        },
       },
     });
 
@@ -180,7 +239,10 @@ export class QuestionsService {
 
     this.assertCanAccessQuestion(question, user);
 
-    return question as any;
+    return {
+      ...question,
+      topic: question.topicLinks?.[0]?.topic || null,
+    } as any;
   }
 
   async updateQuestion(id: string, dto: UpdateQuestionCrudDto, user: AuthUser) {
@@ -213,12 +275,33 @@ export class QuestionsService {
 
     const questionData = dto;
 
-    return this.prisma.question.update({
+    const topicId = String(questionData.topicId || '').trim();
+    if (!topicId) {
+      throw new BadRequestException('Topic is required for question update');
+    }
+
+    if (!question.courseId) {
+      throw new BadRequestException('Question course is missing');
+    }
+
+    await this.assertTopicBelongsToCourse(topicId, question.courseId);
+
+    const updated = await this.prisma.question.update({
       where: { id },
       data: {
-        ...questionData,
+        type: questionData.type,
+        content: questionData.content,
+        options: questionData.options,
+        correctAnswer: questionData.correctAnswer,
+        explanation: questionData.explanation,
+        difficulty: questionData.difficulty,
+        points: questionData.points,
       },
     });
+
+    await this.syncSingleQuestionTopic(id, topicId);
+
+    return updated;
   }
 
   async deleteQuestion(id: string, user: AuthUser) {
@@ -783,12 +866,19 @@ export class QuestionsService {
     };
   }
 
-  async createOrGetTopic(input: { code: string; name: string }) {
+  async createOrGetTopic(input: { code: string; name: string; courseId?: string }, user: AuthUser) {
     const code = String(input?.code || '').trim();
     const name = String(input?.name || '').trim();
+    const courseId = String(input?.courseId || '').trim();
     if (!code || !name) {
       throw new BadRequestException('Topic code and name are required');
     }
+
+    if (!courseId) {
+      throw new BadRequestException('courseId is required');
+    }
+
+    await this.assertCourseAccessible(courseId, user);
 
     if (!(await this.hasTable('topics'))) {
       throw new BadRequestException('Topics table is unavailable. Apply phase-01 schema first.');
@@ -809,7 +899,17 @@ export class QuestionsService {
       throw new BadRequestException('Failed to create topic');
     }
 
-    return rows[0];
+    const topic = rows[0];
+
+    if (await this.hasTable('course_topics')) {
+      await this.prisma.$executeRawUnsafe(
+        `INSERT INTO course_topics (courseId, topicId) VALUES (?, ?) ON DUPLICATE KEY UPDATE courseId = VALUES(courseId)`,
+        courseId,
+        topic.id,
+      );
+    }
+
+    return topic;
   }
 
   async setCourseTopics(courseId: string, topicIds: string[]) {
@@ -852,7 +952,7 @@ export class QuestionsService {
     const args: any[] = [];
 
     if (user.role === 'LECTURER') {
-      where.push('q.creatorId = ?');
+      where.push('q.creatorId COLLATE utf8mb4_unicode_ci = ?');
       args.push(user.id);
     }
 
@@ -867,7 +967,7 @@ export class QuestionsService {
     }
 
     if (query.search) {
-      where.push('q.content LIKE ?');
+      where.push('q.content COLLATE utf8mb4_unicode_ci LIKE ?');
       args.push(`%${query.search}%`);
     }
 
@@ -878,10 +978,10 @@ export class QuestionsService {
 
     if (query.courseId) {
       if (await this.hasTable('question_course_scopes')) {
-        where.push('EXISTS (SELECT 1 FROM question_course_scopes qcs WHERE qcs.questionId = q.id AND qcs.courseId = ?)');
+        where.push('EXISTS (SELECT 1 FROM question_course_scopes qcs WHERE qcs.questionId COLLATE utf8mb4_unicode_ci = q.id COLLATE utf8mb4_unicode_ci AND qcs.courseId COLLATE utf8mb4_unicode_ci = ?)');
         args.push(query.courseId);
       } else {
-        where.push('q.courseId = ?');
+        where.push('q.courseId COLLATE utf8mb4_unicode_ci = ?');
         args.push(query.courseId);
       }
     }
@@ -889,11 +989,32 @@ export class QuestionsService {
     // tagId filtering removed (tags normalized storage removed)
 
     if (query.topicId) {
-      if (!(await this.hasTable('question_topics'))) {
-        throw new BadRequestException('QuestionTopics table is unavailable. Apply phase-01 schema first.');
+      const topicPredicates: string[] = [];
+
+      if (await this.hasTable('question_topics')) {
+        topicPredicates.push(
+          'EXISTS (SELECT 1 FROM question_topics qtp WHERE qtp.questionId COLLATE utf8mb4_unicode_ci = q.id COLLATE utf8mb4_unicode_ci AND qtp.topicId COLLATE utf8mb4_unicode_ci = ?)'
+        );
+        args.push(query.topicId);
       }
-      where.push('EXISTS (SELECT 1 FROM question_topics qtp WHERE qtp.questionId = q.id AND qtp.topicId = ?)');
-      args.push(query.topicId);
+
+      if (await this.hasColumn('questions', 'topicId')) {
+        topicPredicates.push('q.topicId COLLATE utf8mb4_unicode_ci = ?');
+        args.push(query.topicId);
+      }
+
+      if ((await this.hasColumn('questions', 'topic')) && (await this.hasTable('topics'))) {
+        topicPredicates.push(
+          'EXISTS (SELECT 1 FROM topics t WHERE t.id COLLATE utf8mb4_unicode_ci = ? AND q.topic COLLATE utf8mb4_unicode_ci = t.name COLLATE utf8mb4_unicode_ci)'
+        );
+        args.push(query.topicId);
+      }
+
+      if (topicPredicates.length === 0) {
+        throw new BadRequestException('Topic filtering is unavailable. Apply schema backfill for topics.');
+      }
+
+      where.push(`(${topicPredicates.join(' OR ')})`);
     }
 
     const whereClause = where.length > 0 ? `WHERE ${where.join(' AND ')}` : '';
@@ -951,12 +1072,21 @@ export class QuestionsService {
     const explanation = String(state?.answers?.explanation || '').trim() || null;
     const difficulty = this.normalizeDifficultyRaw(state?.classification?.difficulty);
     const points = Math.max(1, Number(state?.classification?.points || 1));
+    const topicId = String(state?.classification?.topicId || state?.classification?.topic || '').trim();
+
+    if (!topicId) {
+      throw new BadRequestException('Topic is required before publishing the question');
+    }
 
     const courseScopeIds = Array.isArray(state?.classification?.courseScopeIds)
       ? state.classification.courseScopeIds.map((x: any) => String(x)).filter(Boolean)
       : [];
 
     const legacyCourseId = courseScopeIds.length > 0 ? courseScopeIds[0] : null;
+
+    if (legacyCourseId) {
+      await this.assertTopicBelongsToCourse(topicId, legacyCourseId);
+    }
 
     let questionId = draft.questionId;
 
@@ -999,6 +1129,9 @@ export class QuestionsService {
       });
       questionId = created.id;
     }
+
+    const persistedQuestionId = questionId as string;
+    await this.syncSingleQuestionTopic(persistedQuestionId, topicId);
 
     const versionRows = await this.prisma.$queryRawUnsafe(
       `SELECT COALESCE(MAX(versionNo), 0) + 1 AS nextVersionNo FROM question_versions WHERE questionId = ?`,

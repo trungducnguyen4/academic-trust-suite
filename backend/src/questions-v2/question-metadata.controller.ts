@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Post, Put, Query, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, Put, Query, Request, UseGuards } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -20,8 +20,8 @@ export class QuestionMetadataController {
   }
 
   @Post('topics')
-  createTopic(@Body() dto: CreateTopicDto) {
-    return this.questionsService.createOrGetTopic(dto);
+  createTopic(@Body() dto: CreateTopicDto, @Request() req) {
+    return this.questionsService.createOrGetTopic(dto, req.user);
   }
 
   @Put('courses/:courseId/topics')

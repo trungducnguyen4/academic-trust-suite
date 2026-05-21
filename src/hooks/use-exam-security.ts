@@ -124,10 +124,8 @@ export function useExamSecurity(options: UseExamSecurityOptions = {}): UseExamSe
       const active = Boolean(document.fullscreenElement);
       setIsFullscreen(active);
       if (active) {
-        if (allowClearRef.current) {
-          setIsBlocked(false);
-          allowClearRef.current = false;
-        }
+        setIsBlocked(false);
+        allowClearRef.current = false;
         return;
       }
       recordViolation("fullscreen_exit", "User exited fullscreen");

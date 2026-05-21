@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import {
@@ -84,6 +84,7 @@ interface ExamForm {
   endTime: string;
   requiresProctoring: boolean;
   requiresDownload: boolean;
+  allowLateSubmission: boolean;
   shuffleQuestions: boolean;
   showResultImmediately: boolean;
   questionType: string;
@@ -144,6 +145,7 @@ const createDefaultForm = (): ExamForm => {
     endTime: examWindow.endTime,
     requiresProctoring: true,
     requiresDownload: false,
+    allowLateSubmission: false,
     shuffleQuestions: true,
     showResultImmediately: false,
     questionType: "mixed",
@@ -164,9 +166,12 @@ interface CourseOption {
 }
 
 interface BankTopic {
+  topicId: string;
   topic: string;
   count: number;
   selected: boolean;
+  requestedCount: string;
+  availableByType: Record<string, number>;
 }
 
 const QUESTION_TYPE_OPTIONS = [
@@ -242,7 +247,7 @@ const mapQuestionTypeToDb = (value: string) => {
 
 // Tags removed from question model
 
-const UNTAGGED_LABEL = "Untagged";
+const WHOLE_COURSE_LABEL = "All questions in course";
 
 const normalizeDifficultyForQuestion = (value: unknown) => {
   const n = Number(value);
@@ -269,6 +274,47 @@ export default function CreateExam() {
 
   const set = (key: keyof ExamForm, val: string | boolean) =>
     setForm((f) => ({ ...f, [key]: val }));
+
+  const bankSelectionWarning = useMemo(() => {
+    if (form.sourceMethod !== "bank") return "";
+
+    const selectedTopics = bankTopics.filter((topic) => topic.selected);
+    if (selectedTopics.length === 0) {
+      return "Please select at least one topic and set its question count.";
+    }
+
+    const requestedTotal = selectedTopics.reduce(
+      (sum, topic) => sum + Math.max(0, Number(topic.requestedCount || 0)),
+      0,
+    );
+    const targetTotal = parseNumericInput(form.questionCount, {
+      min: 1,
+      integer: true,
+    }) || 0;
+
+    if (requestedTotal !== targetTotal) {
+      return `Topic quotas must add up to ${targetTotal} questions. Current total is ${requestedTotal}.`;
+    }
+
+    const typeFilter =
+      form.questionType === "mixed" || form.questionType === "custom"
+        ? undefined
+        : mapQuestionTypeToDb(form.questionType);
+
+    for (const topic of selectedTopics) {
+      const requested = Math.max(0, Number(topic.requestedCount || 0));
+      const available = typeFilter
+        ? Number(topic.availableByType?.[typeFilter] || 0)
+        : Number(topic.count || 0);
+
+      if (requested > available) {
+        const label = typeFilter ? `for ${typeFilter}` : "in this topic";
+        return `Topic "${topic.topic}" only has ${available} questions ${label}, but ${requested} were requested.`;
+      }
+    }
+
+    return "";
+  }, [bankTopics, form.questionCount, form.questionType, form.sourceMethod]);
 
   useEffect(() => {
     const loadCourses = async () => {
@@ -301,44 +347,96 @@ export default function CreateExam() {
       setBankTopics([]);
       setIsLoadingBankTopics(true);
       try {
+        const normalizeType = (value: string) => String(value || "").trim().toUpperCase();
         const limit = 100;
-        let page = 1;
-        let totalPages = 1;
-        const counts = new Map<string, number>();
 
-        while (page <= totalPages) {
-          const response: any = await api.listQuestions({
-            courseId: form.course,
-            page,
-            limit,
-          });
-          const items = Array.isArray(response?.data)
-            ? response.data
-            : Array.isArray(response)
-              ? response
-              : [];
+        const loadQuestionsForTopic = async (topicId?: string) => {
+          let page = 1;
+          let totalPages = 1;
+          const questions: any[] = [];
 
-          totalPages = Number(response?.totalPages || 1);
+          while (page <= totalPages) {
+            const response: any = await api.listQuestions({
+              courseId: form.course,
+              topicId,
+              page,
+              limit,
+            });
+            const items = Array.isArray(response?.data)
+              ? response.data
+              : Array.isArray(response)
+                ? response
+                : [];
 
-          items.forEach((q: any) => {
-            // Tags removed; count all questions as untagged
-            counts.set(UNTAGGED_LABEL, (counts.get(UNTAGGED_LABEL) || 0) + 1);
-          });
+            totalPages = Number(response?.pagination?.totalPages || response?.totalPages || 1);
+            questions.push(...items);
+            page += 1;
+          }
 
-          page += 1;
+          return questions;
+        };
+
+        const topicsResponse = await api.listQuestionTopics({
+          courseId: form.course,
+          limit: 100,
+        });
+        const topicsData = Array.isArray(topicsResponse?.data)
+          ? topicsResponse.data
+          : Array.isArray(topicsResponse)
+            ? topicsResponse
+            : [];
+
+        if (topicsData.length === 0) {
+          const questions = await loadQuestionsForTopic();
+          const typeCounts = questions.reduce((acc: Record<string, number>, question: any) => {
+            const type = normalizeType(question.type);
+            acc[type] = (acc[type] || 0) + 1;
+            return acc;
+          }, {});
+
+          if (!active) return;
+
+          setBankTopics([
+            {
+              topicId: "",
+              topic: WHOLE_COURSE_LABEL,
+              count: questions.length,
+              selected: true,
+              requestedCount: parseNumericInput(form.questionCount, { min: 1, integer: true })?.toString() || form.questionCount || "1",
+              availableByType: typeCounts,
+            },
+          ]);
+          return;
         }
+
+        const nextTopics = await Promise.all(
+          topicsData.map(async (topic: any, index: number) => {
+            const questions = await loadQuestionsForTopic(topic.id);
+            const typeCounts = questions.reduce((acc: Record<string, number>, question: any) => {
+              const type = normalizeType(question.type);
+              acc[type] = (acc[type] || 0) + 1;
+              return acc;
+            }, {});
+
+            return {
+              topicId: topic.id,
+              topic: topic.name,
+              count: questions.length,
+              selected: index === 0,
+              requestedCount:
+                index === 0
+                  ? parseNumericInput(form.questionCount, { min: 1, integer: true })?.toString() || form.questionCount || "1"
+                  : "0",
+              availableByType: typeCounts,
+            };
+          }),
+        );
 
         if (!active) return;
 
-        const nextTopics = Array.from(counts.entries())
-          .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
-          .map(([topic, count]) => ({
-            topic,
-            count,
-            selected: true,
-          }));
-
-        setBankTopics(nextTopics);
+        setBankTopics(
+          nextTopics.sort((a, b) => b.count - a.count || a.topic.localeCompare(b.topic)),
+        );
       } catch (error) {
         console.error("Failed to load question bank topics:", error);
         if (active) setBankTopics([]);
@@ -383,6 +481,12 @@ export default function CreateExam() {
         min: 1,
         integer: true,
       });
+
+        if (form.sourceMethod === "bank" && bankSelectionWarning) {
+          setNumberErrors((prev) => ({ ...prev, questionCount: bankSelectionWarning }));
+          toast.error(bankSelectionWarning);
+          return;
+        }
 
       const nextErrors = {
         duration: durationError || "",
@@ -447,6 +551,7 @@ export default function CreateExam() {
           }) || 1,
           requiresProctoring: form.requiresProctoring,
           requiresDownload: form.requiresDownload,
+          allowLateSubmission: form.allowLateSubmission,
           shuffleQuestions: form.shuffleQuestions,
           showResultImmediately: form.showResultImmediately,
           sourceMethod: form.sourceMethod,
@@ -461,6 +566,17 @@ export default function CreateExam() {
           aiPrompt: form.aiPrompt || undefined,
           aiDifficulty: difficultyOptionToValue(form.aiDifficulty),
           aiReviewRequired: form.aiReviewRequired,
+          topicAllocations:
+            form.sourceMethod === "bank"
+              ? bankTopics
+                  .filter((topic) => topic.selected && Number(topic.requestedCount || 0) > 0)
+                  .filter((topic) => topic.topicId)
+                  .map((topic) => ({
+                    topicId: topic.topicId,
+                    topic: topic.topic,
+                    count: parseNumericInput(topic.requestedCount, { min: 1, integer: true }) || 0,
+                  }))
+              : undefined,
         },
       });
 
@@ -858,6 +974,12 @@ export default function CreateExam() {
                         icon: <Clock className="h-4 w-4 text-primary" />,
                       },
                       {
+                        key: "allowLateSubmission",
+                        label: "Allow Late Submission",
+                        desc: "Students can submit after the end time",
+                        icon: <FileCheck className="h-4 w-4 text-primary" />,
+                      },
+                      {
                         key: "shuffleQuestions",
                         label: "Shuffle Questions",
                         desc: "Randomize question order for each student",
@@ -1053,7 +1175,7 @@ export default function CreateExam() {
                       <div className="space-y-2">
                         {bankTopics.map((bank) => (
                           <label
-                            key={bank.topic}
+                            key={bank.topicId}
                             className={`flex items-center gap-3 border rounded-lg px-4 py-3 cursor-pointer transition-all
                           ${bank.selected ? "border-primary bg-primary/5" : "border-border"}`}
                           >
@@ -1063,21 +1185,65 @@ export default function CreateExam() {
                               onChange={() =>
                                 setBankTopics((prev) =>
                                   prev.map((item) =>
-                                    item.topic === bank.topic
-                                      ? { ...item, selected: !item.selected }
+                                    item.topicId === bank.topicId
+                                      ? {
+                                          ...item,
+                                          selected: !item.selected,
+                                          requestedCount: !item.selected
+                                            ? item.requestedCount === "0"
+                                              ? "1"
+                                              : item.requestedCount
+                                            : "0",
+                                        }
                                       : item,
                                   ),
                                 )
                               }
                               className="accent-primary"
                             />
-                            <span className="flex-1 text-sm">{bank.topic}</span>
-                            <Badge variant="secondary">
-                              {bank.count} questions
-                            </Badge>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-medium">{bank.topic}</p>
+                              <p className="text-[11px] text-muted-foreground">
+                                {bank.count} available total
+                              </p>
+                            </div>
+                            <div className="flex items-center gap-2 shrink-0">
+                              <div className="flex flex-col items-end gap-1">
+                                <Input
+                                  type="number"
+                                  min={0}
+                                  value={bank.requestedCount}
+                                  onChange={(e) =>
+                                    setBankTopics((prev) =>
+                                      prev.map((item) =>
+                                        item.topicId === bank.topicId
+                                          ? {
+                                              ...item,
+                                              requestedCount: sanitizeNumericInput(e.target.value, { min: 0 }),
+                                              selected: Number(e.target.value || 0) > 0 || item.selected,
+                                            }
+                                          : item,
+                                      ),
+                                    )
+                                  }
+                                  className="w-20 h-9 text-sm text-right"
+                                />
+                                <span className="text-[10px] text-muted-foreground">
+                                  {form.questionType === "mixed" || form.questionType === "custom"
+                                    ? `${bank.count} available`
+                                    : `${Number(bank.availableByType?.[mapQuestionTypeToDb(form.questionType)] || 0)} available for this type`}
+                                </span>
+                              </div>
+                            </div>
                           </label>
                         ))}
                       </div>
+                    )}
+
+                    {bankSelectionWarning && (
+                      <p className="text-xs text-amber-600 font-medium">
+                        {bankSelectionWarning}
+                      </p>
                     )}
 
                     <Button
@@ -1422,6 +1588,10 @@ export default function CreateExam() {
                   {
                     label: "Offline Download",
                     value: form.requiresDownload ? "Required" : "Not required",
+                  },
+                  {
+                    label: "Late Submission",
+                    value: form.allowLateSubmission ? "Allowed" : "Blocked",
                   },
                   {
                     label: "Shuffle",

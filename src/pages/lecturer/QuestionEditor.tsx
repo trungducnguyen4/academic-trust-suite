@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { api, unwrapPaginatedData } from "@/lib/api";
@@ -35,7 +35,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
   Save,
-  Eye,
   Plus,
   Trash2,
   CheckCircle2,
@@ -69,6 +68,7 @@ interface Question {
   difficulty: number;
   points: number;
   course?: { id: string; code: string; name: string };
+  topic?: { id: string; code: string; name: string } | null;
   learningObjectives?: string;
 }
 
@@ -119,6 +119,7 @@ export default function QuestionEditor() {
   // AI Generation state
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [aiSimilarityWarning, setAiSimilarityWarning] = useState("");
 
   // Multiple choice options
   const [options, setOptions] = useState<Option[]>([
@@ -271,12 +272,16 @@ export default function QuestionEditor() {
     fetchCourses();
   }, []);
 
-  // Fetch all available topics when component mounts
+  // Fetch only topics that belong to the selected course
   useEffect(() => {
     const fetchTopics = async () => {
       try {
-        // Fetch all topics available in the system (not filtered by course)
-        const response = await api.listQuestionTopics({});
+        if (!course) {
+          setAvailableTopics([]);
+          return;
+        }
+
+        const response = await api.listQuestionTopics({ courseId: course });
         const topicsData = response?.data || [];
         setAvailableTopics(topicsData);
       } catch (err) {
@@ -285,7 +290,7 @@ export default function QuestionEditor() {
       }
     };
     fetchTopics();
-  }, []);
+  }, [course]);
 
   // Load question data if editing existing question
   useEffect(() => {
@@ -407,6 +412,7 @@ export default function QuestionEditor() {
     setContent(questionData.content);
     setExplanation(questionData.explanation || "");
     setCourse(questionData.course?.id || "");
+    setTopic(questionData.topic?.id || "");
     // Backend stores difficulty as 1..10, editor UI uses 0..1 slider.
     const uiDifficulty =
       typeof questionData.difficulty === "number"
@@ -540,7 +546,38 @@ export default function QuestionEditor() {
     }
   };
 
-  const handleSave = async () => {
+  const getDefaultOptions = (): Option[] => [
+    { id: "A", text: "", isCorrect: true },
+    { id: "B", text: "", isCorrect: false },
+    { id: "C", text: "", isCorrect: false },
+    { id: "D", text: "", isCorrect: false },
+  ];
+
+  const resetFormForNextQuestion = () => {
+    setContent("");
+    setExplanation("");
+    setDifficulty([0.5]);
+    setHasMedia(false);
+    setMediaType("image");
+    setLearningObjective("");
+    setMultipleAnswers(questionType === "multiple_choice" ? multipleAnswers : false);
+    setTfAnswer("true");
+    setEssayRubric("");
+    setEssayMaxScore("10");
+    setEssayMaxScoreError("");
+    setValidationErrors([]);
+    setPinnedOptions(new Set());
+    setOptions(
+      questionType === "multiple_choice" || questionType === "ordering" || questionType === "matching"
+        ? getDefaultOptions()
+        : getDefaultOptions(),
+    );
+    setAiPrompt("");
+    setTab("edit");
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  };
+
+  const handleSave = async (addAnother = false) => {
     let questionData;
     try {
       // Validate before saving
@@ -611,17 +648,26 @@ export default function QuestionEditor() {
         console.log("Updating question with data:", questionData);
         await api.saveQuestion({
           sourceQuestionId: questionId,
+          topicId: topic,
           ...questionData,
         });
       } else {
         // Create via V2 draft flow.
         (questionData as any).courseId = course || undefined;
+        (questionData as any).topicId = topic || undefined;
         console.log("Creating question with data:", questionData);
         await api.saveQuestion(questionData);
       }
 
       // Clear draft on successful save
       localStorage.removeItem(DRAFT_STORAGE_KEY);
+
+      if (addAnother && !questionId) {
+        window.alert("Thêm câu hỏi thành công!");
+        resetFormForNextQuestion();
+        return;
+      }
+
       navigate(questionBankPath);
     } catch (error) {
       console.error("Failed to save question:", error);
@@ -638,6 +684,7 @@ export default function QuestionEditor() {
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
     setIsGenerating(true);
+    setAiSimilarityWarning("");
 
     try {
       // Map frontend type to backend type for the AI prompt
@@ -657,6 +704,21 @@ export default function QuestionEditor() {
         language: "en",
         useCase: "question_bank",
       });
+
+      const similarityCheck = await findSimilarExistingQuestion(
+        result,
+        backendTypeMap[questionType] || "MULTIPLE_CHOICE",
+      );
+
+      if (similarityCheck && similarityCheck.similarity >= 0.8) {
+        const warningMessage =
+          `AI generated content is too similar to an existing question (${Math.round(
+            similarityCheck.similarity * 100,
+          )}%). Please rewrite the prompt or regenerate a different question.`;
+        setAiSimilarityWarning(warningMessage);
+        toast.error(warningMessage);
+        return;
+      }
 
       // Fill in the form with AI-generated content
       setContent(result.content);
@@ -706,6 +768,95 @@ export default function QuestionEditor() {
         ? "text-yellow-600"
         : "text-red-600";
 
+  const previewOptions = useMemo(() => {
+    if (questionType !== "ordering") {
+      return options;
+    }
+
+    const shuffled = [...options];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }, [options, questionType]);
+
+  const normalizeQuestionText = (value: string) =>
+    String(value || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/[^a-z0-9\s]/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+
+  const calculateQuestionSimilarity = (left: string, right: string) => {
+    const normalizedLeft = normalizeQuestionText(left);
+    const normalizedRight = normalizeQuestionText(right);
+
+    if (!normalizedLeft || !normalizedRight) return 0;
+    if (normalizedLeft === normalizedRight) return 1;
+    if (
+      normalizedLeft.includes(normalizedRight) ||
+      normalizedRight.includes(normalizedLeft)
+    ) {
+      return 0.95;
+    }
+
+    const leftTokens = new Set(normalizedLeft.split(" ").filter(Boolean));
+    const rightTokens = new Set(normalizedRight.split(" ").filter(Boolean));
+    if (leftTokens.size === 0 || rightTokens.size === 0) return 0;
+
+    let sharedTokens = 0;
+    leftTokens.forEach((token) => {
+      if (rightTokens.has(token)) sharedTokens += 1;
+    });
+
+    return sharedTokens / Math.max(leftTokens.size, rightTokens.size);
+  };
+
+  const buildQuestionSignature = (questionItem: any) => {
+    const contentText = String(questionItem?.content || questionItem?.question || "");
+    const optionValues = questionItem?.options
+      ? Array.isArray(questionItem.options)
+        ? questionItem.options.map((opt: any) => String(opt?.text ?? opt ?? "")).join(" ")
+        : Object.values(questionItem.options).map((value) => String(value ?? "")).join(" ")
+      : "";
+    return `${contentText} ${optionValues}`.trim();
+  };
+
+  const findSimilarExistingQuestion = async (
+    generatedQuestion: { content: string; options?: Record<string, string> | null },
+    backendType: string,
+  ) => {
+    const existing = unwrapPaginatedData(
+      await api.listQuestions({
+        courseId: course || undefined,
+        type: backendType,
+        limit: 200,
+      }),
+    );
+
+    const generatedSignature = `${generatedQuestion.content} ${
+      generatedQuestion.options ? Object.values(generatedQuestion.options).join(" ") : ""
+    }`;
+
+    let bestMatch: { similarity: number; question: any } | null = null;
+
+    for (const item of existing || []) {
+      const similarity = calculateQuestionSimilarity(
+        generatedSignature,
+        buildQuestionSignature(item),
+      );
+
+      if (!bestMatch || similarity > bestMatch.similarity) {
+        bestMatch = { similarity, question: item };
+      }
+    }
+
+    return bestMatch;
+  };
+
   const handleCreateTopic = async () => {
     if (!newTopicName.trim() || !course) return;
     
@@ -714,6 +865,7 @@ export default function QuestionEditor() {
       const newTopic = await api.createQuestionTopic({
         name: newTopicName.trim(),
         code: newTopicName.trim().toUpperCase().replace(/\s+/g, "_"),
+        courseId: course,
       });
       
       setAvailableTopics([...availableTopics, newTopic]);
@@ -894,17 +1046,10 @@ export default function QuestionEditor() {
             {!loading && (
               <>
                 <Button
-                  variant="outline"
-                  onClick={() => setTab("preview")}
-                  size="sm"
-                  className="gap-1.5 hidden sm:flex"
-                >
-                  <Eye className="h-4 w-4" /> Preview
-                </Button>
-                <Button
-                  onClick={handleSave}
+                  onClick={() => handleSave(false)}
                   disabled={saving}
                   size="sm"
+                  variant="outline"
                   className="gap-1.5 flex-1 sm:flex-initial"
                 >
                   {saving ? (
@@ -912,9 +1057,26 @@ export default function QuestionEditor() {
                   ) : (
                     <Save className="h-4 w-4" />
                   )}
-                  <span className="hidden xs:inline">Save Question</span>
+                  <span className="hidden xs:inline">Save</span>
                   <span className="xs:hidden">Save</span>
                 </Button>
+                {!questionId && (
+                  <Button
+                    onClick={() => handleSave(true)}
+                    disabled={saving}
+                    size="sm"
+                    variant="default"
+                    className="gap-1.5 flex-1 sm:flex-initial"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Plus className="h-4 w-4" />
+                    )}
+                    <span className="hidden xs:inline">Save and Add Another</span>
+                    <span className="xs:hidden">Save and Add Another</span>
+                  </Button>
+                )}
               </>
             )}
           </div>
@@ -1007,6 +1169,11 @@ export default function QuestionEditor() {
                       <p className="text-[10px] text-muted-foreground italic px-1">
                         * Generated content will be shown in preview mode for you to approve before applying.
                       </p>
+                      {aiSimilarityWarning && (
+                        <p className="text-[10px] text-red-600 font-medium px-1">
+                          {aiSimilarityWarning}
+                        </p>
+                      )}
                     </CardContent>
                   </Card>
 
@@ -1641,7 +1808,7 @@ export default function QuestionEditor() {
                         questionType === "ordering" ||
                         questionType === "matching") && (
                         <div className="space-y-2">
-                          {options.map((opt, idx) => (
+                          {previewOptions.map((opt, idx) => (
                             <div
                               key={opt.id}
                               className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border text-sm ${
