@@ -58,6 +58,28 @@ class ApiClient {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
+  private async waitForAiJob<T>(jobId: string, timeoutMs = 60000, intervalMs = 1200): Promise<T> {
+    const startedAt = Date.now();
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const job = await this.getQuestionAIGenerationJob(jobId);
+      const status = String(job?.status || '').toUpperCase();
+
+      if (status === 'SUCCEEDED') {
+        const output = job?.output || {};
+        return output as T;
+      }
+
+      if (status === 'FAILED' || status === 'REJECTED') {
+        throw new Error(job?.errorMessage || `AI job failed with status ${status}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error('AI job timed out');
+  }
+
   // Auth endpoints
   async login(email: string, password: string) {
     return this.request<{ accessToken: string; user: any }>('/auth/login', {
@@ -452,10 +474,20 @@ class ApiClient {
     };
     variants?: number;
   }) {
-    return this.request<any>(`/questions/drafts/${draftId}/ai-generate-section`, {
+    const response = await this.request<{
+      jobId?: string;
+      status?: string;
+      candidates?: Array<Record<string, any>>;
+    }>(`/questions/drafts/${draftId}/ai-generate-section`, {
       method: 'POST',
       body: data,
     });
+
+    if (response?.jobId) {
+      return this.waitForAiJob<{ candidates: Array<Record<string, any>> }>(response.jobId);
+    }
+
+    return response as any;
   }
 
   async applyQuestionDraftAICandidate(draftId: string, data: {
@@ -728,6 +760,10 @@ class ApiClient {
     return this.request<any>(`/submissions/exam/${examId}/my-submission`);
   }
 
+  async getMySubmissionById(submissionId: string) {
+    return this.request<any>(`/submissions/my-submissions/${submissionId}`);
+  }
+
   async getExamSubmissions(examId: string, page?: number, limit?: number) {
     const params = new URLSearchParams();
     if (page) params.append('page', String(page));
@@ -809,20 +845,38 @@ class ApiClient {
     courseName?: string;
     useCase?: string;
   }) {
-    return this.request<{
-      content: string;
-      type: string;
-      explanation: string;
-      difficulty: number;
-      points: number;
+    const response = await this.request<{
+      jobId?: string;
+      status?: string;
+      content?: string;
+      type?: string;
+      explanation?: string;
+      difficulty?: number;
+      points?: number;
       topic?: string;
       learningObjective?: string;
-      options: Record<string, string> | null;
-      correctAnswer: Record<string, string> | null;
-      }>('/ai/generate-question', {
+      options?: Record<string, string> | null;
+      correctAnswer?: Record<string, string> | null;
+    }>('/ai/generate-question', {
       method: 'POST',
       body: data,
     });
+
+    if (response?.jobId) {
+      return this.waitForAiJob<{
+        content: string;
+        type: string;
+        explanation: string;
+        difficulty: number;
+        points: number;
+        topic?: string;
+        learningObjective?: string;
+        options: Record<string, string> | null;
+        correctAnswer: Record<string, string> | null;
+      }>(response.jobId);
+    }
+
+    return response as any;
   }
 
   async aiGenerateExamQuestions(data: {
@@ -835,8 +889,10 @@ class ApiClient {
     useCase?: string;
     courseId?: string;
   }) {
-    return this.request<{
-      questions: Array<{
+    const response = await this.request<{
+      jobId?: string;
+      status?: string;
+      questions?: Array<{
         content: string;
         type: string;
         explanation: string;
@@ -845,10 +901,26 @@ class ApiClient {
         options: Record<string, string> | null;
         correctAnswer: Record<string, string> | null;
       }>;
-      }>('/ai/generate-exam-questions', {
+    }>('/ai/generate-exam-questions', {
       method: 'POST',
       body: data,
     });
+
+    if (response?.jobId) {
+      return this.waitForAiJob<{
+        questions: Array<{
+          content: string;
+          type: string;
+          explanation: string;
+          difficulty: number;
+          points: number;
+          options: Record<string, string> | null;
+          correctAnswer: Record<string, string> | null;
+        }>;
+      }>(response.jobId);
+    }
+
+    return response as any;
   }
 
   async getMyRecentCourses() {

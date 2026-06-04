@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { AiService } from '../ai/ai.service';
+import { AiJobsService } from '../ai/ai-jobs.service';
 import {
   AIGenerateSectionDto,
   AISection,
@@ -53,7 +53,7 @@ export class QuestionsService {
 
   constructor(
     private readonly prisma: PrismaService,
-    private readonly aiService: AiService,
+    private readonly aiJobsService: AiJobsService,
   ) {}
 
   private parseJson(value: any, fallback: any = null) {
@@ -600,80 +600,24 @@ export class QuestionsService {
   async aiGenerateSection(draftId: string, dto: AIGenerateSectionDto, user: AuthUser) {
     await this.assertV2Ready();
     const draft = await this.fetchDraftOrThrow(draftId, user);
-
-    const jobId = randomUUID();
-
-    await this.prisma.$executeRawUnsafe(
-      `
-      INSERT INTO ai_generation_records (id, draftId, questionVersionId, section, status, provider, model, prompt, output, safetyFlags, errorMessage, createdAt, completedAt)
-      VALUES (?, ?, NULL, ?, 'RUNNING', ?, ?, ?, NULL, NULL, NULL, NOW(3), NULL)
-      `,
-      jobId,
+    const record = await this.aiJobsService.createJob({
+      task: 'draft-section',
       draftId,
-      dto.section,
-      process.env.AI_PROVIDER || 'google',
-      process.env.AI_OLLAMA_MODEL || 'gemini-2.0-flash',
-      JSON.stringify({
+      questionVersionId: null,
+      section: dto.section,
+      payload: {
         section: dto.section,
         instruction: dto.instruction || '',
         constraints: dto.constraints || {},
-      }),
-    );
+        draftState: draft.state,
+      },
+      requestedBy: user.id,
+    });
 
-    try {
-      const prompt = this.buildAIPrompt(dto.section, draft.state, dto.instruction);
-      const result = await this.aiService.generateQuestion({
-        prompt,
-        questionType: this.normalizeQuestionType(draft.state?.intent?.questionType),
-        difficulty: dto.constraints?.difficulty ? Math.max(0, Math.min(1, (dto.constraints.difficulty - 1) / 9)) : 0.5,
-        language: dto.constraints?.language || 'en',
-        useCase: 'question_bank',
-      });
-
-      const candidates: Array<Record<string, any>> = [];
-      if (dto.section === AISection.CONTENT) {
-        candidates.push({ id: 'cand-1', content: result.content });
-      } else if (dto.section === AISection.ANSWERS) {
-        candidates.push({ id: 'cand-1', options: result.options || {}, correctAnswer: result.correctAnswer || {} });
-      } else if (dto.section === AISection.EXPLANATION) {
-        candidates.push({ id: 'cand-1', explanation: result.explanation || '' });
-      } else {
-        candidates.push({
-          id: 'cand-1',
-          topic: result.topic || '',
-          learningObjective: result.learningObjective || '',
-          difficulty: result.difficulty,
-        });
-      }
-
-      await this.prisma.$executeRawUnsafe(
-        `
-        UPDATE ai_generation_records
-        SET status = 'SUCCEEDED', output = ?, completedAt = NOW(3)
-        WHERE id = ?
-        `,
-        JSON.stringify({ candidates }),
-        jobId,
-      );
-
-      return {
-        jobId,
-        status: 'SUCCEEDED',
-        candidates,
-      };
-    } catch (error: any) {
-      await this.prisma.$executeRawUnsafe(
-        `
-        UPDATE ai_generation_records
-        SET status = 'FAILED', errorMessage = ?, completedAt = NOW(3)
-        WHERE id = ?
-        `,
-        String(error?.message || error),
-        jobId,
-      );
-
-      throw new BadRequestException(`AI generation failed: ${error?.message || 'Unknown error'}`);
-    }
+    return {
+      jobId: record.id,
+      status: record.status,
+    };
   }
 
   async applyAICandidate(draftId: string, dto: ApplyAICandidateDto, user: AuthUser) {
@@ -1345,7 +1289,7 @@ export class QuestionsService {
 
     const rows = await this.prisma.$queryRawUnsafe(
       `
-      SELECT r.id, r.draftId, r.section, r.status, r.provider, r.model, r.output, r.safetyFlags, r.errorMessage, r.createdAt, r.completedAt, d.creatorId
+      SELECT r.id, r.draftId, r.section, r.status, r.reviewStatus, r.provider, r.model, r.output, r.safetyFlags, r.errorMessage, r.createdAt, r.completedAt, d.creatorId
       FROM ai_generation_records r
       LEFT JOIN question_drafts d ON d.id = r.draftId
       WHERE r.id = ?
@@ -1366,6 +1310,7 @@ export class QuestionsService {
       draftId: row.draftId,
       section: row.section,
       status: row.status,
+      reviewStatus: row.reviewStatus,
       provider: row.provider,
       model: row.model,
       output: this.parseJson(row.output, null),

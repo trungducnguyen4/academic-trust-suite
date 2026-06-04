@@ -190,6 +190,23 @@ export class SubmissionsController {
     });
   }
 
+  @Get('my-submissions/:id')
+  @UseGuards(JwtAuthGuard)
+  getMySubmissionById(@Param('id') id: string, @Request() req) {
+    return this.submissionsService.getMySubmissionById(id, req.user.id).then((submission) => {
+      if (!submission) return submission;
+      const sanitized = { ...submission } as any;
+      if (sanitized.proctoring) {
+        sanitized.proctoring = {
+          tabSwitchCount: sanitized.proctoring.tabSwitchCount ?? 0,
+          mouseAnomalies: sanitized.proctoring.mouseAnomalies ?? 0,
+          logsCount: Array.isArray(sanitized.proctoring.logs) ? sanitized.proctoring.logs.length : 0,
+        };
+      }
+      return sanitized;
+    });
+  }
+
   @Get('exam/:examId/student/:studentId')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('LECTURER', 'ADMIN')
@@ -207,8 +224,8 @@ export class SubmissionsController {
   @Post('grade-answer')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('LECTURER', 'ADMIN')
-  gradeAnswer(@Body() gradeDto: GradeAnswerDto) {
-    return this.submissionsService.gradeAnswer(gradeDto);
+  gradeAnswer(@Body() gradeDto: GradeAnswerDto, @Request() req) {
+    return this.submissionsService.gradeAnswer(gradeDto, req.user);
   }
 
   @Post(':id/finalize-grading')

@@ -23,6 +23,7 @@ import { EventsModule } from '../events/events.module';
       { name: 'notifications' },
       { name: 'grading' },
       { name: 'events' },
+      { name: 'ai-generation' },
     ),
     PrismaModule,
     NotificationsModule,

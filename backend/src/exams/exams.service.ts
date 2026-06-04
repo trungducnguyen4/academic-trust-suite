@@ -1313,8 +1313,11 @@ export class ExamsService {
       include: {
         submissions: {
           select: {
+            studentId: true,
             score: true,
             status: true,
+            submittedAt: true,
+            createdAt: true,
           },
         },
         _count: {
@@ -1330,15 +1333,21 @@ export class ExamsService {
       throw new NotFoundException('Exam not found');
     }
 
-    const completedSubmissions = exam.submissions.filter(
-      (s) => s.status === 'GRADED',
-    );
-    const scores = completedSubmissions.map((s) => s.score || 0);
+    const isUnlimited = exam.maxAttempts === null || exam.maxAttempts === undefined;
+    const scopedSubmissions = isUnlimited
+      ? this.collapseLatestCompletedSubmissions(
+          exam.submissions.filter((s) => s.status === 'GRADED'),
+        )
+      : exam.submissions.filter((s) => s.status === 'GRADED');
+    const scores = scopedSubmissions.map((s) => s.score || 0);
 
     return {
+      analyticsScope: isUnlimited ? 'PRACTICE' : 'OFFICIAL',
+      isUnlimited,
       totalQuestions: exam._count.examQuestions,
       totalSubmissions: exam._count.submissions,
-      completedSubmissions: completedSubmissions.length,
+      analyzedSubmissions: scopedSubmissions.length,
+      completedSubmissions: scopedSubmissions.length,
       averageScore: scores.length > 0
         ? scores.reduce((a, b) => a + b, 0) / scores.length
         : 0,
@@ -1348,6 +1357,20 @@ export class ExamsService {
         ? (scores.filter((s) => s >= exam.passingScore).length / scores.length) * 100
         : 0,
     };
+  }
+
+  private collapseLatestCompletedSubmissions<T extends { id: string; studentId?: string | null; status?: string | null; submittedAt?: Date | string | null; createdAt?: Date | string | null }>(submissions: T[]) {
+    const buckets = new Map<string, T>();
+    for (const submission of submissions) {
+      const key = submission.studentId || submission.id;
+      const prev = buckets.get(key);
+      const prevTime = prev ? new Date(prev.submittedAt || prev.createdAt || 0).getTime() : -1;
+      const nextTime = new Date(submission.submittedAt || submission.createdAt || 0).getTime();
+      if (!prev || nextTime >= prevTime) {
+        buckets.set(key, submission);
+      }
+    }
+    return Array.from(buckets.values());
   }
 
   private normalizeQuestionType(rawType?: string): string | undefined {

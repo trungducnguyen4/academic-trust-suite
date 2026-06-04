@@ -293,10 +293,13 @@ export default function StudentResults() {
                         <p className="text-xs text-muted-foreground">
                           {getStatusBadgeLabel(s.status)} • {s.score !== null ? s.score : "—"}
                         </p>
+                        <p className="text-xs text-muted-foreground">
+                          Attempt {s.attemptNo ?? "N/A"}
+                        </p>
                       </div>
                       <div className="flex items-center gap-2">
                         <Button asChild size="sm">
-                          <Link to={`/student/grading?examId=${s.examId ?? s.exam?.id}`}>
+                          <Link to={`/student/grading?examId=${s.examId ?? s.exam?.id}&submissionId=${s.id}`}>
                             View Result
                           </Link>
                         </Button>

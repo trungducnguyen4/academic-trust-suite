@@ -32,8 +32,11 @@ type ExamOption = {
 
 type IntelligencePayload = {
   exam: { id: string; title: string; courseId: string };
+  analyticsScope?: "OFFICIAL" | "PRACTICE";
+  isUnlimited?: boolean;
   kpis: {
     totalSubmissions: number;
+    analyzedSubmissions?: number;
     completedSubmissions: number;
     completionRate: number;
     avgScorePct: number;
@@ -239,6 +242,11 @@ export default function ExamAnalytics() {
       <AdminPageShell backTo="/lecturer">
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
+            {data?.analyticsScope ? (
+              <Badge variant={data.analyticsScope === "OFFICIAL" ? "default" : "secondary"} className="mb-2">
+                {data.analyticsScope === "OFFICIAL" ? "Official analytics" : "Practice analytics"}
+              </Badge>
+            ) : null}
             <h1 className="text-2xl font-bold">Performance Intelligence</h1>
             <p className="text-sm text-muted-foreground">
               Analyze - Practice - Improve loop per exam.

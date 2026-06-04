@@ -72,6 +72,10 @@ export class GradeAnswerDto {
   @IsOptional()
   @IsString()
   feedback?: string;
+
+  @IsOptional()
+  @IsString()
+  reason?: string;
 }
 
 export class UpdateSubmissionStatusDto {

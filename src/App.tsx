@@ -29,7 +29,6 @@ import LearningFeedbackDetail from "./pages/student/LearningFeedbackDetail";
 import JoinExam from "./pages/student/JoinExam";
 import JoinExamByLink from "./pages/student/JoinExamByLink";
 import ScanQRJoinExam from "./pages/student/ScanQRJoinExam";
-import OfflineExamDownload from "./pages/student/OfflineExamDownload";
 import StudentCourseDetail from "./pages/student/StudentCourseDetail";
 import StudentExams from "./pages/student/StudentExams";
 import StudentResults from "./pages/student/StudentResults";
@@ -121,10 +120,6 @@ const App = () => {
               <Route path="/student/join-exam" element={<JoinExam />} />
               <Route path="/student/join/:token" element={<JoinExamByLink />} />
               <Route path="/student/scan-qr" element={<ScanQRJoinExam />} />
-              <Route
-                path="/student/offline-download"
-                element={<OfflineExamDownload />}
-              />
               <Route
                 path="/student/courses/:id"
                 element={<StudentCourseDetail />}

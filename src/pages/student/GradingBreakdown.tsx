@@ -251,17 +251,20 @@ export default function GradingBreakdown() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const examId = searchParams.get("examId") || undefined;
+  const submissionId = searchParams.get("submissionId") || undefined;
 
   const [loading, setLoading] = useState(false);
   const [submission, setSubmission] = useState<any | null>(null);
 
   useEffect(() => {
-    if (!examId) return;
+    if (!examId && !submissionId) return;
     let mounted = true;
     (async () => {
       try {
         setLoading(true);
-        const res = await api.getMyExamSubmission(examId);
+        const res = submissionId
+          ? await api.getMySubmissionById(submissionId)
+          : await api.getMyExamSubmission(examId!);
         if (!mounted) return;
         setSubmission(res);
       } catch (err) {
@@ -273,7 +276,7 @@ export default function GradingBreakdown() {
     return () => {
       mounted = false;
     };
-  }, [examId]);
+  }, [examId, submissionId]);
 
   // Map submission (if available) to gradedQuestions and history
   const mappedQuestions = (submission?.answers || []).map(
@@ -313,6 +316,19 @@ export default function GradingBreakdown() {
     manualQuestions.reduce((s: number, q: any) => s + q.maxPoints, 0) || 1;
   const totalScore = autoScore + manualScore;
   const totalMax = autoMax + manualMax;
+  const attemptNo = Number(submission?.attemptNo ?? 0);
+  const maxAttempts =
+    typeof submission?.exam?.maxAttempts === "number"
+      ? submission.exam.maxAttempts
+      : typeof submission?.exam?.settings?.maxAttempts === "number"
+        ? submission.exam.settings.maxAttempts
+        : null;
+  const attemptLabel =
+    attemptNo > 0
+      ? maxAttempts === null
+        ? `Attempt ${attemptNo} / Unlimited`
+        : `Attempt ${attemptNo} / ${maxAttempts}`
+      : "Attempt";
 
   const gradingHistory = (() => {
     if (!submission) return [];
@@ -395,9 +411,23 @@ export default function GradingBreakdown() {
           Grading Breakdown
         </h1>
         <p className="text-muted-foreground mb-6">
-          Transparent view of how your exam was scored — auto-graded and
+          Transparent view of how your exam was scored - auto-graded and
           manually reviewed questions
         </p>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <StatusBadge status="info" domain="exam">
+            {attemptLabel}
+          </StatusBadge>
+          {submission?.status ? (
+            <StatusBadge
+              status={String(submission.status).toLowerCase() as any}
+              domain="submission"
+            >
+              {String(submission.status).toUpperCase()}
+            </StatusBadge>
+          ) : null}
+        </div>
 
         {/* Score Calculation Summary */}
         <Card className="mb-6">

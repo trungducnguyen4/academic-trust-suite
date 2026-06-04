@@ -28,7 +28,6 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BookOpen,
-  Clock,
   Users,
   Shield,
   ChevronRight,
@@ -87,7 +86,6 @@ interface ExamForm {
   endDate: string;
   endTime: string;
   requiresProctoring: boolean;
-  requiresDownload: boolean;
   allowLateSubmission: boolean;
   shuffleQuestions: boolean;
   showResultImmediately: boolean;
@@ -208,7 +206,6 @@ const createDefaultForm = (): ExamForm => {
     endDate: examWindow.endDate,
     endTime: examWindow.endTime,
     requiresProctoring: true,
-    requiresDownload: false,
     allowLateSubmission: false,
     shuffleQuestions: true,
     showResultImmediately: false,
@@ -939,7 +936,6 @@ export default function CreateExam() {
             integer: true,
           }) || 1,
           requiresProctoring: form.requiresProctoring,
-          requiresDownload: form.requiresDownload,
           allowLateSubmission: form.allowLateSubmission,
           shuffleQuestions: form.shuffleQuestions,
           showResultImmediately: form.showResultImmediately,
@@ -1415,12 +1411,6 @@ export default function CreateExam() {
                         label: "Enable AI Proctoring",
                         desc: "Monitor student activity during the exam",
                         icon: <Shield className="h-4 w-4 text-primary" />,
-                      },
-                      {
-                        key: "requiresDownload",
-                        label: "Require Offline Download",
-                        desc: "Students must download the exam package first",
-                        icon: <Clock className="h-4 w-4 text-primary" />,
                       },
                       {
                         key: "allowLateSubmission",
@@ -2635,10 +2625,6 @@ export default function CreateExam() {
                   {
                     label: "AI Proctoring",
                     value: form.requiresProctoring ? "Enabled" : "Disabled",
-                  },
-                  {
-                    label: "Offline Download",
-                    value: form.requiresDownload ? "Required" : "Not required",
                   },
                   {
                     label: "Late Submission",

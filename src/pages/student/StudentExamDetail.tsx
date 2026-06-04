@@ -33,10 +33,11 @@ type ExamDetail = {
   status?: string;
   passingScore?: number;
   totalPoints?: number;
+  maxAttempts?: number | null;
   startTime?: string | null;
   endTime?: string | null;
   settings?: {
-    maxAttempts?: number;
+    maxAttempts?: number | null;
     allowedIpCidrs?: string[];
   };
   course?: {
@@ -52,6 +53,7 @@ type ExamDetail = {
 type MySubmission = {
   id?: string;
   status?: string;
+  attemptNo?: number | null;
   score?: number | null;
   submittedAt?: string | null;
 };
@@ -70,6 +72,7 @@ export default function StudentExamDetail() {
   const [error, setError] = useState<string | null>(null);
   const [exam, setExam] = useState<ExamDetail | null>(null);
   const [mySubmission, setMySubmission] = useState<MySubmission | null>(null);
+  const [completedSubmission, setCompletedSubmission] = useState<MySubmission | null>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -85,14 +88,26 @@ export default function StudentExamDetail() {
         setLoading(true);
         setError(null);
 
-        const [examRes, mySubmissionRes] = await Promise.all([
+        const [examRes, mySubmissionsRes] = await Promise.all([
           api.getExam(id),
-          api.getMyExamSubmission(id).catch(() => null),
+          api.getMySubmissions().catch(() => []),
         ]);
 
         if (!mounted) return;
         setExam(examRes || null);
-        setMySubmission(mySubmissionRes || null);
+        const submissionList = Array.isArray(mySubmissionsRes) ? mySubmissionsRes : [];
+        const examSubmissions = submissionList.filter((item: any) => String(item?.examId ?? item?.exam?.id ?? "") === id);
+        const byLatest = [...examSubmissions].sort((a: any, b: any) => {
+          const aTime = new Date(a?.submittedAt || a?.startedAt || a?.createdAt || 0).getTime();
+          const bTime = new Date(b?.submittedAt || b?.startedAt || b?.createdAt || 0).getTime();
+          return bTime - aTime;
+        });
+        const latestAny = byLatest[0] || null;
+        const latestCompleted = byLatest.find((item: any) =>
+          ["SUBMITTED", "GRADED", "FLAGGED", "FINALIZED"].includes(String(item?.status || "").toUpperCase()),
+        ) || null;
+        setMySubmission(latestAny || null);
+        setCompletedSubmission(latestCompleted || null);
       } catch (err: any) {
         if (!mounted) return;
         setError(err?.message || "Unable to load exam detail.");
@@ -120,9 +135,21 @@ export default function StudentExamDetail() {
   }, [exam]);
 
   const submissionStatus = String(mySubmission?.status || "").toUpperCase();
-  const hasCompletedAttempt = ["SUBMITTED", "GRADED", "FLAGGED", "FINALIZED"].includes(
-    submissionStatus,
-  );
+  const configuredMaxAttempts =
+    typeof exam?.maxAttempts === "number"
+      ? exam.maxAttempts
+      : typeof exam?.settings?.maxAttempts === "number"
+        ? exam.settings.maxAttempts
+      : null;
+  const latestAttemptNo = Number(mySubmission?.attemptNo ?? 0);
+  const attemptLimitReached =
+    configuredMaxAttempts !== null &&
+    Number.isFinite(configuredMaxAttempts) &&
+    latestAttemptNo >= configuredMaxAttempts;
+  const canStartNewAttempt =
+    !attemptLimitReached || submissionStatus === "IN_PROGRESS";
+  const hasCompletedSubmission = Boolean(completedSubmission?.id);
+  const shouldViewResult = hasCompletedSubmission;
 
   return (
     <DashboardLayout>
@@ -213,7 +240,7 @@ export default function StudentExamDetail() {
                   <div className="rounded-lg border border-border/60 p-3">
                     <p className="text-xs text-muted-foreground">Max Attempts</p>
                     <p className="mt-1 text-sm font-medium">
-                      {exam?.settings?.maxAttempts ?? 1}
+                      {configuredMaxAttempts === null ? "Unlimited" : configuredMaxAttempts}
                     </p>
                   </div>
                 </div>
@@ -233,15 +260,24 @@ export default function StudentExamDetail() {
                   <Badge variant="outline">
                     Attempt: {mySubmission ? getStatusBadgeLabel(submissionStatus || "IN_PROGRESS") : "Not started"}
                   </Badge>
+                  {mySubmission?.attemptNo ? (
+                    <Badge variant="secondary">
+                      Attempt {mySubmission.attemptNo}
+                    </Badge>
+                  ) : null}
                   {typeof mySubmission?.score === "number" ? (
                     <Badge variant="secondary">Score: {mySubmission.score}</Badge>
                   ) : null}
                 </div>
 
                 <div className="flex flex-wrap gap-2">
-                  {hasCompletedAttempt ? (
+                  {shouldViewResult ? (
                     <Button asChild>
-                      <Link to={`/student/grading?examId=${exam?.id}`}>View Result Detail</Link>
+                      <Link to={`/student/grading?examId=${exam?.id}${completedSubmission?.id ? `&submissionId=${completedSubmission.id}` : ""}`}>View Result Detail</Link>
+                    </Button>
+                  ) : accessState === "open" && canStartNewAttempt ? (
+                    <Button asChild>
+                      <Link to={`/student/exam-ready?examId=${exam?.id}`}>Start Exam</Link>
                     </Button>
                   ) : accessState === "open" ? (
                     <Button asChild>

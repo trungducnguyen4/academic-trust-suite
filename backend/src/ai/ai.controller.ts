@@ -1,42 +1,56 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
-import { AiService } from './ai.service';
-import { GenerateQuestionDto, GenerateExamQuestionsDto, SuggestSimilarTopicsDto } from './dto/generate-question.dto';
+import { Body, Controller, Post, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiTags } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
-
-import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
+import { GenerateQuestionDto, GenerateExamQuestionsDto, SuggestSimilarTopicsDto } from './dto/generate-question.dto';
+import { AiJobsService } from './ai-jobs.service';
+import { AiService } from './ai.service';
+import { AISection } from '../questions-v2/dto/question-draft.dto';
 
 @ApiTags('AI')
 @ApiBearerAuth('access-token')
 @Controller('ai')
 @UseGuards(JwtAuthGuard)
 export class AiController {
-  constructor(private readonly aiService: AiService) {}
+  constructor(
+    private readonly aiJobsService: AiJobsService,
+    private readonly aiService: AiService,
+  ) {}
 
   @Post('generate-question')
   async generateQuestion(@Body() dto: GenerateQuestionDto) {
-    const result = await this.aiService.generateQuestion({
-      prompt: dto.prompt,
-      questionType: dto.questionType,
-      difficulty: dto.difficulty,
-      language: dto.language,
-      courseName: dto.courseName,
-      useCase: dto.useCase,
+    const job = await this.aiJobsService.createJob({
+      task: 'single-question',
+      section: AISection.CONTENT,
+      payload: {
+        prompt: dto.prompt,
+        questionType: dto.questionType,
+        difficulty: dto.difficulty,
+        language: dto.language,
+        courseName: dto.courseName,
+        useCase: dto.useCase,
+      },
     });
-    return result;
+
+    return { jobId: job.id, status: job.status };
   }
 
   @Post('generate-exam-questions')
   async generateExamQuestions(@Body() dto: GenerateExamQuestionsDto) {
-    const questions = await this.aiService.generateExamQuestions({
-      prompt: dto.prompt,
-      questionCount: dto.questionCount,
-      difficulty: dto.difficulty,
-      questionType: dto.questionType,
-      language: dto.language,
-      courseName: dto.courseName,
-      useCase: dto.useCase,
+    const job = await this.aiJobsService.createJob({
+      task: 'exam-questions',
+      section: AISection.CONTENT,
+      payload: {
+        prompt: dto.prompt,
+        questionCount: dto.questionCount,
+        difficulty: dto.difficulty,
+        questionType: dto.questionType,
+        language: dto.language,
+        courseName: dto.courseName,
+        useCase: dto.useCase,
+      },
     });
-    return { questions };
+
+    return { jobId: job.id, status: job.status };
   }
 
   @Post('suggest-similar-topics')

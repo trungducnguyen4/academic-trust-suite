@@ -612,7 +612,7 @@ export default function AdvancedExamRuleConfig() {
                   <div>
                     <Label>AES-256 Encryption</Label>
                     <p className="text-xs text-muted-foreground">
-                      Encrypt offline exam package
+                      Encrypt protected exam session data
                     </p>
                   </div>
                   <Switch

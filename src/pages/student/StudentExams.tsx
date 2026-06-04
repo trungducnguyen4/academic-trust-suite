@@ -37,12 +37,28 @@ type StudentExamItem = {
   submitted?: boolean;
   completed?: boolean;
   source?: "available" | "submission";
+  hasCompletedAttempt?: boolean;
+  mySubmissionId?: string | null;
+  myCompletedSubmissionId?: string | null;
+  maxAttempts?: number | null;
+  mySubmissionStatus?: string | null;
+  mySubmissionAttemptNo?: number | null;
+  settings?: {
+    maxAttempts?: number | null;
+  };
   course?: {
     id?: string;
     code?: string;
     name?: string;
   };
 };
+
+const completedAttemptStatuses = new Set([
+  "SUBMITTED",
+  "GRADED",
+  "FLAGGED",
+  "FINALIZED",
+]);
 
 const statusText = (exam: StudentExamItem) => {
   if (exam.completed) return "Completed";
@@ -105,9 +121,7 @@ export default function StudentExams() {
         const submittedExamIds = new Set<string>(
           submissions
             .filter((s: any) =>
-              ["SUBMITTED", "GRADED", "FLAGGED", "FINALIZED"].includes(
-                String(s.status || "").toUpperCase(),
-              ),
+              completedAttemptStatuses.has(String(s.status || "").toUpperCase()),
             )
             .map((s: any) => String(s.examId ?? s.exam?.id)),
         );
@@ -116,6 +130,32 @@ export default function StudentExams() {
 
         examsList.forEach((exam: any) => {
           const id = String(exam.id);
+          const latestSubmission = [...submissions]
+            .filter((s: any) => String(s.examId ?? s.exam?.id ?? "") === id)
+            .sort((a: any, b: any) => {
+              const aTime = new Date(a?.submittedAt || a?.startedAt || a?.createdAt || 0).getTime();
+              const bTime = new Date(b?.submittedAt || b?.startedAt || b?.createdAt || 0).getTime();
+              return bTime - aTime;
+            })[0];
+          const latestCompletedSubmission = [...submissions]
+            .filter(
+              (s: any) =>
+                String(s.examId ?? s.exam?.id ?? "") === id &&
+                completedAttemptStatuses.has(String(s.status || "").toUpperCase()),
+            )
+            .sort((a: any, b: any) => {
+              const aTime = new Date(a?.submittedAt || a?.startedAt || a?.createdAt || 0).getTime();
+              const bTime = new Date(b?.submittedAt || b?.startedAt || b?.createdAt || 0).getTime();
+              return bTime - aTime;
+            })[0];
+
+          const configuredMaxAttempts =
+            typeof exam?.maxAttempts === "number"
+              ? exam.maxAttempts
+              : typeof exam?.settings?.maxAttempts === "number"
+                ? exam.settings.maxAttempts
+                : null;
+
           byId.set(id, {
             id,
             title: exam.title,
@@ -124,19 +164,20 @@ export default function StudentExams() {
             endTime: exam.endTime,
             duration: exam.duration,
             course: exam.course,
-            submitted: submittedExamIds.has(id),
+            submitted: submittedExamIds.has(id) || Boolean(latestSubmission),
             completed: false,
             source: "available",
+            hasCompletedAttempt: submittedExamIds.has(id),
+            mySubmissionId: latestSubmission?.id ?? null,
+            myCompletedSubmissionId: latestCompletedSubmission?.id ?? null,
+            maxAttempts: configuredMaxAttempts,
+            mySubmissionStatus: latestSubmission?.status ?? null,
+            mySubmissionAttemptNo: latestSubmission?.attemptNo ?? null,
           });
         });
 
         if (mounted) {
-          // My Exams only shows pending/active exams. Completed attempts belong to Results.
-          setExams(
-            Array.from(byId.values()).filter(
-              (exam) => !submittedExamIds.has(exam.id),
-            ),
-          );
+          setExams(Array.from(byId.values()));
         }
       } catch (err) {
         console.error("Failed to load exams", err);
@@ -379,6 +420,28 @@ export default function StudentExams() {
                   </div>
                 ) : (
                   paginatedExams.map((exam) => (
+                    (() => {
+                      const latestAttemptNo = Number(exam.mySubmissionAttemptNo ?? 0);
+                      const configuredMaxAttempts =
+                        typeof exam.maxAttempts === "number"
+                          ? exam.maxAttempts
+                          : typeof exam.settings?.maxAttempts === "number"
+                            ? exam.settings.maxAttempts
+                            : null;
+                      const submissionStatus = String(exam.mySubmissionStatus || "").toUpperCase();
+                      const hasCompletedAttempt = Boolean(exam.hasCompletedAttempt);
+                      const attemptLimitReached =
+                        configuredMaxAttempts !== null &&
+                        Number.isFinite(configuredMaxAttempts) &&
+                        latestAttemptNo >= configuredMaxAttempts;
+                      const canStartNewAttempt =
+                        !attemptLimitReached || submissionStatus === "IN_PROGRESS";
+                      const hasResult = hasCompletedAttempt || attemptLimitReached;
+                      const resultUrl = exam.myCompletedSubmissionId || exam.mySubmissionId
+                        ? `/student/grading?examId=${exam.id}&submissionId=${exam.myCompletedSubmissionId || exam.mySubmissionId}`
+                        : `/student/grading?examId=${exam.id}`;
+
+                      return (
                     <div
                       key={exam.id}
                       className={`flex flex-col gap-3 rounded-xl border border-border/50 bg-background/80 p-4 transition-colors hover:bg-muted/20 md:flex-row md:items-center md:justify-between ${
@@ -414,7 +477,7 @@ export default function StudentExams() {
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {!exam.submitted && !exam.completed ? (
+                        {canStartNewAttempt ? (
                           <Button asChild size="sm">
                             <Link to={`/student/exam-ready?examId=${exam.id}`}>Start</Link>
                           </Button>
@@ -424,13 +487,15 @@ export default function StudentExams() {
                           <Link to={`/student/exams/${exam.id}`}>Detail</Link>
                         </Button>
 
-                        {exam.submitted ? (
+                        {hasResult ? (
                           <Button asChild variant="outline" size="sm">
-                            <Link to={`/student/grading?examId=${exam.id}`}>Result</Link>
+                            <Link to={resultUrl}>Result</Link>
                           </Button>
                         ) : null}
                       </div>
                     </div>
+                      );
+                    })()
                   ))
                 )}
               </div>

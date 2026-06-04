@@ -63,6 +63,13 @@ enum AIJobStatus {
   REJECTED
 }
 
+enum AIReviewStatus {
+  PENDING
+  APPROVED
+  REJECTED
+  NEEDS_CHANGES
+}
+
 enum CourseStatus {
   DRAFT
   ACTIVE
@@ -141,6 +148,8 @@ model User {
   createdExamLinks ExamLink[]     @relation("ExamLinkCreator")
   examLinkUsages   ExamLinkUsage[] @relation("ExamLinkUsageUser")
   notifications   Notification[]   @relation("UserNotifications")
+  aiReviewedRecords AIGenerationRecord[] @relation("AIReviewUser")
+  examSubmissionRegradeLogs ExamSubmissionRegradeLog[] @relation("RegradeReviewer")
 
   @@map("users")
 }
@@ -335,6 +344,7 @@ model Question {
   exams             ExamQuestion[]
   submissionAnswers SubmissionAnswer[]
   versions          QuestionVersion[]
+  statistics        QuestionStatistics[]
   topicLinks        QuestionTopic[]
   courseScopes      QuestionCourseScope[]
   drafts            QuestionDraft[]
@@ -365,9 +375,11 @@ model QuestionVersion {
   examItems          ExamQuestion[]
   submissionAnswers  SubmissionAnswer[]
   aiRecords          AIGenerationRecord[]
+  statistics         QuestionStatistics?
 
   @@unique([questionId, versionNo])
   @@index([questionId, createdAt])
+  @@index([createdBy])
   @@map("question_versions")
 }
 
@@ -450,6 +462,11 @@ model AIGenerationRecord {
   questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: SetNull)
   section           AISection
   status            AIJobStatus @default(QUEUED)
+  reviewStatus      AIReviewStatus @default(PENDING)
+  reviewedBy        String?
+  reviewer          User?    @relation("AIReviewUser", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  reviewNotes       String?  @db.Text
   provider          String?
   model             String?
   prompt            Json?
@@ -462,6 +479,8 @@ model AIGenerationRecord {
   @@index([draftId, createdAt])
   @@index([questionVersionId])
   @@index([status])
+  @@index([reviewStatus])
+  @@index([reviewedBy])
   @@map("ai_generation_records")
 }
 
@@ -477,6 +496,24 @@ model QuestionUsage {
   @@index([questionId, usedAt])
   @@index([contextType, contextId])
   @@map("question_usages")
+}
+
+model QuestionStatistics {
+  questionVersionId   String   @id
+  questionVersion     QuestionVersion @relation(fields: [questionVersionId], references: [id], onDelete: Cascade)
+  questionId          String
+  question            Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  totalAttempts       Int      @default(0)
+  correctAttempts     Int      @default(0)
+  incorrectAttempts   Int      @default(0)
+  skippedAttempts     Int      @default(0)
+  pValue              Decimal? @db.Decimal(5, 4)
+  difficultyIndex     Decimal? @db.Decimal(5, 4)
+  discriminationIndex Decimal? @db.Decimal(5, 4)
+  lastRecomputedAt    DateTime @default(now())
+
+  @@index([questionId])
+  @@map("question_statistics")
 }
 
 model ExamQuestion {
@@ -528,6 +565,7 @@ model ExamSubmission {
   createdAt    DateTime  @default(now())
 
   answers      SubmissionAnswer[]
+  regradeLogs  ExamSubmissionRegradeLog[]
   proctoring   ProctoringSession?
 
   @@unique([examId, studentId, attemptNo])
@@ -538,6 +576,27 @@ model ExamSubmission {
   @@index([studentId, status, createdAt])
   @@index([submitIdempotencyKey])
   @@map("exam_submissions")
+}
+
+model ExamSubmissionRegradeLog {
+  id                String   @id @default(uuid())
+  submission         ExamSubmission @relation(fields: [submissionId], references: [id], onDelete: Cascade)
+  submissionId       String
+  submissionAnswerId String
+  submissionAnswer   SubmissionAnswer @relation(fields: [submissionAnswerId], references: [id], onDelete: Cascade)
+  reviewerId         String
+  reviewer           User     @relation("RegradeReviewer", fields: [reviewerId], references: [id], onDelete: Restrict)
+  previousPoints     Int?
+  newPoints          Int?
+  previousFeedback   String?  @db.Text
+  newFeedback        String?  @db.Text
+  reason             String?  @db.Text
+  createdAt          DateTime @default(now())
+
+  @@index([submissionId, createdAt])
+  @@index([submissionAnswerId])
+  @@index([reviewerId])
+  @@map("exam_submission_regrade_logs")
 }
 
 model ExamInstance {
@@ -660,6 +719,7 @@ model SubmissionAnswer {
   @@index([submissionId, questionId, sequence])
   @@index([submissionId, questionVersionId])
   @@index([questionVersionId])
+  regradeLogs      ExamSubmissionRegradeLog[]
   @@map("submission_answers")
 }
 

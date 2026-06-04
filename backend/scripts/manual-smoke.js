@@ -63,6 +63,22 @@ function pickId(obj, keys = ['id', 'submissionId', 'examId', 'courseId', 'questi
   return null;
 }
 
+async function pollAiJob(token, jobId, timeoutMs = 60000, intervalMs = 1000) {
+  const startedAt = Date.now();
+
+  while (Date.now() - startedAt < timeoutMs) {
+    const result = requireOk('Poll AI job', await request('GET', `/questions/ai-jobs/${jobId}`, token));
+    const status = String(result.status || '').toUpperCase();
+    if (status === 'SUCCEEDED') return result;
+    if (status === 'FAILED' || status === 'REJECTED') {
+      throw new Error(result.errorMessage || `AI job failed with status ${status}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+
+  throw new Error(`AI job ${jobId} timed out`);
+}
+
 async function run() {
   console.log(`API_BASE=${API_BASE}`);
 
@@ -186,7 +202,7 @@ async function run() {
 
   // AI endpoint
   if (!SKIP_AI) {
-    requireOk(
+    const aiJob = requireOk(
       'AI generate question',
       await request('POST', '/ai/generate-question', lecturerToken, {
         prompt: 'Create a multiple choice question about arrays in JavaScript',
@@ -197,6 +213,9 @@ async function run() {
         useCase: 'question_bank',
       })
     );
+    if (aiJob.jobId) {
+      await pollAiJob(lecturerToken, aiJob.jobId);
+    }
   }
 
   console.log('Manual smoke test completed successfully.');

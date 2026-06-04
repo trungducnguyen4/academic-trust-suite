@@ -21,8 +21,6 @@ import {
   CheckCircle2,
   AlertCircle,
   BookOpen,
-  Download,
-  Lock,
   Loader2,
   TrendingUp,
   Target,
@@ -49,8 +47,12 @@ interface UpcomingExam {
   startTime: string;
   endTime: string;
   status: string;
-  requiresDownload?: boolean;
   mySubmissionStatus?: string | null;
+  mySubmissionAttemptNo?: number | null;
+  maxAttempts?: number | null;
+  settings?: {
+    maxAttempts?: number | null;
+  };
 }
 
 interface ExamHistoryItem {
@@ -94,9 +96,6 @@ export default function StudentDashboard() {
   const [loading, setLoading] = useState(true);
   const [courses, setCourses] = useState<StudentCourse[]>([]);
   const [recentCourses, setRecentCourses] = useState<StudentCourse[]>([]);
-  const [downloadProgress, setDownloadProgress] = useState<
-    Record<string, number>
-  >({});
 
   useEffect(() => {
     const fetchData = async () => {
@@ -124,6 +123,7 @@ export default function StudentDashboard() {
         const examList = Array.isArray(exams) ? exams : [];
 
         const latestSubmissionByExamId = new Map<string, any>();
+        const latestCompletedSubmissionByExamId = new Map<string, any>();
         submissionList.forEach((s: any) => {
           const key = s?.examId;
           if (!key) return;
@@ -141,6 +141,19 @@ export default function StudentDashboard() {
           if (!prev || currentTime >= prevTime) {
             latestSubmissionByExamId.set(key, s);
           }
+
+          const status = String(s?.status || "").toUpperCase();
+          if (["SUBMITTED", "GRADED", "FLAGGED", "FINALIZED"].includes(status)) {
+            const prevCompleted = latestCompletedSubmissionByExamId.get(key);
+            const prevCompletedTime = prevCompleted
+              ? new Date(
+                  prevCompleted?.submittedAt || prevCompleted?.startedAt || prevCompleted?.createdAt || 0,
+                ).getTime()
+              : -1;
+            if (!prevCompleted || currentTime >= prevCompletedTime) {
+              latestCompletedSubmissionByExamId.set(key, s);
+            }
+          }
         });
 
         const upcoming = examList
@@ -155,9 +168,16 @@ export default function StudentDashboard() {
           })
           .map((exam: any) => ({
             ...exam,
-            requiresDownload: exam.settings?.proctoring || false,
             mySubmissionStatus:
               latestSubmissionByExamId.get(exam.id)?.status ?? null,
+            mySubmissionAttemptNo:
+              latestSubmissionByExamId.get(exam.id)?.attemptNo ?? null,
+            maxAttempts:
+              typeof exam?.maxAttempts === "number"
+                ? exam.maxAttempts
+                : typeof exam?.settings?.maxAttempts === "number"
+                  ? exam.settings.maxAttempts
+                  : null,
           }));
 
         setUpcomingExams(upcoming);
@@ -196,14 +216,6 @@ export default function StudentDashboard() {
       time: addHours(new Date(), -5),
     },
   ];
-
-  const handleDownload = async (examId: string) => {
-    setDownloadProgress((p) => ({ ...p, [examId]: 0 }));
-    for (let i = 2; i <= 100; i += 2) {
-      await new Promise((r) => setTimeout(r, 40));
-      setDownloadProgress((p) => ({ ...p, [examId]: i }));
-    }
-  };
 
   const passedExams = examHistory.filter(
     (e) =>
@@ -452,73 +464,49 @@ export default function StudentDashboard() {
                       const isToday =
                         scheduledAt.toDateString() ===
                         new Date().toDateString();
-                      const progress = downloadProgress[exam.id];
-                      const isDownloading =
-                        progress !== undefined && progress < 100;
-                      const isDownloaded = progress === 100;
-                      const needsDownload = exam.requiresDownload === true;
+                      const latestAttemptNo = Number(exam.mySubmissionAttemptNo ?? 0);
+                      const latestSubmissionId = latestCompletedSubmissionByExamId.get(exam.id)?.id;
+                      const configuredMaxAttempts =
+                        typeof exam.maxAttempts === "number"
+                          ? exam.maxAttempts
+                          : typeof exam.settings?.maxAttempts === "number"
+                            ? exam.settings.maxAttempts
+                            : null;
                       const status = String(
                         exam.mySubmissionStatus || "",
                       ).toUpperCase();
-                      const isCompletedAttempt = [
-                        "SUBMITTED",
-                        "GRADED",
-                        "FLAGGED",
-                      ].includes(status);
-                      const startUrl = `/student/exam-ready?examId=${exam.id}&download=false&title=${encodeURIComponent(exam.title)}&course=${encodeURIComponent(exam.course.code)}&duration=${exam.duration}`;
+                      const isCompletedAttempt = Boolean(latestSubmissionId);
+                      const attemptLimitReached =
+                        configuredMaxAttempts !== null &&
+                        Number.isFinite(configuredMaxAttempts) &&
+                        latestAttemptNo >= configuredMaxAttempts;
+                      const canStartNewAttempt =
+                        !attemptLimitReached || status === "IN_PROGRESS";
+                      const startUrl = `/student/exam-ready?examId=${exam.id}&title=${encodeURIComponent(exam.title)}&course=${encodeURIComponent(exam.course.code)}&duration=${exam.duration}`;
 
-                      const todayCTA = isCompletedAttempt ? (
+                      const todayCTA = (
                         <div className="flex items-center gap-2">
-                          <StatusBadge
-                            variant={
-                              status === "GRADED" ? "success" : "warning"
-                            }
-                          >
-                            {getStatusBadgeLabel(status)}
-                          </StatusBadge>
-                          <Button size="sm" variant="outline" asChild>
-                            <Link to={`/student/grading?examId=${exam.id}`}>
-                              View Result
-                            </Link>
-                          </Button>
+                          {isCompletedAttempt ? (
+                            <Button size="sm" variant="outline" asChild>
+                              <Link to={`/student/grading?examId=${exam.id}${latestSubmissionId ? `&submissionId=${latestSubmissionId}` : ""}`}>
+                                View Result
+                              </Link>
+                            </Button>
+                          ) : null}
+                          {canStartNewAttempt ? (
+                            <Button
+                              size="sm"
+                              className="rounded-xl shadow-sm"
+                              asChild
+                            >
+                              <Link to={startUrl}>Start Now</Link>
+                            </Button>
+                          ) : !isCompletedAttempt ? (
+                            <Button size="sm" variant="outline" disabled>
+                              Attempt Limit Reached
+                            </Button>
+                          ) : null}
                         </div>
-                      ) : needsDownload ? (
-                        isDownloaded ? (
-                          <div className="flex items-center gap-2 text-sm text-amber-600 font-medium">
-                            <Lock className="h-4 w-4" />
-                            Waiting for unlock
-                          </div>
-                        ) : isDownloading ? (
-                          <div className="flex flex-col items-end gap-1 min-w-[120px]">
-                            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                              Downloading {progress}%
-                            </div>
-                            <Progress value={progress} className="h-1.5 w-28" />
-                          </div>
-                        ) : (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="gap-1.5 border-amber-400 text-amber-700 hover:bg-amber-50 rounded-xl"
-                            onClick={(e) => {
-                              e.preventDefault();
-                              e.stopPropagation();
-                              handleDownload(exam.id);
-                            }}
-                          >
-                            <Download className="h-3.5 w-3.5" />
-                            Download
-                          </Button>
-                        )
-                      ) : (
-                        <Button
-                          size="sm"
-                          className="rounded-xl shadow-sm"
-                          asChild
-                        >
-                          <Link to={startUrl}>Start Now</Link>
-                        </Button>
                       );
 
                       return (
@@ -529,16 +517,11 @@ export default function StudentDashboard() {
                           <div className="space-y-1.5">
                             <div className="flex items-center gap-2.5">
                               <h4 className="font-semibold text-foreground">
-                                {exam.title}
+                              {exam.title}
                               </h4>
                               {isToday && (
                                 <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 rounded-md font-semibold">
                                   Today
-                                </span>
-                              )}
-                              {needsDownload && isDownloaded && (
-                                <span className="px-2 py-0.5 text-xs bg-amber-500/10 text-amber-700 rounded-md font-semibold">
-                                  LOCKED
                                 </span>
                               )}
                             </div>
@@ -623,11 +606,12 @@ export default function StudentDashboard() {
                     ? new Date(submission.submittedAt)
                     : new Date();
                   const pct = Math.round((score / maxScore) * 100);
+                  const submissionAttempt = submission.attemptNo ?? "N/A";
 
                   return (
                     <Link
                       key={submission.id}
-                      to={`/student/grading?examId=${submission.examId}`}
+                      to={`/student/grading?examId=${submission.examId}&submissionId=${submission.id}`}
                       className={`flex items-center justify-between rounded-xl border border-border/50 p-4 hover:bg-secondary/50 hover:border-primary/10 transition-all duration-200 animate-fade-in opacity-0 stagger-${i + 1}`}
                     >
                       <div className="flex items-center gap-4">
@@ -649,6 +633,9 @@ export default function StudentDashboard() {
                           <p className="text-sm text-muted-foreground">
                             {submission.exam?.course?.code} ·{" "}
                             {format(completedAt, "MMM d, yyyy")}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Attempt {submissionAttempt}
                           </p>
                         </div>
                       </div>

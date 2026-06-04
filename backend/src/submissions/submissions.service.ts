@@ -210,7 +210,10 @@ export class SubmissionsService {
       examSnapshotId: latestSnapshot?.id ?? null,
       randomizationSeed,
       timeLimitMinutes: exam.timeLimitMinutes ?? exam.duration,
-      maxAttempts: exam.maxAttempts ?? Number(examSettings?.maxAttempts || 1),
+      maxAttempts:
+        exam.maxAttempts ?? (examSettings?.maxAttempts !== undefined && examSettings?.maxAttempts !== null
+          ? Number(examSettings.maxAttempts)
+          : null),
       gradingStrategy: exam.gradingStrategy ?? examSettings?.gradingStrategy ?? 'HIGHEST',
       reviewSettings: exam.reviewSettings ?? examSettings?.reviewSettings ?? null,
       questionSelectionConfig:
@@ -224,46 +227,55 @@ export class SubmissionsService {
       })),
     };
 
-    const examInstance = await this.prisma.examInstance.upsert({
+    const existingExamInstance = await this.prisma.examInstance.findUnique({
       where: {
         examId_studentId: {
           examId: startExamDto.examId,
           studentId,
         },
       },
-      create: {
-        examId: startExamDto.examId,
-        studentId,
-        examSnapshotId: latestSnapshot?.id ?? null,
-        snapshotPayload,
-        randomizationSeed,
-        questionOrder: snapshotQuestions.map((item) => item.questionSnapshotId ?? item.questionId),
-        status: 'IN_PROGRESS',
-        startedAt: now,
-        lastActivityAt: now,
-        ipAddress: typeof (context as any)?.remoteIp !== 'undefined' || typeof (context as any)?.forwardedFor !== 'undefined'
-          ? this.accessPolicy.resolveClientIpFromParts(context?.remoteIp ?? null, context?.forwardedFor ?? null)
-          : null,
-        userAgent: context?.userAgent ?? null,
-      },
-      update: {
-        examSnapshotId: latestSnapshot?.id ?? null,
-        snapshotPayload,
-        randomizationSeed,
-        questionOrder: snapshotQuestions.map((item) => item.questionSnapshotId ?? item.questionId),
-        lastActivityAt: now,
-        ipAddress: typeof (context as any)?.remoteIp !== 'undefined' || typeof (context as any)?.forwardedFor !== 'undefined'
-          ? this.accessPolicy.resolveClientIpFromParts(context?.remoteIp ?? null, context?.forwardedFor ?? null)
-          : undefined,
-        userAgent: context?.userAgent ?? undefined,
-      },
     });
 
-    // Enforce maximum attempts from exam settings (default: 1)
-    const parsedMaxAttempts = Number(examSettings?.maxAttempts);
-    const maxAttempts = Number.isFinite(parsedMaxAttempts)
-      ? Math.max(1, Math.floor(parsedMaxAttempts))
-      : 1;
+    const resolvedClientIp =
+      typeof (context as any)?.remoteIp !== 'undefined' || typeof (context as any)?.forwardedFor !== 'undefined'
+        ? this.accessPolicy.resolveClientIpFromParts(context?.remoteIp ?? null, context?.forwardedFor ?? null)
+        : null;
+
+    const examInstance = existingExamInstance
+      ? await this.prisma.examInstance.update({
+          where: { id: existingExamInstance.id },
+          data: {
+            lastActivityAt: now,
+            ipAddress: resolvedClientIp ?? undefined,
+            userAgent: context?.userAgent ?? undefined,
+          },
+        })
+      : await this.prisma.examInstance.create({
+          data: {
+            examId: startExamDto.examId,
+            studentId,
+            examSnapshotId: latestSnapshot?.id ?? null,
+            snapshotPayload,
+            randomizationSeed,
+            questionOrder: snapshotQuestions.map((item) => item.questionSnapshotId ?? item.questionId),
+            status: 'IN_PROGRESS',
+            startedAt: now,
+            lastActivityAt: now,
+            ipAddress: resolvedClientIp,
+            userAgent: context?.userAgent ?? null,
+          },
+        });
+
+    // Enforce maximum attempts only when the exam is explicitly limited.
+    const configuredMaxAttempts =
+      exam.maxAttempts ??
+      (examSettings?.maxAttempts !== undefined && examSettings?.maxAttempts !== null
+        ? Number(examSettings.maxAttempts)
+        : null);
+    const maxAttempts =
+      configuredMaxAttempts === null || configuredMaxAttempts === undefined
+        ? null
+        : Math.max(1, Math.floor(Number(configuredMaxAttempts)));
 
     // Get count of completed attempts to determine next attemptNo
     const completedSubmissions = await this.prisma.examSubmission.findMany({
@@ -280,7 +292,7 @@ export class SubmissionsService {
     const lastAttemptNo = completedSubmissions[0]?.attemptNo || 0;
     const nextAttemptNo = lastAttemptNo + 1;
 
-    if (nextAttemptNo > maxAttempts) {
+    if (maxAttempts !== null && nextAttemptNo > maxAttempts) {
       throw new ConflictException(
         `Attempt limit reached (${lastAttemptNo}/${maxAttempts}).`,
       );
@@ -531,9 +543,17 @@ export class SubmissionsService {
                   question: {
                     select: {
                       type: true,
-                      correctAnswer: true,
                       points: true,
                       defaultPoints: true,
+                    },
+                  },
+                  questionVersion: {
+                    select: {
+                      id: true,
+                      stem: true,
+                      payload: true,
+                      answerKey: true,
+                      points: true,
                     },
                   },
                 },
@@ -562,11 +582,41 @@ export class SubmissionsService {
         assignedScore?: number | null;
         question: {
           type: string;
-          correctAnswer: any;
           points: number | null;
           defaultPoints?: number | null;
         };
+        questionVersion?: {
+          id: string;
+          stem: string;
+          payload: any;
+          answerKey: any;
+          points: number | null;
+        } | null;
       }>;
+
+      const missingVersionQuestionIds = Array.from(
+        new Set(examQuestions.filter((eq) => !eq.questionVersionId).map((eq) => eq.questionId)),
+      );
+      const latestVersionByQuestionId = new Map<string, string>();
+      if (missingVersionQuestionIds.length > 0) {
+        const fallbackVersions = await tx.questionVersion.findMany({
+          where: { questionId: { in: missingVersionQuestionIds } },
+          orderBy: [
+            { questionId: 'asc' },
+            { versionNo: 'desc' },
+          ],
+          select: {
+            id: true,
+            questionId: true,
+          },
+        });
+
+        for (const version of fallbackVersions) {
+          if (!latestVersionByQuestionId.has(version.questionId)) {
+            latestVersionByQuestionId.set(version.questionId, version.id);
+          }
+        }
+      }
 
       const validQuestions = new Map<string, (typeof examQuestions)[number]>(
         examQuestions.map((eq) => [eq.questionId, eq]),
@@ -579,11 +629,15 @@ export class SubmissionsService {
       const finalAnswerRows = normalizedAnswers.map((answerDto) => {
         const examQuestion = validQuestions.get(answerDto.questionId)!;
         const answerMeta = answerMetaByQuestionId.get(answerDto.questionId);
+        const resolvedQuestionVersionId =
+          examQuestion.questionVersionId ||
+          latestVersionByQuestionId.get(answerDto.questionId) ||
+          null;
         let pointsAwarded = 0;
         let isCorrect = false;
 
         if (autoGradedTypes.has(examQuestion.question.type)) {
-          const correctAnswer = examQuestion.question.correctAnswer;
+          const correctAnswer = examQuestion.questionVersion?.answerKey ?? null;
           if (correctAnswer && this.compareAnswers(answerDto.answer, correctAnswer)) {
             pointsAwarded = Number(
               examQuestion.assignedScore ??
@@ -599,7 +653,7 @@ export class SubmissionsService {
         return {
           submissionId,
           questionId: answerDto.questionId,
-          questionVersionId: null,
+          questionVersionId: resolvedQuestionVersionId,
           sequence: Number(answerMeta?.sequence || 1),
           clientBatchId: answerMeta?.clientBatchId || null,
           serverVersion: Number(answerMeta?.serverVersion || 0),
@@ -635,6 +689,73 @@ export class SubmissionsService {
       if (finalAnswerRows.length > 0) {
         await tx.submissionAnswer.createMany({
           data: finalAnswerRows,
+        });
+      }
+
+      const answeredByVersionId = new Map<string, { correct: number; incorrect: number; skipped: number }>();
+      const finalAnswerByQuestionId = new Map(finalAnswerRows.map((row) => [row.questionId, row]));
+
+      for (const examQuestion of examQuestions) {
+        const versionId =
+          examQuestion.questionVersionId ||
+          latestVersionByQuestionId.get(examQuestion.questionId) ||
+          null;
+        if (!versionId) continue;
+
+        const answerRow = finalAnswerByQuestionId.get(examQuestion.questionId);
+        const bucket = answeredByVersionId.get(versionId) || { correct: 0, incorrect: 0, skipped: 0 };
+
+        if (!answerRow) {
+          bucket.skipped += 1;
+        } else if (answerRow.isCorrect) {
+          bucket.correct += 1;
+        } else {
+          bucket.incorrect += 1;
+        }
+
+        answeredByVersionId.set(versionId, bucket);
+      }
+
+      for (const examQuestion of examQuestions) {
+        const versionId =
+          examQuestion.questionVersionId ||
+          latestVersionByQuestionId.get(examQuestion.questionId) ||
+          null;
+        if (!versionId) continue;
+
+        const bucket = answeredByVersionId.get(versionId) || { correct: 0, incorrect: 0, skipped: 1 };
+        const versionTotal = bucket.correct + bucket.incorrect + bucket.skipped;
+        const pValue = versionTotal > 0 ? bucket.correct / versionTotal : 0;
+        const difficultyIndex = versionTotal > 0 ? 1 - pValue : 0;
+        const discriminationIndex =
+          versionTotal > 0
+            ? Math.max(-1, Math.min(1, (bucket.correct - bucket.incorrect) / versionTotal))
+            : null;
+
+        await tx.questionStatistics.upsert({
+          where: { questionVersionId: versionId },
+          create: {
+            questionVersionId: versionId,
+            questionId: examQuestion.questionId,
+            totalAttempts: versionTotal,
+            correctAttempts: bucket.correct,
+            incorrectAttempts: bucket.incorrect,
+            skippedAttempts: bucket.skipped,
+            pValue,
+            difficultyIndex,
+            discriminationIndex,
+            lastRecomputedAt: now,
+          },
+          update: {
+            totalAttempts: { increment: versionTotal },
+            correctAttempts: { increment: bucket.correct },
+            incorrectAttempts: { increment: bucket.incorrect },
+            skippedAttempts: { increment: bucket.skipped },
+            pValue,
+            difficultyIndex,
+            discriminationIndex,
+            lastRecomputedAt: now,
+          },
         });
       }
 
@@ -764,22 +885,23 @@ export class SubmissionsService {
 
     const submission = await this.prisma.examSubmission.findUnique({
       where: { id: submissionId },
-      select: {
-        id: true,
-        studentId: true,
-        status: true,
-        version: true,
-        examSnapshotId: true,
-        exam: {
           select: {
             id: true,
-            examQuestions: {
+            studentId: true,
+            status: true,
+            version: true,
+            examSnapshotId: true,
+            exam: {
               select: {
-                questionId: true,
+                id: true,
+                examQuestions: {
+                  select: {
+                    questionId: true,
+                    questionVersionId: true,
+                  },
+                },
               },
             },
-          },
-        },
       },
     });
 
@@ -796,6 +918,9 @@ export class SubmissionsService {
     }
 
     const validQuestionIds = new Set(submission.exam.examQuestions.map((eq) => eq.questionId));
+    const versionByQuestionId = new Map(
+      submission.exam.examQuestions.map((eq) => [eq.questionId, eq.questionVersionId || null]),
+    );
     const normalizedAnswers = new Map<string, { questionId: string; sequence: number; answer: any; timeTaken?: number }>();
 
     for (const answer of answers.slice(0, 500)) {
@@ -926,6 +1051,7 @@ export class SubmissionsService {
             data: {
               submissionId,
               questionId: answer.questionId,
+              questionVersionId: versionByQuestionId.get(answer.questionId) || null,
               questionSnapshotId: qSnapshotId,
               answer: answer.answer,
               timeTaken: answer.timeTaken,
@@ -1193,25 +1319,52 @@ export class SubmissionsService {
     };
   }
 
-  async gradeAnswer(gradeDto: GradeAnswerDto) {
-    const answer = await this.prisma.submissionAnswer.findUnique({
-      where: { id: gradeDto.submissionAnswerId },
-      include: {
-        submission: true,
-      },
+  async gradeAnswer(gradeDto: GradeAnswerDto, actor: { id: string; role?: string }) {
+    const updated = await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.submissionAnswer.findUnique({
+        where: { id: gradeDto.submissionAnswerId },
+        select: {
+          id: true,
+          submissionId: true,
+          pointsAwarded: true,
+          feedback: true,
+        },
+      });
+
+      if (!existing) {
+        throw new NotFoundException('Answer not found');
+      }
+
+      const next = await tx.submissionAnswer.update({
+        where: { id: gradeDto.submissionAnswerId },
+        data: {
+          pointsAwarded: gradeDto.pointsAwarded,
+          feedback: gradeDto.feedback,
+        },
+      });
+
+      if (
+        existing.pointsAwarded !== gradeDto.pointsAwarded ||
+        String(existing.feedback || '') !== String(gradeDto.feedback || '')
+      ) {
+        await tx.examSubmissionRegradeLog.create({
+          data: {
+            submissionId: existing.submissionId,
+            submissionAnswerId: existing.id,
+            reviewerId: actor.id,
+            previousPoints: existing.pointsAwarded ?? null,
+            newPoints: gradeDto.pointsAwarded,
+            previousFeedback: existing.feedback ?? null,
+            newFeedback: gradeDto.feedback ?? null,
+            reason: gradeDto.reason || 'Manual regrade',
+          } as any,
+        });
+      }
+
+      return next;
     });
 
-    if (!answer) {
-      throw new NotFoundException('Answer not found');
-    }
-
-    return this.prisma.submissionAnswer.update({
-      where: { id: gradeDto.submissionAnswerId },
-      data: {
-        pointsAwarded: gradeDto.pointsAwarded,
-        feedback: gradeDto.feedback,
-      },
-    });
+    return updated;
   }
 
   async finalizeSubmission(submissionId: string): Promise<void> {
@@ -1295,6 +1448,8 @@ export class SubmissionsService {
         status: true,
         startTime: true,
         endTime: true,
+        maxAttempts: true,
+        settings: true,
       },
     });
 
@@ -1307,10 +1462,12 @@ export class SubmissionsService {
         where: { examId },
         select: {
           id: true,
+          studentId: true,
           status: true,
           score: true,
           startedAt: true,
           submittedAt: true,
+          createdAt: true,
           student: {
             select: {
               id: true,
@@ -1380,7 +1537,12 @@ export class SubmissionsService {
       }),
     ]);
 
-    const completed = submissions.filter((s) => ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(s.status));
+    const isUnlimited = this.isUnlimitedAttemptsExam(exam);
+    const completed = isUnlimited
+      ? this.collapseLatestCompletedSubmissions(
+          submissions.filter((s) => ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(s.status)),
+        )
+      : submissions.filter((s) => ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(s.status));
     const scoresPct = completed
       .filter((s) => typeof s.score === 'number')
       .map((s) => {
@@ -1475,6 +1637,8 @@ export class SubmissionsService {
 
     return {
       exam,
+      analyticsScope: isUnlimited ? 'PRACTICE' : 'OFFICIAL',
+      isUnlimited,
       summary: {
         totalSubmissions: submissions.length,
         inProgress: submissions.filter((s) => s.status === 'IN_PROGRESS').length,
@@ -1498,6 +1662,8 @@ export class SubmissionsService {
         courseId: true,
         passingScore: true,
         totalPoints: true,
+        maxAttempts: true,
+        settings: true,
       },
     });
 
@@ -1508,13 +1674,15 @@ export class SubmissionsService {
     const [examQuestions, submissions, integrityLogs] = await Promise.all([
       this.prisma.$queryRaw<Array<{
         questionId: string;
+        questionVersionId: string | null;
         orderIndex: number;
         questionType: string;
         questionContent: string;
       }>>`
-        SELECT eq.questionId, eq.orderIndex, q.type AS questionType, q.content AS questionContent
+        SELECT eq.questionId, eq.questionVersionId, eq.orderIndex, q.type AS questionType, COALESCE(qv.stem, q.content) AS questionContent
         FROM exam_questions eq
         INNER JOIN questions q ON q.id = eq.questionId
+        LEFT JOIN question_versions qv ON qv.id = eq.questionVersionId
         WHERE eq.examId = ${examId}
         ORDER BY eq.orderIndex ASC
       `,
@@ -1522,6 +1690,7 @@ export class SubmissionsService {
         where: { examId },
         select: {
           id: true,
+          studentId: true,
           status: true,
           score: true,
           submittedAt: true,
@@ -1567,28 +1736,67 @@ export class SubmissionsService {
       // Legacy databases may not have question_topics/topics in expected shape.
     }
 
-    const completedSubmissions = submissions.filter((s) =>
-      ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(String(s.status).toUpperCase()),
-    );
-    const completedSubmissionIds = completedSubmissions.map((s) => s.id);
+    const isUnlimited = this.isUnlimitedAttemptsExam(exam);
+    const scopedCompletedSubmissions = isUnlimited
+      ? this.collapseLatestCompletedSubmissions(
+          submissions.filter((s) =>
+            ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(String(s.status).toUpperCase()),
+          ),
+        )
+      : submissions.filter((s) =>
+          ['SUBMITTED', 'GRADED', 'FLAGGED'].includes(String(s.status).toUpperCase()),
+        );
+    const completedSubmissionIds = scopedCompletedSubmissions.map((s) => s.id);
 
     const answers = completedSubmissionIds.length
       ? await this.prisma.submissionAnswer.findMany({
           where: { submissionId: { in: completedSubmissionIds } },
           select: {
             questionId: true,
+            questionVersionId: true,
             isCorrect: true,
             timeTaken: true,
           },
         })
       : [];
 
-    const attemptsPerQuestion = Math.max(1, completedSubmissions.length);
+    type QuestionStatsRow = {
+      questionVersionId: string;
+      pValue: { toNumber(): number } | null;
+      difficultyIndex: { toNumber(): number } | null;
+      discriminationIndex: { toNumber(): number } | null;
+      totalAttempts: number;
+      correctAttempts: number;
+      incorrectAttempts: number;
+      skippedAttempts: number;
+    };
+
+    const statsRows: QuestionStatsRow[] = await this.prisma.questionStatistics.findMany({
+      where: {
+        questionVersionId: {
+          in: examQuestions.map((eq) => eq.questionVersionId).filter((id): id is string => Boolean(id)),
+        },
+      },
+      select: {
+        questionVersionId: true,
+        pValue: true,
+        difficultyIndex: true,
+        discriminationIndex: true,
+        totalAttempts: true,
+        correctAttempts: true,
+        incorrectAttempts: true,
+        skippedAttempts: true,
+      },
+    });
+    const statsByVersionId = new Map(statsRows.map((row) => [row.questionVersionId, row]));
+
+    const attemptsPerQuestion = Math.max(1, scopedCompletedSubmissions.length);
     const byQuestion = new Map<string, Array<{ isCorrect: boolean; timeTaken: number | null }>>();
     for (const row of answers) {
-      const list = byQuestion.get(row.questionId) || [];
+      const key = row.questionVersionId || row.questionId;
+      const list = byQuestion.get(key) || [];
       list.push({ isCorrect: Boolean(row.isCorrect), timeTaken: row.timeTaken ?? null });
-      byQuestion.set(row.questionId, list);
+      byQuestion.set(key, list);
     }
 
     const flaggedByQuestion = new Map<string, number>();
@@ -1602,7 +1810,8 @@ export class SubmissionsService {
     }
 
     const questionMetrics = examQuestions.map((eq) => {
-      const rows = byQuestion.get(eq.questionId) || [];
+      const metricKey = eq.questionVersionId || eq.questionId;
+      const rows = byQuestion.get(metricKey) || [];
       const answeredCount = rows.length;
       const correctCount = rows.filter((r) => r.isCorrect).length;
       const incorrectCount = Math.max(0, answeredCount - correctCount);
@@ -1611,8 +1820,10 @@ export class SubmissionsService {
         ? Number((rows.reduce((sum, r) => sum + Number(r.timeTaken || 0), 0) / rows.length).toFixed(1))
         : 0;
       const topic = topicByQuestionId.get(eq.questionId);
+      const stats = eq.questionVersionId ? statsByVersionId.get(eq.questionVersionId) : null;
       return {
         questionId: eq.questionId,
+        questionVersionId: eq.questionVersionId || null,
         orderIndex: eq.orderIndex,
         questionType: eq.questionType,
         topicId: topic?.topicId || null,
@@ -1625,6 +1836,9 @@ export class SubmissionsService {
         correctCount,
         incorrectCount,
         skippedCount,
+        pValue: stats?.pValue !== undefined && stats?.pValue !== null ? Number(stats.pValue) : null,
+        difficultyIndex: stats?.difficultyIndex !== undefined && stats?.difficultyIndex !== null ? Number(stats.difficultyIndex) : null,
+        discriminationIndex: stats?.discriminationIndex !== undefined && stats?.discriminationIndex !== null ? Number(stats.discriminationIndex) : null,
         action: {
           path: '/lecturer/question-bank',
           params: {
@@ -1708,7 +1922,7 @@ export class SubmissionsService {
       .sort((a, b) => b.skipRate - a.skipRate)
       .slice(0, 10);
 
-    const scoreRows = completedSubmissions.map((s) => {
+    const scoreRows = scopedCompletedSubmissions.map((s) => {
       const raw = Number(s.score || 0);
       const pct = Number(exam.totalPoints || 0) > 0
         ? this.clampPercent((raw / Number(exam.totalPoints || 1)) * 100)
@@ -1772,10 +1986,13 @@ export class SubmissionsService {
 
     return {
       exam,
+      analyticsScope: isUnlimited ? 'PRACTICE' : 'OFFICIAL',
+      isUnlimited,
       kpis: {
         totalSubmissions: submissions.length,
-        completedSubmissions: completedSubmissions.length,
-        completionRate: this.clampPercent((completedSubmissions.length / Math.max(1, submissions.length)) * 100),
+        analyzedSubmissions: scopedCompletedSubmissions.length,
+        completedSubmissions: scopedCompletedSubmissions.length,
+        completionRate: this.clampPercent((scopedCompletedSubmissions.length / Math.max(1, submissions.length)) * 100),
         avgScorePct,
         passRate,
       },
@@ -1857,6 +2074,61 @@ export class SubmissionsService {
         },
       },
       orderBy: { submittedAt: 'desc' },
+    });
+  }
+
+  async getMySubmissionById(submissionId: string, studentId: string) {
+    return this.prisma.examSubmission.findFirst({
+      where: {
+        id: submissionId,
+        studentId,
+      },
+      include: {
+        exam: {
+          select: {
+            id: true,
+            title: true,
+            totalPoints: true,
+            maxAttempts: true,
+            settings: true,
+            course: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            },
+          },
+        },
+        answers: {
+          orderBy: [
+            { questionId: 'asc' },
+            { sequence: 'desc' },
+            { updatedAt: 'desc' },
+          ],
+          include: {
+            question: {
+              select: {
+                id: true,
+                type: true,
+                content: true,
+                options: true,
+                points: true,
+                explanation: true,
+                correctAnswer: true,
+              },
+            },
+          },
+        },
+        proctoring: {
+          select: {
+            ipAddress: true,
+            tabSwitchCount: true,
+            mouseAnomalies: true,
+            logs: true,
+          },
+        },
+      },
     });
   }
 
@@ -1945,6 +2217,8 @@ export class SubmissionsService {
             id: true,
             title: true,
             totalPoints: true,
+            maxAttempts: true,
+            settings: true,
           },
         },
         answers: {
@@ -1977,7 +2251,43 @@ export class SubmissionsService {
           },
         },
       },
+      orderBy: [
+        { attemptNo: 'desc' },
+        { createdAt: 'desc' },
+      ],
     });
+  }
+
+  private resolveConfiguredMaxAttempts(exam: { maxAttempts?: number | null; settings?: any }): number | null {
+    const rawSettings = exam?.settings;
+    const settingsMaxAttempts =
+      rawSettings && typeof rawSettings === 'object' && rawSettings.maxAttempts !== undefined && rawSettings.maxAttempts !== null
+        ? Number(rawSettings.maxAttempts)
+        : null;
+    const resolved =
+      exam?.maxAttempts ?? settingsMaxAttempts;
+    if (resolved === null || resolved === undefined || Number.isNaN(Number(resolved))) {
+      return null;
+    }
+    return Math.max(1, Math.floor(Number(resolved)));
+  }
+
+  private isUnlimitedAttemptsExam(exam: { maxAttempts?: number | null; settings?: any }): boolean {
+    return this.resolveConfiguredMaxAttempts(exam) === null;
+  }
+
+  private collapseLatestCompletedSubmissions<T extends { id: string; studentId?: string | null; status?: string | null; submittedAt?: Date | string | null; createdAt?: Date | string | null }>(submissions: T[]) {
+    const buckets = new Map<string, T>();
+    for (const submission of submissions) {
+      const studentKey = submission.studentId || submission.id;
+      const current = buckets.get(studentKey);
+      const currentTime = current ? new Date(current.submittedAt || current.createdAt || 0).getTime() : -1;
+      const nextTime = new Date(submission.submittedAt || submission.createdAt || 0).getTime();
+      if (!current || nextTime >= currentTime) {
+        buckets.set(studentKey, submission);
+      }
+    }
+    return Array.from(buckets.values());
   }
 
   async updateStatus(id: string, updateDto: UpdateSubmissionStatusDto) {

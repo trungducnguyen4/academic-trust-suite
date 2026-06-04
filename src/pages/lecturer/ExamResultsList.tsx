@@ -1,24 +1,6 @@
-import { useState, useEffect } from "react";
-import { useLocation, useParams, useNavigate } from "react-router-dom";
-import { DataPagination } from "@/components/common/DataPagination";
-import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Card, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Loader2, AlertTriangle, Activity } from "lucide-react";
-import api from "@/lib/api";
-import { unwrapPaginatedData } from "@/lib/api";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
-import { getStatusBadgeLabel } from "@/components/ui/status-badge";
+import { useEffect, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Activity, AlertTriangle, Loader2, Search } from "lucide-react";
 import {
   ResponsiveContainer,
   BarChart,
@@ -29,14 +11,33 @@ import {
   Tooltip,
 } from "recharts";
 
+import { DataPagination } from "@/components/common/DataPagination";
+import { DashboardLayout } from "@/components/layout/DashboardLayout";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import { StatusBadge } from "@/components/ui/status-badge";
+import api, { unwrapPaginatedData } from "@/lib/api";
+
 type ExamOverview = {
   exam: {
     id: string;
     title: string;
     totalPoints?: number;
   };
+  analyticsScope?: "OFFICIAL" | "PRACTICE";
+  isUnlimited?: boolean;
   summary: {
     totalSubmissions: number;
+    analyzedSubmissions?: number;
     inProgress: number;
     completed: number;
     avgScorePct: number;
@@ -69,9 +70,8 @@ export default function ExamResultsList() {
   const { id: examId } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const basePath = location.pathname.startsWith("/admin")
-    ? "/admin"
-    : "/lecturer";
+  const basePath = location.pathname.startsWith("/admin") ? "/admin" : "/lecturer";
+
   const [examTitle, setExamTitle] = useState("Exam Results");
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [overview, setOverview] = useState<ExamOverview | null>(null);
@@ -104,8 +104,7 @@ export default function ExamResultsList() {
         if (!mounted) return;
 
         setExamTitle(examRes?.title || "Exam Results");
-        const data = unwrapPaginatedData(subsRes);
-        setSubmissions(data);
+        setSubmissions(unwrapPaginatedData(subsRes));
         setTotalPages(subsRes?.totalPages ?? 1);
         setOverview(overviewRes || null);
       } catch (err) {
@@ -142,7 +141,6 @@ export default function ExamResultsList() {
   const handleExport = async (format = "csv") => {
     if (!examId) return;
     try {
-      // Use fetch directly to receive CSV with correct headers
       const token = localStorage.getItem("accessToken");
       const res = await fetch(
         `${process.env.REACT_APP_API_BASE || "http://localhost:3001/api"}/submissions/exam/${examId}/export`,
@@ -165,52 +163,76 @@ export default function ExamResultsList() {
     }
   };
 
-  if (loading)
+  if (loading) {
     return (
       <DashboardLayout>
-        <div className="flex items-center justify-center h-40">
-          <Loader2 className="h-6 w-6 animate-spin" />
+        <div className="flex h-40 items-center justify-center">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
         </div>
       </DashboardLayout>
     );
+  }
 
   return (
     <DashboardLayout>
-      <div className="max-w-6xl mx-auto space-y-4">
-        {/* <BackToDashboardButton to="/lecturer" className="-ml-2" /> */}
-
-        <div className="flex items-center justify-between mb-4 flex-col sm:flex-row gap-3">
-          <div>
-            <h1 className="text-2xl font-semibold">
+      <div className="mx-auto max-w-7xl space-y-5 rounded-3xl bg-gradient-to-b from-slate-50/90 via-background to-background px-4 py-5 sm:px-6 lg:px-8">
+        <div className="flex flex-col gap-4 rounded-3xl border border-border/70 bg-card/90 p-5 shadow-[0_16px_40px_-28px_rgba(15,23,42,0.45)] backdrop-blur-sm sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-100/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.18em] text-slate-600">
+              Exam analytics
+            </div>
+            {overview?.analyticsScope ? (
+              <StatusBadge
+                status={overview.analyticsScope === "OFFICIAL" ? "published" : "available"}
+                domain="exam"
+              >
+                {overview.analyticsScope === "OFFICIAL" ? "Official analytics" : "Practice analytics"}
+              </StatusBadge>
+            ) : null}
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground sm:text-[1.75rem]">
               Student Exam Results List - {examTitle}
             </h1>
-            <p className="text-xs text-muted-foreground mt-1 flex items-center gap-1">
+            <p className="flex items-center gap-1 text-xs text-muted-foreground">
               <Activity className="h-3.5 w-3.5" />
               {isRefreshing
                 ? "Updating live data..."
                 : `Last update: ${overview?.updatedAt ? new Date(overview.updatedAt).toLocaleTimeString() : "N/A"}`}
             </p>
           </div>
-          <div className="flex items-center gap-2">
-            <Input
-              placeholder="Search by Name or ID"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="bg-white"
-            />
-            <Button onClick={() => handleExport("csv")}>Export to CSV</Button>
-            <Button variant="outline" onClick={() => handleExport("pdf")}>
-              Export to CSV/PDF
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Search by Name or ID"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="min-w-[240px] bg-background/90 pl-9 shadow-sm"
+              />
+            </div>
+            <Button onClick={() => handleExport("csv")} className="shadow-sm">
+              Export CSV
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => handleExport("pdf")}
+              className="border-slate-300 bg-background/80 shadow-sm"
+            >
+              Export PDF
             </Button>
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-2">
+        <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+          <Card className="lg:col-span-2 border-slate-200/80 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
             <CardContent className="pt-5">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold">Score Distribution (Live)</h2>
-                <div className="text-xs text-muted-foreground">
+              <div className="mb-4 flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="font-semibold tracking-tight">Score Distribution (Live)</h2>
+                  <p className="text-xs text-muted-foreground">
+                    A compact read on how the cohort is spreading out.
+                  </p>
+                </div>
+                <div className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-xs text-muted-foreground">
                   Avg:{" "}
                   <span className="font-semibold text-foreground">
                     {overview?.summary?.avgScorePct ?? 0}%
@@ -225,35 +247,54 @@ export default function ExamResultsList() {
               <div className="h-[260px]">
                 <ResponsiveContainer width="100%" height="100%">
                   <BarChart data={overview?.scoreDistribution || []}>
-                    <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                    <XAxis dataKey="key" />
-                    <YAxis allowDecimals={false} />
-                    <Tooltip />
-                    <Bar
-                      dataKey="count"
-                      fill="hsl(var(--chart-1))"
-                      radius={[8, 8, 0, 0]}
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      vertical={false}
+                      stroke="hsl(var(--border))"
+                      opacity={0.65}
                     />
+                    <XAxis
+                      dataKey="key"
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <YAxis
+                      allowDecimals={false}
+                      tickLine={false}
+                      axisLine={false}
+                      stroke="hsl(var(--muted-foreground))"
+                    />
+                    <Tooltip
+                      cursor={{ fill: "rgba(148, 163, 184, 0.12)" }}
+                      contentStyle={{
+                        borderRadius: 12,
+                        border: "1px solid hsl(var(--border))",
+                        background: "hsl(var(--background))",
+                        boxShadow: "0 16px 30px -20px rgba(15, 23, 42, 0.45)",
+                      }}
+                    />
+                    <Bar dataKey="count" fill="hsl(var(--primary))" radius={[8, 8, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
 
-              <div className="grid grid-cols-3 gap-2 mt-4 text-center text-sm">
-                <div className="rounded-md bg-muted p-2">
+              <div className="mt-4 grid grid-cols-3 gap-3 text-center text-sm">
+                <div className="rounded-2xl border border-emerald-200 bg-emerald-50/70 p-3">
                   <p className="text-muted-foreground">Completed</p>
-                  <p className="font-semibold">
+                  <p className="mt-1 font-semibold text-emerald-700">
                     {overview?.summary?.completed ?? 0}
                   </p>
                 </div>
-                <div className="rounded-md bg-muted p-2">
+                <div className="rounded-2xl border border-amber-200 bg-amber-50/70 p-3">
                   <p className="text-muted-foreground">In Progress</p>
-                  <p className="font-semibold">
+                  <p className="mt-1 font-semibold text-amber-700">
                     {overview?.summary?.inProgress ?? 0}
                   </p>
                 </div>
-                <div className="rounded-md bg-muted p-2">
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3">
                   <p className="text-muted-foreground">Total</p>
-                  <p className="font-semibold">
+                  <p className="mt-1 font-semibold text-slate-800">
                     {overview?.summary?.totalSubmissions ?? 0}
                   </p>
                 </div>
@@ -261,44 +302,42 @@ export default function ExamResultsList() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="border-slate-200/80 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
             <CardContent className="pt-5">
-              <div className="flex items-center gap-2 mb-3">
-                <AlertTriangle className="h-4 w-4 text-amber-600" />
-                <h2 className="font-semibold">Suspicious Activities</h2>
+              <div className="mb-3 flex items-center gap-2">
+                <div className="rounded-full bg-amber-100 p-1.5 text-amber-700">
+                  <AlertTriangle className="h-4 w-4" />
+                </div>
+                <div>
+                  <h2 className="font-semibold tracking-tight">Suspicious Activities</h2>
+                  <p className="text-xs text-muted-foreground">
+                    Signals only, no automatic cheating verdict.
+                  </p>
+                </div>
               </div>
 
-              <div className="space-y-2 max-h-[320px] overflow-auto pr-1">
+              <div className="max-h-[320px] space-y-2 overflow-auto pr-1">
                 {(overview?.anomalies?.length || 0) === 0 ? (
                   <p className="text-sm text-muted-foreground">
                     No suspicious actions detected yet.
                   </p>
                 ) : (
                   overview?.anomalies?.map((item) => (
-                    <div key={item.id} className="rounded-md border p-2.5">
-                      <div className="flex items-center justify-between gap-2 mb-1">
-                        <p className="text-sm font-medium truncate">
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-slate-200/80 bg-gradient-to-br from-background to-slate-50/70 p-3 shadow-sm"
+                    >
+                      <div className="mb-1 flex items-center justify-between gap-2">
+                        <p className="truncate text-sm font-medium">
                           {item.student?.fullName || "Unknown student"}
                         </p>
-                        <Badge
-                          variant={
-                            item.severity === "high"
-                              ? "destructive"
-                              : item.severity === "medium"
-                                ? "secondary"
-                                : "outline"
-                          }
-                        >
-                          {item.severity}
-                        </Badge>
+                        <StatusBadge domain="severity" status={item.severity} />
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        {item.eventType}
-                      </p>
-                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                      <p className="text-xs font-medium text-slate-700">{item.eventType}</p>
+                      <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
                         {item.details || "-"}
                       </p>
-                      <p className="text-[11px] text-muted-foreground mt-1">
+                      <p className="mt-2 text-[11px] text-muted-foreground">
                         {new Date(item.timestamp).toLocaleString()}
                       </p>
                     </div>
@@ -309,17 +348,27 @@ export default function ExamResultsList() {
           </Card>
         </div>
 
-        <Card>
+        <Card className="overflow-hidden border-slate-200/80 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
           <CardContent className="p-0">
             <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Student Name</TableHead>
-                    <TableHead>ID</TableHead>
-                    <TableHead>Score (Points)</TableHead>
-                    <TableHead>Time Spent</TableHead>
-                    <TableHead>Status</TableHead>
+              <Table className="border-separate border-spacing-0">
+                <TableHeader className="bg-slate-50/80">
+                  <TableRow className="border-b border-slate-200">
+                    <TableHead className="bg-slate-50/80 font-semibold text-slate-600">
+                      Student Name
+                    </TableHead>
+                    <TableHead className="bg-slate-50/80 font-semibold text-slate-600">
+                      ID
+                    </TableHead>
+                    <TableHead className="bg-slate-50/80 font-semibold text-slate-600">
+                      Score (Points)
+                    </TableHead>
+                    <TableHead className="bg-slate-50/80 font-semibold text-slate-600">
+                      Time Spent
+                    </TableHead>
+                    <TableHead className="bg-slate-50/80 font-semibold text-slate-600">
+                      Status
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -334,27 +383,29 @@ export default function ExamResultsList() {
                     </TableRow>
                   ) : (
                     filtered.map((s) => (
-                      <TableRow key={s.id}>
-                        <TableCell>
+                      <TableRow key={s.id} className="transition-colors hover:bg-slate-50/80">
+                        <TableCell className="py-4">
                           <a
-                            className="text-blue-600 hover:underline"
+                            className="font-medium text-primary underline-offset-4 hover:underline"
                             onClick={() => navigate(`${basePath}/exam/${examId}/monitor`)}
                           >
                             {s.student?.fullName || "—"}
                           </a>
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-4 text-muted-foreground">
                           {s.student?.studentId || s.student?.id}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-4 font-medium text-foreground">
                           {s.score != null
                             ? `${s.score}/${overview?.exam?.totalPoints ?? "-"}`
                             : "-"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell className="py-4 text-muted-foreground">
                           {formatTimeSpent(s.startedAt, s.submittedAt)}
                         </TableCell>
-                        <TableCell>{getStatusBadgeLabel(s.status)}</TableCell>
+                        <TableCell className="py-4">
+                          <StatusBadge domain="submission" status={s.status} />
+                        </TableCell>
                       </TableRow>
                     ))
                   )}

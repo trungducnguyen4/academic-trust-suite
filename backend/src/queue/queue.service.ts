@@ -18,6 +18,8 @@ export class QueueService {
     private gradingQueue: Queue,
     @InjectQueue('events')
     private eventsQueue: Queue,
+    @InjectQueue('ai-generation')
+    private aiGenerationQueue: Queue,
     private prisma: PrismaService,
     private events: DistributedEventsService,
     private readonly redisService: RedisService,
@@ -50,6 +52,18 @@ export class QueueService {
   async enqueueGrading(data: any): Promise<void> {
     await this.gradingQueue.add(data, {
       removeOnComplete: true,
+      removeOnFail: false,
+      attempts: 3,
+      backoff: {
+        type: 'exponential',
+        delay: 2000,
+      },
+    });
+  }
+
+  async enqueueAiGeneration(data: any): Promise<void> {
+    await this.aiGenerationQueue.add(data, {
+      removeOnComplete: false,
       removeOnFail: false,
       attempts: 3,
       backoff: {
@@ -135,6 +149,8 @@ export class QueueService {
         return this.gradingQueue;
       case 'events':
         return this.eventsQueue;
+      case 'ai-generation':
+        return this.aiGenerationQueue;
       default:
         return null;
     }
