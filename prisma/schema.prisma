@@ -20,6 +20,13 @@ enum ExamMode {
   LAB
 }
 
+enum ExamGradingStrategy {
+  HIGHEST
+  AVERAGE
+  FIRST_ATTEMPT
+  LAST_ATTEMPT
+}
+
 enum QuestionLifecycleStatus {
   DRAFT
   IN_REVIEW
@@ -141,6 +148,7 @@ model User {
 model Course {
   id         String    @id @default(uuid())
   code       String    @unique
+  subjectCode String?
   name       String
   semester   String?
   academicYear String?
@@ -164,6 +172,7 @@ model Course {
   questionCourseScopes QuestionCourseScope[]
 
   @@index([code])
+  @@index([subjectCode])
   @@index([lecturerId])
   @@map("courses")
 }
@@ -190,6 +199,7 @@ model Exam {
   title                  String
   description            String?  @db.Text
   duration               Int      // duration in minutes
+  timeLimitMinutes       Int?
   totalPoints            Int?
   passingScore           Int?
   startTime              DateTime?
@@ -198,6 +208,10 @@ model Exam {
   statusEnum             ExamStatus?
   mode                   ExamMode @default(NORMAL)
   settings               Json?
+  maxAttempts            Int?
+  gradingStrategy        ExamGradingStrategy?
+  reviewSettings         Json?
+  questionSelectionConfig Json?
   scoringScale           Int?     @default(10)
   scoringRounding         Int?     @default(2)
   scoringNormalization    ScoringNormalization? @default(LINEAR)
@@ -218,6 +232,7 @@ model Exam {
   @@index([courseId])
   @@index([creatorId])
   @@index([status])
+  @@index([gradingStrategy])
   @@map("exams")
 }
 
@@ -306,6 +321,7 @@ model Question {
   explanation  String?  @db.Text
   difficulty   Int?     @default(1)
   points       Int?     @default(1)
+  defaultPoints Decimal? @default(1.0) @db.Decimal(5, 2)
   courseId     String?
   course       Course?  @relation(fields: [courseId], references: [id])
   creatorId    String?
@@ -473,6 +489,7 @@ model ExamQuestion {
   questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id])
   orderIndex Int
   points     Int?     @default(1)
+  assignedScore Decimal? @default(1.0) @db.Decimal(7, 2)
   weight     Decimal? @db.Decimal(5, 2)
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
@@ -529,6 +546,8 @@ model ExamInstance {
   exam           Exam     @relation(fields: [examId], references: [id])
   studentId      String
   student        User     @relation(fields: [studentId], references: [id])
+  examSnapshotId String?
+  examSnapshot   ExamSnapshot? @relation(fields: [examSnapshotId], references: [id], onDelete: SetNull)
   status         ExamInstanceStatus @default(NOT_STARTED)
   startedAt      DateTime?
   submittedAt    DateTime?
@@ -537,6 +556,9 @@ model ExamInstance {
   userAgent      String?  @db.Text
   encryptedPayload Bytes?
   payloadChecksum String? @db.VarChar(64)
+  snapshotPayload Json?
+  randomizationSeed String? @db.VarChar(64)
+  questionOrder  Json?
   rawScore       Decimal? @db.Decimal(7, 2)
   maxRawScore    Decimal? @db.Decimal(7, 2)
   normalizedScore Decimal? @db.Decimal(5, 2)
@@ -554,6 +576,7 @@ model ExamInstance {
   @@unique([examId, studentId])
   @@index([examId])
   @@index([studentId])
+  @@index([examSnapshotId])
   @@map("exam_instances")
 }
 
@@ -651,6 +674,7 @@ model ExamSnapshot {
   publishedAt DateTime?
 
   questions  ExamQuestionSnapshot[]
+  examInstances ExamInstance[]
   submissions ExamSubmission[]
   @@index([examId])
   @@map("exam_snapshots")
@@ -665,6 +689,7 @@ model ExamQuestionSnapshot {
   questionSnapshotId String?
   orderIndex        Int
   points            Int?
+  assignedScore     Decimal? @db.Decimal(7, 2)
   payload           Json?    // question payload copied at snapshot time
 
   questionSnapshot  QuestionSnapshot? @relation(fields: [questionSnapshotId], references: [id])

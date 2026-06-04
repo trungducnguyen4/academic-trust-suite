@@ -17,6 +17,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 @Injectable()
 export class ExamsService {
   private examQuestionVersionColumnExists: boolean | null = null;
+  private examQuestionAssignedScoreColumnExists: boolean | null = null;
 
   constructor(
     private prisma: PrismaService,
@@ -52,38 +53,97 @@ export class ExamsService {
     return this.examQuestionVersionColumnExists;
   }
 
+  private async hasExamQuestionAssignedScoreColumn(client: any): Promise<boolean> {
+    if (this.examQuestionAssignedScoreColumnExists !== null) {
+      return this.examQuestionAssignedScoreColumnExists;
+    }
+
+    const rows = await client.$queryRawUnsafe(
+      `
+      SELECT 1 AS ok
+      FROM information_schema.columns
+      WHERE table_schema = DATABASE()
+        AND table_name = 'exam_questions'
+        AND column_name = 'assignedScore'
+      LIMIT 1
+      `,
+    ) as Array<{ ok: number }>;
+
+    this.examQuestionAssignedScoreColumnExists = rows.length > 0;
+    return this.examQuestionAssignedScoreColumnExists;
+  }
+
   private async insertExamQuestionCompat(
     client: any,
-    data: { examId: string; questionId: string; orderIndex: number; points?: number | null; questionVersionId?: string | null },
+    data: {
+      examId: string;
+      questionId: string;
+      orderIndex: number;
+      points?: number | null;
+      questionVersionId?: string | null;
+      assignedScore?: number | null;
+    },
   ): Promise<string> {
     const id = randomUUID();
     const hasVersionColumn = await this.hasExamQuestionVersionColumn(client);
+    const hasAssignedScoreColumn = await this.hasExamQuestionAssignedScoreColumn(client);
 
     if (hasVersionColumn) {
-      await client.$executeRawUnsafe(
-        `
-        INSERT INTO exam_questions (id, examId, questionId, questionVersionId, orderIndex, points)
-        VALUES (?, ?, ?, ?, ?, ?)
-        `,
-        id,
-        data.examId,
-        data.questionId,
-        data.questionVersionId ?? null,
-        data.orderIndex,
-        data.points ?? 1,
-      );
+      if (hasAssignedScoreColumn) {
+        await client.$executeRawUnsafe(
+          `
+          INSERT INTO exam_questions (id, examId, questionId, questionVersionId, orderIndex, points, assignedScore)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+          `,
+          id,
+          data.examId,
+          data.questionId,
+          data.questionVersionId ?? null,
+          data.orderIndex,
+          data.points ?? 1,
+          data.assignedScore ?? data.points ?? 1,
+        );
+      } else {
+        await client.$executeRawUnsafe(
+          `
+          INSERT INTO exam_questions (id, examId, questionId, questionVersionId, orderIndex, points)
+          VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          id,
+          data.examId,
+          data.questionId,
+          data.questionVersionId ?? null,
+          data.orderIndex,
+          data.points ?? 1,
+        );
+      }
     } else {
-      await client.$executeRawUnsafe(
-        `
-        INSERT INTO exam_questions (id, examId, questionId, orderIndex, points)
-        VALUES (?, ?, ?, ?, ?)
-        `,
-        id,
-        data.examId,
-        data.questionId,
-        data.orderIndex,
-        data.points ?? 1,
-      );
+      if (hasAssignedScoreColumn) {
+        await client.$executeRawUnsafe(
+          `
+          INSERT INTO exam_questions (id, examId, questionId, orderIndex, points, assignedScore)
+          VALUES (?, ?, ?, ?, ?, ?)
+          `,
+          id,
+          data.examId,
+          data.questionId,
+          data.orderIndex,
+          data.points ?? 1,
+          data.assignedScore ?? data.points ?? 1,
+        );
+      } else {
+        await client.$executeRawUnsafe(
+          `
+          INSERT INTO exam_questions (id, examId, questionId, orderIndex, points)
+          VALUES (?, ?, ?, ?, ?)
+          `,
+          id,
+          data.examId,
+          data.questionId,
+          data.orderIndex,
+          data.points ?? 1,
+        );
+      }
     }
 
     return id;
@@ -106,21 +166,26 @@ export class ExamsService {
         eq.id,
         eq.examId,
         eq.questionId,
+        eq.questionVersionId,
         eq.orderIndex,
         eq.points,
+        eq.assignedScore,
+        COALESCE(qv.stem, q.content) AS content,
+        COALESCE(qv.payload, q.options) AS options,
+        COALESCE(qv.answerKey, q.correctAnswer) AS correctAnswer,
+        COALESCE(qv.explanation, q.explanation) AS explanation,
+        COALESCE(qv.difficulty, q.difficulty) AS difficulty,
+        COALESCE(qv.points, q.defaultPoints, q.points) AS questionPoints,
+        COALESCE(qv.versionNo, 0) AS versionNo,
         q.type,
-        q.content,
-        q.options,
-        q.correctAnswer,
-        q.explanation,
-        q.difficulty,
-        q.points AS questionPoints,
         q.courseId,
         q.creatorId,
         q.createdAt,
         q.updatedAt
       FROM exam_questions eq
-      INNER JOIN questions q
+      LEFT JOIN question_versions qv
+        ON qv.id COLLATE utf8mb4_unicode_ci = eq.questionVersionId COLLATE utf8mb4_unicode_ci
+      LEFT JOIN questions q
         ON q.id COLLATE utf8mb4_unicode_ci = eq.questionId COLLATE utf8mb4_unicode_ci
       WHERE eq.examId COLLATE utf8mb4_unicode_ci = ?
       ORDER BY eq.orderIndex ASC
@@ -132,8 +197,10 @@ export class ExamsService {
       id: row.id,
       examId: row.examId,
       questionId: row.questionId,
+      questionVersionId: row.questionVersionId ?? null,
       orderIndex: Number(row.orderIndex || 0),
-      points: row.points ?? 1,
+      points: row.assignedScore ?? row.points ?? 1,
+      assignedScore: row.assignedScore ?? row.points ?? 1,
       question: {
         id: row.questionId,
         type: row.type,
@@ -147,6 +214,7 @@ export class ExamsService {
         creatorId: row.creatorId,
         createdAt: row.createdAt,
         updatedAt: row.updatedAt,
+        versionNo: row.versionNo,
       },
     }));
   }
@@ -154,6 +222,35 @@ export class ExamsService {
   async create(createExamDto: CreateExamDto, creatorId: string) {
     const { questionIds, ...examData } = createExamDto;
     const settings = (createExamDto as any).settings || (examData as any).settings || {};
+    const timeLimitMinutes =
+      typeof createExamDto.timeLimitMinutes === 'number'
+        ? createExamDto.timeLimitMinutes
+        : typeof settings.timeLimitMinutes === 'number'
+          ? settings.timeLimitMinutes
+          : createExamDto.duration;
+    const maxAttempts =
+      typeof createExamDto.maxAttempts === 'number'
+        ? createExamDto.maxAttempts
+        : typeof settings.maxAttempts === 'number'
+          ? settings.maxAttempts
+          : null;
+    const gradingStrategy =
+      createExamDto.gradingStrategy ||
+      settings.gradingStrategy ||
+      null;
+    const reviewSettings =
+      createExamDto.reviewSettings ||
+      settings.reviewSettings ||
+      null;
+    const questionSelectionConfig =
+      createExamDto.questionSelectionConfig ||
+      settings.questionSelectionConfig ||
+      {
+        sourceMethod: settings.sourceMethod || 'bank',
+        shuffleQuestions: Boolean(settings.shuffleQuestions),
+        requestedQuestionCount: Number(settings.requestedQuestionCount || 0) || null,
+        topicAllocations: Array.isArray(settings.topicAllocations) ? settings.topicAllocations : [],
+      };
     const requestedCount = Number(settings.requestedQuestionCount || 0);
     const sourceMethod = settings.sourceMethod || 'bank';
     const normalizedType = this.normalizeQuestionType(settings.questionType);
@@ -191,6 +288,11 @@ export class ExamsService {
           creatorId,
           startTime: examData.startTime ? new Date(examData.startTime) : null,
           endTime: examData.endTime ? new Date(examData.endTime) : null,
+          timeLimitMinutes: timeLimitMinutes ?? null,
+          maxAttempts: maxAttempts ?? null,
+          gradingStrategy: gradingStrategy ?? null,
+          reviewSettings: reviewSettings ?? null,
+          questionSelectionConfig: questionSelectionConfig ?? null,
         },
         include: {
           course: {
@@ -217,16 +319,51 @@ export class ExamsService {
 
       // Add questions if provided
       if (questionIds && questionIds.length > 0) {
-        for (let i = 0; i < questionIds.length; i++) {
-          await this.insertExamQuestionCompat(tx, {
-            examId: exam.id,
-            questionId: questionIds[i],
-            orderIndex: i + 1,
-            points: 1,
-          });
+        const versionRows = await tx.questionVersion.findMany({
+          where: { questionId: { in: questionIds } },
+          orderBy: [
+            { questionId: 'asc' },
+            { versionNo: 'desc' },
+          ],
+          select: {
+            id: true,
+            questionId: true,
+          },
+        });
+        const latestVersionByQuestionId = new Map<string, string>();
+        for (const version of versionRows) {
+          if (!latestVersionByQuestionId.has(version.questionId)) {
+            latestVersionByQuestionId.set(version.questionId, version.id);
+          }
         }
-      } else {
-        // Auto-fill from question bank when requested
+
+        for (let i = 0; i < questionIds.length; i++) {
+          const questionId = questionIds[i];
+          const question = await tx.question.findUnique({
+            where: { id: questionId },
+            select: {
+              id: true,
+              points: true,
+              defaultPoints: true,
+            },
+          });
+
+          if (!question) {
+            throw new BadRequestException(`Question not found: ${questionId}`);
+          }
+
+            await this.insertExamQuestionCompat(tx, {
+              examId: exam.id,
+              questionId,
+              orderIndex: i + 1,
+              points: Math.max(1, Math.round(Number(question.points ?? question.defaultPoints ?? 1))),
+              assignedScore: Number(question.defaultPoints ?? question.points ?? 1) || 1,
+              questionVersionId: latestVersionByQuestionId.get(questionId) ?? null,
+            });
+        }
+      }
+
+        // Add random bank questions after any explicitly selected questions.
         const requestedCount = (createExamDto as any).settings?.requestedQuestionCount ||
           (examData as any).settings?.requestedQuestionCount || 0;
 
@@ -234,7 +371,7 @@ export class ExamsService {
           (examData as any).settings?.sourceMethod || 'bank';
 
         // Only auto-fill for bank source and a positive requestedCount
-        if (!questionIds && sourceMethod === 'bank' && (requestedCount > 0 || topicAllocations.length > 0)) {
+        if (sourceMethod === 'bank' && (requestedCount > 0 || topicAllocations.length > 0)) {
             // Build base where clause: same course
             const baseWhere: any = { courseId: createExamDto.courseId };
 
@@ -265,7 +402,7 @@ export class ExamsService {
             };
 
             const selectedQuestions: any[] = [];
-            const usedQuestionIds = new Set<string>();
+            const usedQuestionIds = new Set<string>(questionIds || []);
 
             if (topicAllocations.length > 0) {
               const difficultyGte = Number((baseWhere as any)?.difficulty?.gte);
@@ -300,14 +437,14 @@ export class ExamsService {
 
                 const questionsForTopic = await tx.$queryRawUnsafe(
                   `
-                  SELECT q.id, q.points
+                  SELECT q.id, q.points, q.defaultPoints
                   FROM questions q
                   INNER JOIN question_topics qt
                     ON qt.questionId COLLATE utf8mb4_unicode_ci = q.id COLLATE utf8mb4_unicode_ci
                   WHERE ${topicWhereParts.join(' AND ')}
                   `,
                   ...topicArgs,
-                ) as Array<{ id: string; points: number | null }>;
+                ) as Array<{ id: string; points: number | null; defaultPoints: number | null }>;
 
                 const available = questionsForTopic.filter((question) => !usedQuestionIds.has(question.id));
                 if (available.length < allocation.count) {
@@ -327,6 +464,12 @@ export class ExamsService {
                 where: baseWhere,
                 take: Math.max(0, Number(requestedCount)),
                 orderBy: { createdAt: 'desc' },
+                select: {
+                  id: true,
+                  points: true,
+                  defaultPoints: true,
+                  latestVersionNo: true,
+                },
               });
 
               if (selected.length === 0) {
@@ -344,17 +487,38 @@ export class ExamsService {
               );
             }
 
+            const selectedQuestionIds = Array.from(new Set(selectedQuestions.map((q) => q.id)));
+            const latestVersions = await tx.questionVersion.findMany({
+              where: { questionId: { in: selectedQuestionIds } },
+              orderBy: [
+                { questionId: 'asc' },
+                { versionNo: 'desc' },
+              ],
+              select: {
+                id: true,
+                questionId: true,
+                versionNo: true,
+              },
+            });
+            const latestVersionByQuestionId = new Map<string, string>();
+            for (const version of latestVersions) {
+              if (!latestVersionByQuestionId.has(version.questionId)) {
+                latestVersionByQuestionId.set(version.questionId, version.id);
+              }
+            }
+
             for (let i = 0; i < selectedQuestions.length; i++) {
               const question = selectedQuestions[i];
               await this.insertExamQuestionCompat(tx, {
                 examId: exam.id,
                 questionId: question.id,
-                orderIndex: i + 1,
-                points: question.points || 1,
+                orderIndex: (questionIds?.length || 0) + i + 1,
+                points: Math.max(1, Math.round(Number(question.points ?? question.defaultPoints ?? 1))),
+                assignedScore: Number(question.defaultPoints ?? question.points ?? 1) || 1,
+                questionVersionId: latestVersionByQuestionId.get(question.id) ?? null,
               });
             }
         }
-      }
 
       // If exam has at least one question, auto-publish by default
       const qCount = await tx.examQuestion.count({ where: { examId: exam.id } });
@@ -843,11 +1007,28 @@ export class ExamsService {
     let orderIndex = (maxOrder?.orderIndex || 0) + 1;
 
     const examQuestions: any[] = [];
+    const versionRows = await this.prisma.questionVersion.findMany({
+      where: { questionId: { in: questionIds } },
+      orderBy: [
+        { questionId: 'asc' },
+        { versionNo: 'desc' },
+      ],
+      select: {
+        id: true,
+        questionId: true,
+      },
+    });
+    const latestVersionByQuestionId = new Map<string, string>();
+    for (const version of versionRows) {
+      if (!latestVersionByQuestionId.has(version.questionId)) {
+        latestVersionByQuestionId.set(version.questionId, version.id);
+      }
+    }
 
-      for (const questionId of questionIds) {
+    for (const questionId of questionIds) {
       const question = await this.prisma.question.findUnique({
         where: { id: questionId },
-        select: { id: true, points: true },
+        select: { id: true, points: true, defaultPoints: true },
       });
 
       if (!question) {
@@ -866,14 +1047,16 @@ export class ExamsService {
           examId,
           questionId,
           orderIndex,
-          points: question.points || 1,
+          points: Math.max(1, Math.round(Number(question.points ?? question.defaultPoints ?? 1))),
+          assignedScore: Number(question.defaultPoints ?? question.points ?? 1) || 1,
+          questionVersionId: latestVersionByQuestionId.get(questionId) ?? null,
         });
         examQuestions.push({
           id: createdId,
           examId,
           questionId,
           orderIndex,
-          points: question.points || 1,
+          points: Math.max(1, Math.round(Number(question.points ?? question.defaultPoints ?? 1))),
           question,
         });
         orderIndex++;
@@ -918,7 +1101,18 @@ export class ExamsService {
 
     return this.prisma.examQuestion.update({
       where: { id: examQuestion.id },
-      data: updateDto,
+      data: {
+        ...(typeof updateDto.orderIndex === 'number' ? { orderIndex: updateDto.orderIndex } : {}),
+        ...(typeof updateDto.points === 'number'
+          ? { points: updateDto.points, assignedScore: updateDto.points }
+          : {}),
+        ...(typeof updateDto.assignedScore === 'number'
+          ? {
+              assignedScore: updateDto.assignedScore,
+              points: Math.max(1, Math.round(updateDto.assignedScore)),
+            }
+          : {}),
+      },
       include: {
         question: true,
       },
@@ -958,7 +1152,14 @@ export class ExamsService {
         data: {
           examId: id,
           title: exam.title,
-          payload: exam.settings ?? {},
+          payload: {
+            ...(this.parseRawJson(exam.settings) || {}),
+            timeLimitMinutes: exam.timeLimitMinutes ?? null,
+            maxAttempts: exam.maxAttempts ?? null,
+            gradingStrategy: exam.gradingStrategy ?? null,
+            reviewSettings: exam.reviewSettings ?? null,
+            questionSelectionConfig: exam.questionSelectionConfig ?? null,
+          },
           createdBy: exam.creatorId,
           publishedAt: new Date(),
         },
@@ -998,7 +1199,8 @@ export class ExamsService {
             questionVersionId: questionVersionId,
             questionSnapshotId: qSnapshot.id,
             orderIndex: eq.orderIndex,
-            points: eq.points ?? 1,
+            points: Math.max(1, Math.round(Number(eq.assignedScore ?? eq.points ?? 1))),
+            assignedScore: Number(eq.assignedScore ?? eq.points ?? 1),
             payload: questionVersion?.payload ?? {},
           },
         });

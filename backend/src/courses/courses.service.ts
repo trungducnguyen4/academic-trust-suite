@@ -437,6 +437,7 @@ export class CoursesService {
         return {
           id: c.id,
           code: c.code,
+          subjectCode: c.subjectCode,
           name: c.name,
           academicYear: c.academicYear,
           term: c.term,
@@ -483,6 +484,7 @@ export class CoursesService {
         return {
           id: c.id,
           code: c.code,
+          subjectCode: c.subjectCode,
           name: c.name,
           academicYear: c.academicYear,
           term: c.term,

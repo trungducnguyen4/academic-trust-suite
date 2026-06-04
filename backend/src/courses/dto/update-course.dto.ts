@@ -8,6 +8,10 @@ export class UpdateCourseDto {
 
   @IsOptional()
   @IsString()
+  subjectCode?: string | null;
+
+  @IsOptional()
+  @IsString()
   description?: string;
 
   @IsOptional()

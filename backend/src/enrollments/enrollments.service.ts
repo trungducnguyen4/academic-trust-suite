@@ -447,6 +447,54 @@ export class EnrollmentsService {
     return results;
   }
 
+  async searchTrainingSystemStudents(query?: string, courseId?: string) {
+    const trimmedQuery = String(query || '').trim();
+    const normalizedQuery = trimmedQuery.toLowerCase();
+
+    const alreadyEnrolled = courseId
+      ? await this.prisma.enrollment.findMany({
+          where: { courseId },
+          select: { studentId: true },
+        })
+      : [];
+    const excludedStudentIds = new Set(alreadyEnrolled.map((row) => row.studentId));
+
+    const students = await this.prisma.user.findMany({
+      where: {
+        role: 'STUDENT',
+        status: 'active',
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        studentId: true,
+        department: true,
+      },
+      orderBy: { fullName: 'asc' },
+      take: 100,
+    });
+
+    return students.filter((student) => {
+      if (excludedStudentIds.has(student.id)) {
+        return false;
+      }
+
+      if (!normalizedQuery) {
+        return true;
+      }
+
+      return [
+        student.email,
+        student.fullName,
+        student.studentId,
+        student.department,
+      ]
+        .filter(Boolean)
+        .some((value) => String(value).toLowerCase().includes(normalizedQuery));
+    });
+  }
+
   async findByCourse(courseId: string, user: { id: string; role: 'ADMIN' | 'LECTURER' | 'STUDENT' }) {
     await this.assertCanManageCourseById(courseId, user);
 

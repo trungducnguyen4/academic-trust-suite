@@ -195,6 +195,7 @@ class ApiClient {
 
   async createCourse(data: {
     name: string;
+    subjectCode?: string;
     description?: string;
     credits?: number;
     academicYear: string;
@@ -268,6 +269,14 @@ class ApiClient {
     });
   }
 
+  async searchTrainingSystemStudents(params: { query?: string; courseId?: string }) {
+    const queryParams = new URLSearchParams();
+    if (params.query) queryParams.append('query', params.query);
+    if (params.courseId) queryParams.append('courseId', params.courseId);
+    const query = queryParams.toString() ? `?${queryParams.toString()}` : '';
+    return this.request<any[]>(`/enrollments/training-system/students${query}`);
+  }
+
   // Questions endpoints (official)
   async listQuestions(filters?: {
     topicId?: string;
@@ -331,6 +340,7 @@ class ApiClient {
     explanation?: string;
     difficulty?: number;
     points?: number;
+    defaultPoints?: number;
     
     courseId?: string;
     topicId?: string;
@@ -382,6 +392,7 @@ class ApiClient {
         data: {
           difficulty: data.difficulty,
           points: data.points,
+          defaultPoints: data.defaultPoints ?? data.points ?? 1,
           courseId: data.courseId,
           
           topicId: data.topicId || data.topic,
@@ -561,10 +572,15 @@ class ApiClient {
     description?: string;
     courseId: string;
     duration: number;
+    timeLimitMinutes?: number | null;
     totalPoints?: number;
     passingScore?: number;
     startTime?: string;
     endTime?: string;
+    maxAttempts?: number | null;
+    gradingStrategy?: 'HIGHEST' | 'AVERAGE' | 'FIRST_ATTEMPT' | 'LAST_ATTEMPT' | null;
+    reviewSettings?: Record<string, any> | null;
+    questionSelectionConfig?: Record<string, any> | null;
     settings?: any;
     questionIds?: string[];
   }) {

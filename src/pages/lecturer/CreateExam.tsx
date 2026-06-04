@@ -24,6 +24,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   BookOpen,
@@ -45,6 +46,7 @@ import {
   FileSearch,
   Database,
   Loader2,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
@@ -76,7 +78,9 @@ interface ExamForm {
   course: string;
   description: string;
   duration: string;
+  timeLimitMinutes: string;
   maxAttempts: string;
+  gradingStrategy: "HIGHEST" | "AVERAGE" | "FIRST_ATTEMPT" | "LAST_ATTEMPT";
   passingScore: string;
   startDate: string;
   startTime: string;
@@ -96,6 +100,64 @@ interface ExamForm {
   aiDifficulty: string;
   aiReviewRequired: boolean;
 }
+
+type ReviewPhaseKey = "during" | "after";
+
+type ReviewPhaseConfig = {
+  showScore: boolean;
+  showAnswers: boolean;
+  showFeedback: boolean;
+};
+
+type ReviewSettingsDraft = {
+  enabled: boolean;
+  phases: Record<ReviewPhaseKey, ReviewPhaseConfig>;
+};
+
+const REVIEW_PHASE_META: { key: ReviewPhaseKey; title: string; description: string }[] = [
+  {
+    key: "during",
+    title: "During review window",
+    description: "Optional partial review access while the exam is still active.",
+  },
+  {
+    key: "after",
+    title: "After submission",
+    description: "What students can see once the attempt is submitted or graded.",
+  },
+];
+
+const createDefaultReviewSettingsDraft = (): ReviewSettingsDraft => ({
+  enabled: true,
+  phases: {
+    during: {
+      showScore: false,
+      showAnswers: false,
+      showFeedback: false,
+    },
+    after: {
+      showScore: true,
+      showAnswers: true,
+      showFeedback: true,
+    },
+  },
+});
+
+const buildReviewSettingsPayload = (draft: ReviewSettingsDraft) => ({
+  type: "phase-based",
+  enabled: draft.enabled,
+  phases: draft.phases,
+});
+
+const reviewPhaseSummary = (phase: ReviewPhaseConfig) => {
+  const items = [
+    phase.showScore ? "Score" : null,
+    phase.showAnswers ? "Answers" : null,
+    phase.showFeedback ? "Feedback" : null,
+  ].filter(Boolean);
+
+  return items.length ? items.join(", ") : "Hidden";
+};
 
 const pad2 = (value: number) => String(value).padStart(2, "0");
 
@@ -137,7 +199,9 @@ const createDefaultForm = (): ExamForm => {
     course: "",
     description: "",
     duration: "60",
+    timeLimitMinutes: "",
     maxAttempts: "1",
+    gradingStrategy: "HIGHEST",
     passingScore: "50",
     startDate: examWindow.startDate,
     startTime: examWindow.startTime,
@@ -159,6 +223,10 @@ const createDefaultForm = (): ExamForm => {
   };
 };
 
+const MAX_ATTEMPT_OPTIONS = Array.from({ length: 10 }, (_, index) =>
+  String(index + 1),
+);
+
 interface CourseOption {
   id: string;
   code: string;
@@ -173,6 +241,29 @@ interface BankTopic {
   requestedCount: string;
   availableByType: Record<string, number>;
 }
+
+type QuestionSourceMode = "manual" | "bank-select" | "bank-random";
+
+interface BankQuestionOption {
+  id: string;
+  type: string;
+  content: string;
+  difficulty?: number;
+}
+
+interface ManualQuestionOption {
+  id: string;
+  text: string;
+  match?: string;
+  isCorrect: boolean;
+}
+
+const createDefaultManualOptions = (): ManualQuestionOption[] => [
+  { id: "A", text: "", isCorrect: true },
+  { id: "B", text: "", isCorrect: false },
+  { id: "C", text: "", isCorrect: false },
+  { id: "D", text: "", isCorrect: false },
+];
 
 const QUESTION_TYPE_OPTIONS = [
   { value: "mixed", label: "Mixed (all types)" },
@@ -271,30 +362,42 @@ export default function CreateExam() {
   const [bankTopics, setBankTopics] = useState<BankTopic[]>([]);
   const [isLoadingBankTopics, setIsLoadingBankTopics] = useState(false);
   const [numberErrors, setNumberErrors] = useState<Record<string, string>>({});
+  const [reviewSettingsDraft, setReviewSettingsDraft] = useState<ReviewSettingsDraft>(() => createDefaultReviewSettingsDraft());
+  const [questionSourceMode, setQuestionSourceMode] = useState<QuestionSourceMode>("manual");
+  const [selectedBankTopicId, setSelectedBankTopicId] = useState("");
+  const [bankQuestions, setBankQuestions] = useState<BankQuestionOption[]>([]);
+  const [selectedBankQuestionIds, setSelectedBankQuestionIds] = useState<string[]>([]);
+  const [isLoadingBankQuestions, setIsLoadingBankQuestions] = useState(false);
+  const [manualQuestionContent, setManualQuestionContent] = useState("");
+  const [manualQuestionType, setManualQuestionType] = useState("multiple_choice");
+  const [manualOptions, setManualOptions] = useState<ManualQuestionOption[]>(createDefaultManualOptions);
+  const [manualMultipleAnswers, setManualMultipleAnswers] = useState(false);
+  const [manualTrueFalseAnswer, setManualTrueFalseAnswer] = useState<"true" | "false">("true");
+  const [manualExplanation, setManualExplanation] = useState("");
+  const [manualEssayRubric, setManualEssayRubric] = useState("");
+  const [manualDifficulty, setManualDifficulty] = useState("medium");
+  const [manualTopicId, setManualTopicId] = useState("");
+  const [manualLearningObjective, setManualLearningObjective] = useState("");
+  const [manualAiPrompt, setManualAiPrompt] = useState("");
+  const [isManualAiGenerating, setIsManualAiGenerating] = useState(false);
+  const isSingleAttempt = form.maxAttempts === "1";
+
+  useEffect(() => {
+    if (isSingleAttempt && form.allowLateSubmission) {
+      setForm((current) =>
+        current.allowLateSubmission
+          ? { ...current, allowLateSubmission: false }
+          : current,
+      );
+    }
+  }, [form.allowLateSubmission, isSingleAttempt]);
 
   const set = (key: keyof ExamForm, val: string | boolean) =>
     setForm((f) => ({ ...f, [key]: val }));
 
   const bankSelectionWarning = useMemo(() => {
-    if (form.sourceMethod !== "bank") return "";
-
     const selectedTopics = bankTopics.filter((topic) => topic.selected);
-    if (selectedTopics.length === 0) {
-      return "Please select at least one topic and set its question count.";
-    }
-
-    const requestedTotal = selectedTopics.reduce(
-      (sum, topic) => sum + Math.max(0, Number(topic.requestedCount || 0)),
-      0,
-    );
-    const targetTotal = parseNumericInput(form.questionCount, {
-      min: 1,
-      integer: true,
-    }) || 0;
-
-    if (requestedTotal !== targetTotal) {
-      return `Topic quotas must add up to ${targetTotal} questions. Current total is ${requestedTotal}.`;
-    }
+    if (selectedTopics.length === 0) return "";
 
     const typeFilter =
       form.questionType === "mixed" || form.questionType === "custom"
@@ -314,7 +417,7 @@ export default function CreateExam() {
     }
 
     return "";
-  }, [bankTopics, form.questionCount, form.questionType, form.sourceMethod]);
+  }, [bankTopics, form.questionType]);
 
   useEffect(() => {
     const loadCourses = async () => {
@@ -401,8 +504,8 @@ export default function CreateExam() {
               topicId: "",
               topic: WHOLE_COURSE_LABEL,
               count: questions.length,
-              selected: true,
-              requestedCount: parseNumericInput(form.questionCount, { min: 1, integer: true })?.toString() || form.questionCount || "1",
+              selected: false,
+              requestedCount: "0",
               availableByType: typeCounts,
             },
           ]);
@@ -410,7 +513,7 @@ export default function CreateExam() {
         }
 
         const nextTopics = await Promise.all(
-          topicsData.map(async (topic: any, index: number) => {
+          topicsData.map(async (topic: any) => {
             const questions = await loadQuestionsForTopic(topic.id);
             const typeCounts = questions.reduce((acc: Record<string, number>, question: any) => {
               const type = normalizeType(question.type);
@@ -422,11 +525,8 @@ export default function CreateExam() {
               topicId: topic.id,
               topic: topic.name,
               count: questions.length,
-              selected: index === 0,
-              requestedCount:
-                index === 0
-                  ? parseNumericInput(form.questionCount, { min: 1, integer: true })?.toString() || form.questionCount || "1"
-                  : "0",
+              selected: false,
+              requestedCount: "0",
               availableByType: typeCounts,
             };
           }),
@@ -451,6 +551,247 @@ export default function CreateExam() {
       active = false;
     };
   }, [form.course]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadSelectableQuestions = async () => {
+      if (questionSourceMode !== "bank-select" || !form.course || !selectedBankTopicId) {
+        setBankQuestions([]);
+        return;
+      }
+
+      setIsLoadingBankQuestions(true);
+      try {
+        const response: any = await api.listQuestions({
+          courseId: form.course,
+          topicId: selectedBankTopicId === "__all__" ? undefined : selectedBankTopicId,
+          page: 1,
+          limit: 100,
+        });
+        const questions = Array.isArray(response?.data)
+          ? response.data
+          : Array.isArray(response)
+            ? response
+            : [];
+
+        if (active) {
+          setBankQuestions(
+            questions.map((question: any) => ({
+              id: String(question.id),
+              type: String(question.type || "UNKNOWN"),
+              content: String(question.content || question.stem || "Untitled question"),
+              difficulty: Number(question.difficulty || 0) || undefined,
+            })),
+          );
+        }
+      } catch (error) {
+        console.error("Failed to load selectable questions:", error);
+        if (active) setBankQuestions([]);
+      } finally {
+        if (active) setIsLoadingBankQuestions(false);
+      }
+    };
+
+    loadSelectableQuestions();
+    return () => {
+      active = false;
+    };
+  }, [form.course, questionSourceMode, selectedBankTopicId]);
+
+  const filteredBankQuestions = useMemo(() => {
+    return bankQuestions.filter((question) => {
+      const matchesType =
+        form.questionType === "mixed" ||
+        form.questionType === "custom" ||
+        question.type === mapQuestionTypeToDb(form.questionType);
+      const matchesDifficulty =
+        form.bankDifficulty === "mixed" ||
+        difficultyLabelFromValue(question.difficulty).toLowerCase() === form.bankDifficulty;
+      return matchesType && matchesDifficulty;
+    });
+  }, [bankQuestions, form.bankDifficulty, form.questionType]);
+
+  const randomQuestionCount = useMemo(
+    () =>
+      bankTopics.reduce(
+        (total, topic) =>
+          total + (topic.selected ? Math.max(0, Number(topic.requestedCount || 0)) : 0),
+        0,
+      ),
+    [bankTopics],
+  );
+  const composedQuestionCount =
+    aiGeneratedQuestions.length + selectedBankQuestionIds.length + randomQuestionCount;
+
+  const addManualQuestion = () => {
+    if (!manualQuestionContent.trim()) {
+      toast.error("Question text is required.");
+      return;
+    }
+
+    const filledOptions = manualOptions.filter((option) => option.text.trim());
+    if (
+      ["multiple_choice", "matching", "ordering"].includes(manualQuestionType) &&
+      filledOptions.length < 2
+    ) {
+      toast.error("At least two options or items are required.");
+      return;
+    }
+    if (
+      manualQuestionType === "multiple_choice" &&
+      !filledOptions.some((option) => option.isCorrect)
+    ) {
+      toast.error("Select at least one correct answer.");
+      return;
+    }
+    if (manualQuestionType === "essay" && !manualEssayRubric.trim()) {
+      toast.error("A grading rubric is required for essay questions.");
+      return;
+    }
+
+    const backendType =
+      manualQuestionType === "multiple_choice"
+        ? manualMultipleAnswers
+          ? "MULTI_SELECT"
+          : "MULTIPLE_CHOICE"
+        : manualQuestionType === "true_false"
+          ? "TRUE_FALSE"
+          : manualQuestionType === "fill_blank"
+            ? "FILL_IN_BLANK"
+            : manualQuestionType === "matching"
+              ? "MATCHING"
+              : manualQuestionType === "ordering"
+                ? "ORDERING"
+                : "ESSAY";
+    const options =
+      manualQuestionType === "matching"
+        ? filledOptions.reduce<Record<string, string>>((result, option) => {
+            result[option.text] = option.match || "";
+            return result;
+          }, {})
+        : ["multiple_choice", "ordering"].includes(manualQuestionType)
+          ? filledOptions.reduce<Record<string, string>>((result, option) => {
+              result[option.id] = option.text;
+              return result;
+            }, {})
+          : undefined;
+    const correctAnswer =
+      manualQuestionType === "multiple_choice"
+        ? {
+            answer: filledOptions
+              .filter((option) => option.isCorrect)
+              .map((option) => option.id)
+              .join(","),
+          }
+        : manualQuestionType === "true_false"
+          ? { answer: manualTrueFalseAnswer === "true" }
+          : manualQuestionType === "fill_blank"
+            ? {
+                answers: Array.from(
+                  manualQuestionContent.matchAll(/\[\[(.*?)\]\]/g),
+                  (match) => match[1],
+                ),
+              }
+            : manualQuestionType === "ordering"
+              ? { order: filledOptions.map((option) => option.id) }
+              : manualQuestionType === "matching"
+                ? { pairs: options }
+                : { rubric: manualEssayRubric.trim() };
+
+    setAiGeneratedQuestions((questions) => [
+      ...questions,
+      {
+        type: backendType,
+        content: manualQuestionContent.trim(),
+        options,
+        correctAnswer,
+        explanation: manualExplanation.trim() || undefined,
+        difficulty: difficultyOptionToValue(manualDifficulty),
+        points: 1,
+        topicId: manualTopicId || undefined,
+        learningObjective: manualLearningObjective.trim() || undefined,
+      },
+    ]);
+    setManualQuestionContent("");
+    setManualExplanation("");
+    setManualEssayRubric("");
+    setManualOptions(createDefaultManualOptions());
+    setManualMultipleAnswers(false);
+    setManualTrueFalseAnswer("true");
+  };
+
+  const applyGeneratedQuestionToManualForm = (question: any) => {
+    const type = String(question?.type || "").toUpperCase();
+    const nextType =
+      type === "TRUE_FALSE"
+        ? "true_false"
+        : type === "FILL_IN_BLANK"
+          ? "fill_blank"
+          : type === "MATCHING"
+            ? "matching"
+            : type === "ORDERING"
+              ? "ordering"
+              : type === "ESSAY" || type === "SHORT_ANSWER"
+                ? "essay"
+                : "multiple_choice";
+
+    setManualQuestionType(nextType);
+    setManualQuestionContent(String(question?.content || ""));
+    setManualExplanation(String(question?.explanation || ""));
+    setManualDifficulty(difficultyLabelFromValue(question?.difficulty).toLowerCase());
+
+    if (nextType === "true_false") {
+      setManualTrueFalseAnswer(question?.correctAnswer?.answer === false ? "false" : "true");
+    } else if (nextType === "essay") {
+      setManualEssayRubric(String(question?.correctAnswer?.rubric || question?.explanation || ""));
+    } else if (question?.options && typeof question.options === "object") {
+      const answer = String(question?.correctAnswer?.answer || "");
+      setManualOptions(
+        Object.entries(question.options).map(([id, text]) => ({
+          id,
+          text: String(text || ""),
+          isCorrect: answer.split(",").includes(id),
+        })),
+      );
+      setManualMultipleAnswers(answer.includes(","));
+    }
+  };
+
+  const handleManualAiGenerate = async () => {
+    if (!manualAiPrompt.trim()) return;
+    setIsManualAiGenerating(true);
+    try {
+      const result = await api.aiGenerateExamQuestions({
+        prompt: manualAiPrompt,
+        questionCount: 1,
+        difficulty: difficultyOptionToValue(manualDifficulty),
+        questionType: mapQuestionTypeToAiApi(
+          manualQuestionType === "multiple_choice"
+            ? "multiple-choice"
+            : manualQuestionType === "true_false"
+              ? "true-false"
+              : manualQuestionType === "fill_blank"
+                ? "fill-blank"
+                : manualQuestionType === "essay"
+                  ? "short-answer"
+                  : manualQuestionType,
+        ),
+        language: "en",
+        courseName: courses.find((course) => course.id === form.course)?.name,
+        useCase: "exam",
+      });
+      const generated = Array.isArray(result?.questions) ? result.questions[0] : null;
+      if (!generated) throw new Error("AI did not return a question.");
+      applyGeneratedQuestionToManualForm(generated);
+      toast.success("AI generated a draft question. Review it before adding.");
+    } catch (error: any) {
+      console.error("Manual AI generation failed:", error);
+      toast.error(error.message || "AI generation failed.");
+    } finally {
+      setIsManualAiGenerating(false);
+    }
+  };
 
   const stepIdx = STEPS.findIndex((s) => s.key === step);
   const canNext = (): boolean => {
@@ -482,11 +823,16 @@ export default function CreateExam() {
         integer: true,
       });
 
-        if (form.sourceMethod === "bank" && bankSelectionWarning) {
+        if (randomQuestionCount > 0 && bankSelectionWarning) {
           setNumberErrors((prev) => ({ ...prev, questionCount: bankSelectionWarning }));
           toast.error(bankSelectionWarning);
           return;
         }
+
+      if (composedQuestionCount === 0) {
+        toast.error("Please add at least one question from any source.");
+        return;
+      }
 
       const nextErrors = {
         duration: durationError || "",
@@ -501,16 +847,15 @@ export default function CreateExam() {
         return;
       }
 
+      const parsedReviewSettings = reviewSettingsDraft.enabled
+        ? buildReviewSettingsPayload(reviewSettingsDraft)
+        : null;
+      const effectiveQuestionCount = composedQuestionCount;
+
       setIsCreating(true);
       let questionIds: string[] | undefined;
 
-      if (form.sourceMethod === "ai" || form.sourceMethod === "import") {
-        if (aiGeneratedQuestions.length === 0) {
-          throw new Error(
-            "Please extract/generate questions before creating the exam.",
-          );
-        }
-
+      if (aiGeneratedQuestions.length > 0) {
         const createdQuestions = await Promise.all(
           aiGeneratedQuestions.map((q) =>
             api.saveQuestion({
@@ -521,14 +866,22 @@ export default function CreateExam() {
               explanation: q.explanation || undefined,
               difficulty: normalizeDifficultyForQuestion(q.difficulty),
               points: Math.max(1, Number(q.points) || 1),
+              defaultPoints: Math.max(1, Number(q.points) || 1),
               courseId: form.course,
+              topicId: q.topicId || undefined,
+              learningObjective: q.learningObjective || undefined,
             }),
           ),
         );
 
-        questionIds = createdQuestions
+        questionIds = [
+          ...selectedBankQuestionIds,
+          ...createdQuestions
           .map((item: any) => item.id)
-          .filter(Boolean);
+          .filter(Boolean),
+        ];
+      } else if (selectedBankQuestionIds.length > 0) {
+        questionIds = selectedBankQuestionIds;
       }
 
       await api.createExam({
@@ -536,6 +889,10 @@ export default function CreateExam() {
         description: form.description.trim() || undefined,
         courseId: form.course,
         duration: parseNumericInput(form.duration, { min: 5, integer: true })!,
+        timeLimitMinutes:
+          form.timeLimitMinutes.trim() === ""
+            ? null
+            : parseNumericInput(form.timeLimitMinutes, { min: 1, integer: true }),
         passingScore: parseNumericInput(form.passingScore, {
           min: 0,
           max: 100,
@@ -543,6 +900,38 @@ export default function CreateExam() {
         })!,
         startTime,
         endTime,
+        maxAttempts:
+          form.maxAttempts.trim() === ""
+            ? null
+            : parseNumericInput(form.maxAttempts, { min: 1, integer: true }),
+        gradingStrategy: form.gradingStrategy,
+        reviewSettings: parsedReviewSettings,
+        questionSelectionConfig: {
+          sourceMethod: "composite",
+          selectionMode: "composite",
+          sources: {
+            manualCount: aiGeneratedQuestions.length,
+            selectedBankCount: selectedBankQuestionIds.length,
+            randomTopicCount: randomQuestionCount,
+          },
+          randomizePerStudent: randomQuestionCount > 0,
+          shuffleQuestions: form.shuffleQuestions,
+          questionType: form.questionType,
+          requestedQuestionCount: randomQuestionCount,
+          totalComposedQuestionCount: effectiveQuestionCount,
+          bankDifficulty: difficultyOptionToBankValue(form.bankDifficulty),
+          topicAllocations:
+            randomQuestionCount > 0
+              ? bankTopics
+                  .filter((topic) => topic.selected && Number(topic.requestedCount || 0) > 0)
+                  .filter((topic) => topic.topicId)
+                  .map((topic) => ({
+                    topicId: topic.topicId,
+                    topic: topic.topic,
+                    count: parseNumericInput(topic.requestedCount, { min: 1, integer: true }) || 0,
+                  }))
+              : undefined,
+        },
         questionIds,
         settings: {
           maxAttempts: parseNumericInput(form.maxAttempts, {
@@ -554,20 +943,16 @@ export default function CreateExam() {
           allowLateSubmission: form.allowLateSubmission,
           shuffleQuestions: form.shuffleQuestions,
           showResultImmediately: form.showResultImmediately,
-          sourceMethod: form.sourceMethod,
+          sourceMethod: randomQuestionCount > 0 ? "bank" : "composite",
+          selectionMode: "composite",
+          randomizePerStudent: randomQuestionCount > 0,
           questionType: form.questionType,
           bankDifficulty: difficultyOptionToBankValue(form.bankDifficulty),
-          requestedQuestionCount:
-            parseNumericInput(form.questionCount, {
-              min: 1,
-              integer: true,
-            }) || 1,
-          aiGenerationMode: form.aiGenerationMode,
-          aiPrompt: form.aiPrompt || undefined,
-          aiDifficulty: difficultyOptionToValue(form.aiDifficulty),
-          aiReviewRequired: form.aiReviewRequired,
+          requestedQuestionCount: randomQuestionCount,
+          totalComposedQuestionCount: effectiveQuestionCount,
+          randomRequestedQuestionCount: randomQuestionCount,
           topicAllocations:
-            form.sourceMethod === "bank"
+            randomQuestionCount > 0
               ? bankTopics
                   .filter((topic) => topic.selected && Number(topic.requestedCount || 0) > 0)
                   .filter((topic) => topic.topicId)
@@ -577,6 +962,10 @@ export default function CreateExam() {
                     count: parseNumericInput(topic.requestedCount, { min: 1, integer: true }) || 0,
                   }))
               : undefined,
+          aiGenerationMode: form.aiGenerationMode,
+          aiPrompt: form.aiPrompt || undefined,
+          aiDifficulty: difficultyOptionToValue(form.aiDifficulty),
+          aiReviewRequired: form.aiReviewRequired,
         },
       });
 
@@ -740,7 +1129,11 @@ export default function CreateExam() {
 
   return (
     <DashboardLayout>
-      <div className="max-w-3xl mx-auto space-y-6">
+      <div
+        className={`mx-auto space-y-6 px-3 sm:px-0 transition-[max-width] duration-300 ${
+          step === "questions" ? "max-w-6xl" : "max-w-3xl"
+        }`}
+      >
         {/* Header */}
         <div>
           <h1 className="text-2xl font-bold">Create New Exam</h1>
@@ -909,6 +1302,62 @@ export default function CreateExam() {
                       </p>
                     ) : null}
                   </div>
+                  <div>
+                    <Label>Time Limit (optional)</Label>
+                    <Input
+                      type="number"
+                      value={form.timeLimitMinutes}
+                      onChange={(e) =>
+                        set(
+                          "timeLimitMinutes",
+                          sanitizeNumericInput(e.target.value, { min: 1 }),
+                        )
+                      }
+                      min={1}
+                      placeholder="Leave empty to use duration"
+                      className="mt-1"
+                    />
+                  </div>
+                  <div>
+                    <Label>Max Attempts</Label>
+                    <Select
+                      value={form.maxAttempts}
+                      onValueChange={(v) => set("maxAttempts", v)}
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {MAX_ATTEMPT_OPTIONS.map((option) => (
+                          <SelectItem key={option} value={option}>
+                            {option}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Select a value from 1 to 10. Choosing 1 locks late submission.
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Grading Strategy</Label>
+                    <Select
+                      value={form.gradingStrategy}
+                      onValueChange={(v) =>
+                        set("gradingStrategy", v as ExamForm["gradingStrategy"])
+                      }
+                    >
+                      <SelectTrigger className="mt-1">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="HIGHEST">Highest</SelectItem>
+                        <SelectItem value="AVERAGE">Average</SelectItem>
+                        <SelectItem value="FIRST_ATTEMPT">First Attempt</SelectItem>
+                        <SelectItem value="LAST_ATTEMPT">Last Attempt</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 <Separator />
@@ -1009,9 +1458,122 @@ export default function CreateExam() {
                       <Switch
                         checked={form[key] as boolean}
                         onCheckedChange={(v) => set(key, v)}
+                        disabled={key === "allowLateSubmission" && isSingleAttempt}
                       />
                     </div>
                   ))}
+                </div>
+                {isSingleAttempt ? (
+                  <p className="text-xs text-muted-foreground">
+                    Late submission is locked because max attempts is set to 1.
+                  </p>
+                ) : null}
+
+                <Separator />
+                <div className="space-y-4">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <Label className="text-base font-semibold">
+                        Review / Feedback Settings
+                      </Label>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        Phase-based review controls are saved into the existing JSON field, so older review data stays intact.
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 rounded-lg border px-3 py-2">
+                      <div>
+                        <p className="text-sm font-medium">Enable review config</p>
+                        <p className="text-xs text-muted-foreground">
+                          Save phase-based review rules for this exam.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={reviewSettingsDraft.enabled}
+                        onCheckedChange={(checked) =>
+                          setReviewSettingsDraft((draft) => ({
+                            ...draft,
+                            enabled: checked,
+                          }))
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {REVIEW_PHASE_META.map((phase) => {
+                      const config = reviewSettingsDraft.phases[phase.key];
+                      const isActive = reviewSettingsDraft.enabled;
+
+                      return (
+                        <Card
+                          key={phase.key}
+                          className={!isActive ? "border-dashed bg-muted/30" : ""}
+                        >
+                          <CardHeader className="pb-3">
+                            <div className="flex items-start justify-between gap-3">
+                              <div>
+                                <CardTitle className="text-base">{phase.title}</CardTitle>
+                                <CardDescription className="text-xs mt-1">
+                                  {phase.description}
+                                </CardDescription>
+                              </div>
+                              <Badge variant={isActive ? "default" : "secondary"}>
+                                {reviewPhaseSummary(config)}
+                              </Badge>
+                            </div>
+                          </CardHeader>
+                          <CardContent className="space-y-3">
+                            {([
+                              {
+                                key: "showScore",
+                                label: "Show score",
+                                desc: "Reveal numeric score to students.",
+                              },
+                              {
+                                key: "showAnswers",
+                                label: "Show answers",
+                                desc: "Reveal the correct answers or key responses.",
+                              },
+                              {
+                                key: "showFeedback",
+                                label: "Show feedback",
+                                desc: "Display lecturer feedback and explanations.",
+                              },
+                            ] as const).map((item) => (
+                              <div
+                                key={item.key}
+                                className="flex items-center justify-between gap-3 rounded-lg border p-3"
+                              >
+                                <div>
+                                  <p className="text-sm font-medium">{item.label}</p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {item.desc}
+                                  </p>
+                                </div>
+                                <Switch
+                                  checked={Boolean(config[item.key])}
+                                  disabled={!isActive}
+                                  onCheckedChange={(checked) =>
+                                    setReviewSettingsDraft((draft) => ({
+                                      ...draft,
+                                      phases: {
+                                        ...draft.phases,
+                                        [phase.key]: {
+                                          ...draft.phases[phase.key],
+                                          [item.key]: checked,
+                                        },
+                                      },
+                                    }))
+                                  }
+                                />
+                              </div>
+                            ))}
+                          </CardContent>
+                        </Card>
+                      );
+                    })}
+                  </div>
+
                 </div>
               </CardContent>
             </>
@@ -1022,13 +1584,488 @@ export default function CreateExam() {
               <CardHeader>
                 <CardTitle>Question Sourcing</CardTitle>
                 <CardDescription>
-                  Select one primary method to source questions for this exam.
+                  Combine questions from any source. Switching tabs keeps everything already added.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
+                {!questionSourceMode ? (
+                  <button
+                    type="button"
+                    onClick={() => setQuestionSourceMode("choose")}
+                    className="group flex min-h-56 w-full flex-col items-center justify-center gap-4 rounded-2xl border-2 border-dashed border-primary/35 bg-primary/[0.03] transition hover:border-primary hover:bg-primary/[0.07]"
+                  >
+                    <span className="flex h-20 w-20 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition group-hover:scale-105">
+                      <Plus className="h-10 w-10" />
+                    </span>
+                    <span className="text-lg font-semibold">Add question source</span>
+                    <span className="max-w-md text-sm text-muted-foreground">
+                      Enter questions, select exact bank questions, or randomize from topic pools.
+                    </span>
+                  </button>
+                ) : (
+                  <div className="space-y-5">
+                    <div className="grid gap-1 rounded-xl bg-muted p-1 md:grid-cols-3">
+                      {([
+                        ["manual", "Enter directly", "Write fixed questions for this exam.", FileText],
+                        ["bank-select", "Select from bank", "Choose topic, filter, then tick exact questions.", Database],
+                        ["bank-random", "Random by topic", "Set topic quotas for randomized student instances.", Sparkles],
+                      ] as const).map(([key, title, description, Icon]) => (
+                        <button
+                          key={key}
+                          type="button"
+                          onClick={() => {
+                            setQuestionSourceMode(key);
+                            set("sourceMethod", key === "manual" ? "import" : "bank");
+                          }}
+                          className={`rounded-lg px-4 py-3 text-left transition ${
+                            questionSourceMode === key
+                              ? "bg-background text-foreground shadow-sm"
+                              : "text-muted-foreground hover:bg-background/60 hover:text-foreground"
+                          }`}
+                        >
+                          <span className="flex items-center gap-2 text-sm font-semibold">
+                            <Icon className="h-4 w-4" />
+                            {title}
+                            {key === "manual" && aiGeneratedQuestions.length > 0 && <Badge>{aiGeneratedQuestions.length}</Badge>}
+                            {key === "bank-select" && selectedBankQuestionIds.length > 0 && <Badge>{selectedBankQuestionIds.length}</Badge>}
+                            {key === "bank-random" && randomQuestionCount > 0 && <Badge>{randomQuestionCount}</Badge>}
+                          </span>
+                          <span className="mt-1 block text-xs">{description}</span>
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="grid gap-3 rounded-xl border bg-card p-4 sm:grid-cols-4">
+                      <div>
+                        <p className="text-xs text-muted-foreground">Exam total</p>
+                        <p className="text-2xl font-bold">{composedQuestionCount}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Entered directly</p>
+                        <p className="text-lg font-semibold">{aiGeneratedQuestions.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Selected from bank</p>
+                        <p className="text-lg font-semibold">{selectedBankQuestionIds.length}</p>
+                      </div>
+                      <div>
+                        <p className="text-xs text-muted-foreground">Random by topic</p>
+                        <p className="text-lg font-semibold">{randomQuestionCount}</p>
+                      </div>
+                    </div>
+
+                    {questionSourceMode === "manual" && (
+                      <div className="space-y-4">
+                        <div className="space-y-4">
+                          <Card className="border-primary/20 bg-primary/5">
+                            <CardHeader className="pb-3">
+                              <div className="flex items-center gap-2">
+                                <Sparkles className="h-5 w-5 text-primary" />
+                                <CardTitle className="text-base text-primary">AI Assistant</CardTitle>
+                              </div>
+                              <CardDescription>Generate a draft, then review and edit before adding it to the exam.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                              <div className="flex flex-col gap-2 sm:flex-row">
+                                <Input
+                                  value={manualAiPrompt}
+                                  onChange={(event) => setManualAiPrompt(event.target.value)}
+                                  placeholder="e.g. Database indexing, transaction isolation..."
+                                  className="bg-background"
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") handleManualAiGenerate();
+                                  }}
+                                />
+                                <Button
+                                  type="button"
+                                  onClick={handleManualAiGenerate}
+                                  disabled={isManualAiGenerating || !manualAiPrompt.trim() || !form.course}
+                                  className="gap-2"
+                                >
+                                  {isManualAiGenerating ? <Loader2 className="h-4 w-4 animate-spin" /> : <Wand2 className="h-4 w-4" />}
+                                  Generate
+                                </Button>
+                              </div>
+                              {!form.course && (
+                                <p className="text-xs text-amber-600">Select a course in Basic Info to enable AI generation.</p>
+                              )}
+                            </CardContent>
+                          </Card>
+
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-base">Question Type</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <Select
+                                value={manualQuestionType}
+                                onValueChange={(value) => {
+                                  setManualQuestionType(value);
+                                  setManualOptions(createDefaultManualOptions());
+                                }}
+                              >
+                                <SelectTrigger className="w-full sm:w-[280px]"><SelectValue /></SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="multiple_choice">Multiple Choice</SelectItem>
+                                  <SelectItem value="true_false">True / False</SelectItem>
+                                  <SelectItem value="fill_blank">Fill in the Blank</SelectItem>
+                                  <SelectItem value="matching">Matching</SelectItem>
+                                  <SelectItem value="ordering">Ordering / Sequencing</SelectItem>
+                                  <SelectItem value="essay">Short Answer / Essay</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </CardContent>
+                          </Card>
+
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-base">Question Content</CardTitle>
+                              <CardDescription>Enter the text shown to students.</CardDescription>
+                            </CardHeader>
+                            <CardContent className="space-y-3">
+                              {manualQuestionType === "fill_blank" && (
+                                <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-800">
+                                  Mark answers with double brackets, for example: The capital of France is [[Paris]].
+                                </div>
+                              )}
+                              <Textarea
+                                className="min-h-32 text-base"
+                                value={manualQuestionContent}
+                                onChange={(event) => setManualQuestionContent(event.target.value)}
+                                placeholder="Enter your question here..."
+                              />
+                            </CardContent>
+                          </Card>
+
+                          {manualQuestionType !== "fill_blank" && (
+                            <Card>
+                              <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between gap-3">
+                                  <CardTitle className="text-base">
+                                    {manualQuestionType === "multiple_choice" && "Answer Options"}
+                                    {manualQuestionType === "true_false" && "Correct Answer"}
+                                    {manualQuestionType === "matching" && "Matching Pairs"}
+                                    {manualQuestionType === "ordering" && "Sequence Items"}
+                                    {manualQuestionType === "essay" && "Grading Rubric"}
+                                  </CardTitle>
+                                  {["multiple_choice", "matching", "ordering"].includes(manualQuestionType) && manualOptions.length < 8 && (
+                                    <Button
+                                      type="button"
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        setManualOptions((options) => [
+                                          ...options,
+                                          {
+                                            id: String.fromCharCode(65 + options.length),
+                                            text: "",
+                                            isCorrect: false,
+                                          },
+                                        ])
+                                      }
+                                    >
+                                      <Plus className="mr-1 h-4 w-4" /> Add
+                                    </Button>
+                                  )}
+                                </div>
+                              </CardHeader>
+                              <CardContent className="space-y-3">
+                                {manualQuestionType === "multiple_choice" && (
+                                  <div className="flex items-center gap-3">
+                                    <Label>Allow multiple correct answers</Label>
+                                    <Switch checked={manualMultipleAnswers} onCheckedChange={setManualMultipleAnswers} />
+                                  </div>
+                                )}
+
+                                {["multiple_choice", "matching", "ordering"].includes(manualQuestionType) &&
+                                  manualOptions.map((option, index) => (
+                                    <div key={option.id} className="flex items-center gap-3">
+                                      {manualQuestionType === "multiple_choice" ? (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setManualOptions((options) =>
+                                              options.map((item) => ({
+                                                ...item,
+                                                isCorrect: manualMultipleAnswers
+                                                  ? item.id === option.id
+                                                    ? !item.isCorrect
+                                                    : item.isCorrect
+                                                  : item.id === option.id,
+                                              })),
+                                            )
+                                          }
+                                          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-full border-2 text-sm font-medium ${
+                                            option.isCorrect ? "border-green-500 bg-green-100 text-green-700" : "border-border"
+                                          }`}
+                                        >
+                                          {option.id}
+                                        </button>
+                                      ) : (
+                                        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-sm font-bold text-primary">
+                                          {index + 1}
+                                        </span>
+                                      )}
+                                      <Input
+                                        value={option.text}
+                                        placeholder={manualQuestionType === "matching" ? "Concept" : `Item ${option.id}`}
+                                        onChange={(event) =>
+                                          setManualOptions((options) =>
+                                            options.map((item) => item.id === option.id ? { ...item, text: event.target.value } : item),
+                                          )
+                                        }
+                                      />
+                                      {manualQuestionType === "matching" && (
+                                        <Input
+                                          value={option.match || ""}
+                                          placeholder="Matching value"
+                                          onChange={(event) =>
+                                            setManualOptions((options) =>
+                                              options.map((item) => item.id === option.id ? { ...item, match: event.target.value } : item),
+                                            )
+                                          }
+                                        />
+                                      )}
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        disabled={manualOptions.length <= 2}
+                                        onClick={() => setManualOptions((options) => options.filter((item) => item.id !== option.id))}
+                                      >
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </div>
+                                  ))}
+
+                                {manualQuestionType === "true_false" && (
+                                  <div className="grid grid-cols-2 gap-3">
+                                    {(["true", "false"] as const).map((value) => (
+                                      <Button
+                                        key={value}
+                                        type="button"
+                                        variant={manualTrueFalseAnswer === value ? "default" : "outline"}
+                                        onClick={() => setManualTrueFalseAnswer(value)}
+                                      >
+                                        {value === "true" ? "True" : "False"}
+                                      </Button>
+                                    ))}
+                                  </div>
+                                )}
+
+                                {manualQuestionType === "essay" && (
+                                  <Textarea
+                                    value={manualEssayRubric}
+                                    onChange={(event) => setManualEssayRubric(event.target.value)}
+                                    placeholder="Describe grading criteria and expected key points..."
+                                  />
+                                )}
+                              </CardContent>
+                            </Card>
+                          )}
+
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-base">Explanation (optional)</CardTitle>
+                            </CardHeader>
+                            <CardContent>
+                              <Textarea
+                                value={manualExplanation}
+                                onChange={(event) => setManualExplanation(event.target.value)}
+                                placeholder="Explain why the answer is correct..."
+                              />
+                            </CardContent>
+                          </Card>
+                        </div>
+
+                        <div className="grid items-stretch gap-4 md:grid-cols-[1fr_1fr_auto]">
+                          <Card>
+                            <CardHeader className="pb-3"><CardTitle className="text-sm">Course</CardTitle></CardHeader>
+                            <CardContent className="space-y-3">
+                              <p className="text-sm font-medium">
+                                {courses.find((course) => course.id === form.course)?.name || "Select a course in Basic Info"}
+                              </p>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">Topic</Label>
+                                <Select value={manualTopicId || "__none__"} onValueChange={(value) => setManualTopicId(value === "__none__" ? "" : value)}>
+                                  <SelectTrigger><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="__none__">Untagged</SelectItem>
+                                    {bankTopics.filter((topic) => topic.topicId).map((topic) => (
+                                      <SelectItem key={topic.topicId} value={topic.topicId}>
+                                        {topic.topic}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-muted-foreground">Learning Objective</Label>
+                                <Input
+                                  value={manualLearningObjective}
+                                  onChange={(event) => setManualLearningObjective(event.target.value)}
+                                  placeholder="e.g. Apply Dijkstra's algorithm"
+                                />
+                              </div>
+                            </CardContent>
+                          </Card>
+                          <Card>
+                            <CardHeader className="pb-3"><CardTitle className="text-sm">Difficulty</CardTitle></CardHeader>
+                            <CardContent className="grid grid-cols-3 gap-2">
+                              {(["easy", "medium", "hard"] as const).map((difficulty) => (
+                                <Button
+                                  key={difficulty}
+                                  type="button"
+                                  variant={manualDifficulty === difficulty ? "default" : "outline"}
+                                  size="sm"
+                                  onClick={() => setManualDifficulty(difficulty)}
+                                  className="capitalize"
+                                >
+                                  {difficulty}
+                                </Button>
+                              ))}
+                            </CardContent>
+                          </Card>
+                          <Button type="button" className="h-full min-h-20 px-8" onClick={addManualQuestion}>
+                            <Plus className="mr-2 h-4 w-4" /> Add to exam
+                          </Button>
+                        </div>
+
+                        {aiGeneratedQuestions.length > 0 && (
+                          <Card>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-base">Questions added ({aiGeneratedQuestions.length})</CardTitle>
+                            </CardHeader>
+                            <CardContent className="space-y-2">
+                              {aiGeneratedQuestions.map((question, index) => (
+                                <div key={`${question.content}-${index}`} className="flex items-start justify-between gap-3 rounded-lg border p-3">
+                                  <div>
+                                    <p className="text-sm font-medium">Q{index + 1}. {question.content}</p>
+                                    <p className="text-xs text-muted-foreground">{question.type}</p>
+                                  </div>
+                                  <Button type="button" variant="ghost" size="sm" onClick={() => setAiGeneratedQuestions((questions) => questions.filter((_, itemIndex) => itemIndex !== index))}>
+                                    Remove
+                                  </Button>
+                                </div>
+                              ))}
+                            </CardContent>
+                          </Card>
+                        )}
+                      </div>
+                    )}
+
+                    {questionSourceMode === "bank-select" && (
+                      <div className="space-y-4 rounded-xl border p-5">
+                        <div>
+                          <Label>Select topic first</Label>
+                          <Select value={selectedBankTopicId} onValueChange={setSelectedBankTopicId}>
+                            <SelectTrigger className="mt-1"><SelectValue placeholder="Choose a topic" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="__all__">All course questions</SelectItem>
+                              {bankTopics.filter((topic) => topic.topicId).map((topic) => (
+                                <SelectItem key={topic.topicId} value={topic.topicId}>{topic.topic} ({topic.count})</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                        {selectedBankTopicId && (
+                          <>
+                            <div className="grid gap-4 md:grid-cols-2">
+                              <div>
+                                <Label>Question type</Label>
+                                <Select value={form.questionType} onValueChange={(value) => set("questionType", value)}>
+                                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    {QUESTION_TYPE_OPTIONS.filter((type) => type.value !== "custom").map((type) => (
+                                      <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div>
+                                <Label>Difficulty</Label>
+                                <Select value={form.bankDifficulty} onValueChange={(value) => set("bankDifficulty", value)}>
+                                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="mixed">Mixed (all levels)</SelectItem>
+                                    <SelectItem value="easy">Easy</SelectItem>
+                                    <SelectItem value="medium">Medium</SelectItem>
+                                    <SelectItem value="hard">Hard</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+                            <div className="max-h-96 space-y-2 overflow-y-auto pr-1">
+                              {isLoadingBankQuestions ? (
+                                <p className="py-8 text-center text-sm text-muted-foreground">Loading questions...</p>
+                              ) : filteredBankQuestions.map((question) => {
+                                const checked = selectedBankQuestionIds.includes(question.id);
+                                return (
+                                  <label key={question.id} className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 ${checked ? "border-primary bg-primary/5" : ""}`}>
+                                    <Checkbox
+                                      checked={checked}
+                                      onCheckedChange={(value) => setSelectedBankQuestionIds((ids) => value ? [...new Set([...ids, question.id])] : ids.filter((id) => id !== question.id))}
+                                    />
+                                    <div className="min-w-0 flex-1">
+                                      <p className="text-sm font-medium">{question.content}</p>
+                                      <div className="mt-2 flex gap-2">
+                                        <Badge variant="outline">{question.type}</Badge>
+                                        <Badge variant="outline">{difficultyLabelFromValue(question.difficulty)}</Badge>
+                                      </div>
+                                    </div>
+                                  </label>
+                                );
+                              })}
+                            </div>
+                            <p className="text-sm font-medium">{selectedBankQuestionIds.length} questions selected</p>
+                          </>
+                        )}
+                      </div>
+                    )}
+
+                    {questionSourceMode === "bank-random" && (
+                      <div className="space-y-4 rounded-xl border p-5">
+                        <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">
+                          Topic quotas are saved as the randomization policy for student exam instances.
+                        </div>
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div>
+                            <Label>Question type</Label>
+                            <Select value={form.questionType} onValueChange={(value) => set("questionType", value)}>
+                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent>{QUESTION_TYPE_OPTIONS.filter((type) => type.value !== "custom").map((type) => <SelectItem key={type.value} value={type.value}>{type.label}</SelectItem>)}</SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <Label>Difficulty</Label>
+                            <Select value={form.bankDifficulty} onValueChange={(value) => set("bankDifficulty", value)}>
+                              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                              <SelectContent><SelectItem value="mixed">Mixed (all levels)</SelectItem><SelectItem value="easy">Easy</SelectItem><SelectItem value="medium">Medium</SelectItem><SelectItem value="hard">Hard</SelectItem></SelectContent>
+                            </Select>
+                          </div>
+                        </div>
+                        <p className="text-sm font-medium">
+                          Random pool contribution: {randomQuestionCount} questions
+                        </p>
+                        <div className="space-y-2">
+                          {bankTopics.map((topic) => (
+                            <label key={topic.topicId || topic.topic} className={`flex items-center gap-3 rounded-lg border p-3 ${topic.selected ? "border-primary bg-primary/5" : ""}`}>
+                              <Checkbox checked={topic.selected} onCheckedChange={(value) => setBankTopics((topics) => topics.map((item) => item.topicId === topic.topicId ? { ...item, selected: Boolean(value), requestedCount: value ? (item.requestedCount === "0" ? "1" : item.requestedCount) : "0" } : item))} />
+                              <div className="flex-1"><p className="text-sm font-medium">{topic.topic}</p><p className="text-xs text-muted-foreground">{topic.count} available</p></div>
+                              <Input className="w-24" type="number" min={0} value={topic.requestedCount} onChange={(event) => setBankTopics((topics) => topics.map((item) => item.topicId === topic.topicId ? { ...item, requestedCount: sanitizeNumericInput(event.target.value, { min: 0 }), selected: Number(event.target.value || 0) > 0 } : item))} />
+                            </label>
+                          ))}
+                        </div>
+                        {bankSelectionWarning && <p className="text-xs font-medium text-amber-600">{bankSelectionWarning}</p>}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 <Tabs
                   value={form.sourceMethod}
                   onValueChange={(v) => set("sourceMethod", v as any)}
+                  className="hidden"
                 >
                   <TabsList className="grid w-full grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 mb-4">
                     <TabsTrigger value="bank" className="gap-2">
@@ -1572,6 +2609,20 @@ export default function CreateExam() {
                   },
                   { label: "Description", value: form.description || "—" },
                   { label: "Duration", value: `${form.duration} minutes` },
+                  {
+                    label: "Time Limit",
+                    value: form.timeLimitMinutes
+                      ? `${form.timeLimitMinutes} minutes`
+                      : "Unlimited within exam window",
+                  },
+                  {
+                    label: "Max Attempts (1-10)",
+                    value: form.maxAttempts || "1",
+                  },
+                  {
+                    label: "Grading Strategy",
+                    value: form.gradingStrategy,
+                  },
                   { label: "Passing Score", value: `${form.passingScore}%` },
                   {
                     label: "Exam Window",
@@ -1579,7 +2630,7 @@ export default function CreateExam() {
                   },
                   {
                     label: "Questions",
-                    value: `${form.questionCount} (${form.questionType})`,
+                    value: `${composedQuestionCount} total (${aiGeneratedQuestions.length} direct + ${selectedBankQuestionIds.length} selected + ${randomQuestionCount} random)`,
                   },
                   {
                     label: "AI Proctoring",
@@ -1591,11 +2642,19 @@ export default function CreateExam() {
                   },
                   {
                     label: "Late Submission",
-                    value: form.allowLateSubmission ? "Allowed" : "Blocked",
+                    value: isSingleAttempt
+                      ? "Locked when Max Attempts = 1"
+                      : form.allowLateSubmission
+                        ? "Allowed"
+                        : "Blocked",
                   },
                   {
                     label: "Shuffle",
                     value: form.shuffleQuestions ? "Yes" : "No",
+                  },
+                  {
+                    label: "Review Settings",
+                    value: reviewSettingsDraft.enabled ? "Phase-based" : "Default",
                   },
                   {
                     label: "Show Results",

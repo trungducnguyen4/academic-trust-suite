@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { isIpInAnyCidr, normalizeIp } from '../common/utils/ip.utils';
 import { AccessPolicyService } from '../common/services/access-policy.service';
@@ -177,9 +178,89 @@ export class SubmissionsService {
       return inProgressSubmission;
     }
 
+    const latestSnapshot = await this.prisma.examSnapshot.findFirst({
+      where: { examId: startExamDto.examId },
+      orderBy: { publishedAt: 'desc' },
+      include: {
+        questions: {
+          orderBy: { orderIndex: 'asc' },
+        },
+      },
+    });
+
+    const examSettings: any = exam.settings || {};
+    const snapshotQuestions = Array.isArray(latestSnapshot?.questions)
+      ? [...latestSnapshot.questions]
+      : [];
+    const shouldShuffleQuestions = Boolean(
+      examSettings?.shuffleQuestions ||
+        examSettings?.questionSelectionConfig?.shuffleQuestions,
+    );
+
+    if (shouldShuffleQuestions) {
+      for (let i = snapshotQuestions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [snapshotQuestions[i], snapshotQuestions[j]] = [snapshotQuestions[j], snapshotQuestions[i]];
+      }
+    }
+
+    const randomizationSeed = randomUUID();
+    const snapshotPayload = {
+      examId: exam.id,
+      examSnapshotId: latestSnapshot?.id ?? null,
+      randomizationSeed,
+      timeLimitMinutes: exam.timeLimitMinutes ?? exam.duration,
+      maxAttempts: exam.maxAttempts ?? Number(examSettings?.maxAttempts || 1),
+      gradingStrategy: exam.gradingStrategy ?? examSettings?.gradingStrategy ?? 'HIGHEST',
+      reviewSettings: exam.reviewSettings ?? examSettings?.reviewSettings ?? null,
+      questionSelectionConfig:
+        exam.questionSelectionConfig ?? examSettings?.questionSelectionConfig ?? null,
+      questions: snapshotQuestions.map((item) => ({
+        questionId: item.questionId,
+        questionVersionId: item.questionVersionId ?? null,
+        questionSnapshotId: item.questionSnapshotId ?? null,
+        orderIndex: item.orderIndex,
+        assignedScore: item.assignedScore ?? item.points ?? 1,
+      })),
+    };
+
+    const examInstance = await this.prisma.examInstance.upsert({
+      where: {
+        examId_studentId: {
+          examId: startExamDto.examId,
+          studentId,
+        },
+      },
+      create: {
+        examId: startExamDto.examId,
+        studentId,
+        examSnapshotId: latestSnapshot?.id ?? null,
+        snapshotPayload,
+        randomizationSeed,
+        questionOrder: snapshotQuestions.map((item) => item.questionSnapshotId ?? item.questionId),
+        status: 'IN_PROGRESS',
+        startedAt: now,
+        lastActivityAt: now,
+        ipAddress: typeof (context as any)?.remoteIp !== 'undefined' || typeof (context as any)?.forwardedFor !== 'undefined'
+          ? this.accessPolicy.resolveClientIpFromParts(context?.remoteIp ?? null, context?.forwardedFor ?? null)
+          : null,
+        userAgent: context?.userAgent ?? null,
+      },
+      update: {
+        examSnapshotId: latestSnapshot?.id ?? null,
+        snapshotPayload,
+        randomizationSeed,
+        questionOrder: snapshotQuestions.map((item) => item.questionSnapshotId ?? item.questionId),
+        lastActivityAt: now,
+        ipAddress: typeof (context as any)?.remoteIp !== 'undefined' || typeof (context as any)?.forwardedFor !== 'undefined'
+          ? this.accessPolicy.resolveClientIpFromParts(context?.remoteIp ?? null, context?.forwardedFor ?? null)
+          : undefined,
+        userAgent: context?.userAgent ?? undefined,
+      },
+    });
+
     // Enforce maximum attempts from exam settings (default: 1)
-    const settings: any = exam.settings || {};
-    const parsedMaxAttempts = Number(settings?.maxAttempts);
+    const parsedMaxAttempts = Number(examSettings?.maxAttempts);
     const maxAttempts = Number.isFinite(parsedMaxAttempts)
       ? Math.max(1, Math.floor(parsedMaxAttempts))
       : 1;
@@ -217,6 +298,7 @@ export class SubmissionsService {
         status: 'IN_PROGRESS',
         startedAt: now,
         examSnapshotId: latestSnapshotId,
+        examInstanceId: examInstance.id,
       },
       include: {
         exam: {
@@ -308,6 +390,7 @@ export class SubmissionsService {
         submittedAt: true,
         gradedAt: true,
         score: true,
+        examInstanceId: true,
         submitIdempotencyKey: true,
         submitLockedAt: true,
         student: {
@@ -442,12 +525,15 @@ export class SubmissionsService {
               examQuestions: {
                 select: {
                   questionId: true,
+                  questionVersionId: true,
                   points: true,
+                  assignedScore: true,
                   question: {
                     select: {
                       type: true,
                       correctAnswer: true,
                       points: true,
+                      defaultPoints: true,
                     },
                   },
                 },
@@ -471,11 +557,14 @@ export class SubmissionsService {
 
       const examQuestions = lockedSubmission.exam.examQuestions as Array<{
         questionId: string;
+        questionVersionId?: string | null;
         points: number | null;
+        assignedScore?: number | null;
         question: {
           type: string;
           correctAnswer: any;
           points: number | null;
+          defaultPoints?: number | null;
         };
       }>;
 
@@ -496,7 +585,13 @@ export class SubmissionsService {
         if (autoGradedTypes.has(examQuestion.question.type)) {
           const correctAnswer = examQuestion.question.correctAnswer;
           if (correctAnswer && this.compareAnswers(answerDto.answer, correctAnswer)) {
-            pointsAwarded = examQuestion.points || examQuestion.question.points || 1;
+            pointsAwarded = Number(
+              examQuestion.assignedScore ??
+                examQuestion.points ??
+                examQuestion.question.defaultPoints ??
+                examQuestion.question.points ??
+                1,
+            );
             isCorrect = true;
           }
         }
@@ -516,6 +611,19 @@ export class SubmissionsService {
       });
 
       const totalScore = finalAnswerRows.reduce((sum, row) => sum + Number(row.pointsAwarded || 0), 0);
+      const maxRawScore = examQuestions.reduce(
+        (sum, eq) =>
+          sum +
+          Number(
+            eq.assignedScore ??
+              eq.points ??
+              eq.question.defaultPoints ??
+              eq.question.points ??
+              1,
+          ),
+        0,
+      );
+      const normalizedScore = maxRawScore > 0 ? (totalScore / maxRawScore) * 10 : 0;
       const hasManualGrading = lockedSubmission.exam.examQuestions.some(
         (eq) => !autoGradedTypes.has(eq.question.type),
       );
@@ -565,7 +673,7 @@ export class SubmissionsService {
           status: hasManualGrading ? 'SUBMITTED' : 'GRADED',
           submittedAt: now,
           gradedAt: hasManualGrading ? null : now,
-          score: totalScore,
+          score: Math.round(totalScore),
           finalSnapshotVersion: lockedSubmission.version,
           lastActivityAt: now,
           version: { increment: 1 },
@@ -599,9 +707,25 @@ export class SubmissionsService {
         },
       });
 
+      if (submission.examInstanceId) {
+        await tx.examInstance.update({
+          where: { id: submission.examInstanceId },
+          data: {
+            status: hasManualGrading ? 'SUBMITTED' : 'GRADED',
+            submittedAt: now,
+            rawScore: totalScore,
+            maxRawScore,
+            normalizedScore,
+            lastActivityAt: now,
+          },
+        });
+      }
+
       return {
         submission: updatedSubmission,
         totalScore,
+        maxRawScore,
+        normalizedScore,
         hasManualGrading,
       };
     });
@@ -623,7 +747,11 @@ export class SubmissionsService {
       console.error('Failed to send notifications:', err);
     });
 
-    return this.buildSubmitResponse(result.submission, false);
+    return {
+      ...this.buildSubmitResponse(result.submission, false),
+      normalizedScore: result.normalizedScore,
+      maxRawScore: result.maxRawScore,
+    };
   }
 
   async autosaveAnswers(

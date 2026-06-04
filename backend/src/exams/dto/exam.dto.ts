@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsOptional, IsObject, IsInt, IsDateString, IsArray, Min, IsBoolean, IsEmail } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsObject, IsInt, IsDateString, IsArray, Min, IsBoolean, IsEmail, IsNumber } from 'class-validator';
 
 export class CreateExamDto {
   @IsString()
@@ -14,6 +14,11 @@ export class CreateExamDto {
   @IsInt()
   @Min(1)
   duration: number; // in minutes
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  timeLimitMinutes?: number | null;
 
   @IsOptional()
   @IsInt()
@@ -36,6 +41,23 @@ export class CreateExamDto {
   @IsOptional()
   @IsObject()
   settings?: Record<string, any>;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxAttempts?: number | null;
+
+  @IsOptional()
+  @IsEnum(['HIGHEST', 'AVERAGE', 'FIRST_ATTEMPT', 'LAST_ATTEMPT'])
+  gradingStrategy?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  reviewSettings?: Record<string, any> | null;
+
+  @IsOptional()
+  @IsObject()
+  questionSelectionConfig?: Record<string, any> | null;
 
   @IsOptional()
   @IsEnum(['NORMAL', 'LAB'])
@@ -67,6 +89,11 @@ export class UpdateExamDto {
 
   @IsOptional()
   @IsInt()
+  @Min(1)
+  timeLimitMinutes?: number | null;
+
+  @IsOptional()
+  @IsInt()
   @Min(0)
   totalPoints?: number;
 
@@ -86,6 +113,23 @@ export class UpdateExamDto {
   @IsOptional()
   @IsObject()
   settings?: Record<string, any>;
+
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  maxAttempts?: number | null;
+
+  @IsOptional()
+  @IsEnum(['HIGHEST', 'AVERAGE', 'FIRST_ATTEMPT', 'LAST_ATTEMPT'])
+  gradingStrategy?: string | null;
+
+  @IsOptional()
+  @IsObject()
+  reviewSettings?: Record<string, any> | null;
+
+  @IsOptional()
+  @IsObject()
+  questionSelectionConfig?: Record<string, any> | null;
 
   @IsOptional()
   @IsEnum(['NORMAL', 'LAB'])
@@ -125,6 +169,11 @@ export class UpdateExamQuestionDto {
   @IsInt()
   @Min(1)
   points?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  assignedScore?: number;
 }
 
 export class ShareExamDto {

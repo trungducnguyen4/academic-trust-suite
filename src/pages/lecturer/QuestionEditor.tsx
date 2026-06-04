@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useLocation } from "react-router-dom";
 import { api, unwrapPaginatedData } from "@/lib/api";
@@ -17,7 +17,6 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
-import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Select,
   SelectContent,
@@ -31,7 +30,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   ArrowLeft,
   Save,
@@ -86,7 +84,6 @@ export default function QuestionEditor() {
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [question, setQuestion] = useState<Question | null>(null);
-  const [tab, setTab] = useState("edit");
   const [courses, setCourses] = useState<
     { id: string; code: string; name: string }[]
   >([]);
@@ -760,28 +757,6 @@ export default function QuestionEditor() {
     }
   };
 
-  const difficultyLabel =
-    difficulty[0] <= 0.3 ? "Easy" : difficulty[0] <= 0.5 ? "Medium" : "Hard";
-  const difficultyColor =
-    difficulty[0] <= 0.3
-      ? "text-green-600"
-      : difficulty[0] <= 0.5
-        ? "text-yellow-600"
-        : "text-red-600";
-
-  const previewOptions = useMemo(() => {
-    if (questionType !== "ordering") {
-      return options;
-    }
-
-    const shuffled = [...options];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    return shuffled;
-  }, [options, questionType]);
-
   const normalizeQuestionText = (value: string) =>
     String(value || "")
       .toLowerCase()
@@ -1108,18 +1083,9 @@ export default function QuestionEditor() {
             </span>
           </div>
         ) : (
-          <Tabs value={tab} onValueChange={setTab}>
-            <TabsList className="mb-3 sm:mb-4 grid grid-cols-2 w-[160px]">
-              <TabsTrigger value="edit" className="text-xs sm:text-sm">
-                Edit
-              </TabsTrigger>
-              <TabsTrigger value="preview" className="text-xs sm:text-sm">
-                Preview
-              </TabsTrigger>
-            </TabsList>
-
-            {/* === EDIT TAB === */}
-            <TabsContent value="edit">
+          <div>
+            {/* === EDIT MODE === */}
+            <div>
               <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-6 items-start">
                 {/* ── LEFT: Question Editor ── */}
                 <div className="space-y-4 sm:space-y-6">
@@ -1168,7 +1134,7 @@ export default function QuestionEditor() {
                         </p>
                       )}
                       <p className="text-[10px] text-muted-foreground italic px-1">
-                        * Generated content will be shown in preview mode for you to approve before applying.
+                        * Generated content will be inserted into the editor for you to review before saving.
                       </p>
                       {aiSimilarityWarning && (
                         <p className="text-[10px] text-red-600 font-medium px-1">
@@ -1763,151 +1729,9 @@ export default function QuestionEditor() {
                 {/* end metadata sidebar */}
               </div>
               {/* end grid */}
-            </TabsContent>
-
-            {/* === PREVIEW TAB === */}
-            <TabsContent value="preview">
-              <Card>
-                <CardHeader className="px-3 sm:px-6 pt-3 sm:pt-6 pb-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <CardTitle className="text-sm sm:text-base">
-                      Question Preview
-                    </CardTitle>
-                    <StatusBadge
-                      variant={
-                        difficulty[0] <= 0.3
-                          ? "success"
-                          : difficulty[0] <= 0.5
-                            ? "warning"
-                            : "destructive"
-                      }
-                      className="text-[10px] sm:text-xs"
-                    >
-                      {difficultyLabel}
-                    </StatusBadge>
-                    <StatusBadge
-                      variant="info"
-                      className="text-[10px] sm:text-xs"
-                    >
-                      {questionType.replace("_", " ")}
-                    </StatusBadge>
-                  </div>
-                </CardHeader>
-                <CardContent className="px-3 sm:px-6 pb-3 sm:pb-6">
-                  {!content ? (
-                    <p className="text-xs sm:text-sm text-muted-foreground text-center py-6 sm:py-8">
-                      Enter question content to see preview
-                    </p>
-                  ) : (
-                    <div className="space-y-3 sm:space-y-4">
-                      <p className="text-sm sm:text-base font-medium leading-relaxed">
-                        {content}
-                      </p>
-                      <Separator />
-
-                      {(questionType === "multiple_choice" ||
-                        questionType === "ordering" ||
-                        questionType === "matching") && (
-                        <div className="space-y-2">
-                          {previewOptions.map((opt, idx) => (
-                            <div
-                              key={opt.id}
-                              className={`flex items-center gap-2 sm:gap-3 p-2 sm:p-3 rounded-lg border text-sm ${
-                                opt.isCorrect &&
-                                questionType === "multiple_choice"
-                                  ? "border-green-500 bg-green-50"
-                                  : "border-muted"
-                              }`}
-                            >
-                              <span className="shrink-0 w-5 h-5 sm:w-6 sm:h-6 rounded-full bg-secondary flex items-center justify-center text-[9px] sm:text-[10px] font-bold">
-                                {questionType === "ordering" ? idx + 1 : opt.id}
-                              </span>
-                              <span className="text-xs sm:text-sm flex-1 min-w-0 break-words">
-                                {opt.text || "(empty)"}
-                              </span>
-                              {questionType === "matching" && (
-                                <>
-                                  <span className="text-muted-foreground text-sm flex-shrink-0">
-                                    →
-                                  </span>
-                                  <span className="text-xs sm:text-sm font-medium text-primary">
-                                    Match
-                                  </span>
-                                </>
-                              )}
-                              {opt.isCorrect &&
-                                questionType === "multiple_choice" && (
-                                  <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-green-600 ml-auto flex-shrink-0" />
-                                )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {questionType === "fill_blank" && (
-                        <div className="p-4 rounded-lg bg-secondary/10 border border-dashed text-center">
-                          <p className="text-sm text-muted-foreground">
-                            Fill in the blank preview will appear here
-                          </p>
-                        </div>
-                      )}
-
-                      {questionType === "find_error" && (
-                        <div className="p-4 rounded-lg bg-secondary/10 border border-dashed text-center">
-                          <p className="text-sm text-muted-foreground">
-                            Find the error code block preview will appear here
-                          </p>
-                        </div>
-                      )}
-
-                      {questionType === "true_false" && (
-                        <div className="flex gap-2 sm:gap-4">
-                          <div
-                            className={`flex-1 p-2 sm:p-3 rounded-lg border text-center text-xs sm:text-sm ${tfAnswer === "true" ? "border-green-500 bg-green-50 text-green-700 font-medium" : "border-muted text-muted-foreground"}`}
-                          >
-                            True
-                          </div>
-                          <div
-                            className={`flex-1 p-2 sm:p-3 rounded-lg border text-center text-xs sm:text-sm ${tfAnswer === "false" ? "border-green-500 bg-green-50 text-green-700 font-medium" : "border-muted text-muted-foreground"}`}
-                          >
-                            False
-                          </div>
-                        </div>
-                      )}
-
-                      {questionType === "essay" && (
-                        <div className="p-3 sm:p-4 rounded-lg bg-muted/50">
-                          <p className="text-[10px] sm:text-xs text-muted-foreground mb-1">
-                            Rubric
-                          </p>
-                          <p className="text-xs sm:text-sm">
-                            {essayRubric || "(no rubric)"}
-                          </p>
-                          <p className="text-[10px] sm:text-xs text-muted-foreground mt-2">
-                            Max Score: {essayMaxScore}
-                          </p>
-                        </div>
-                      )}
-
-                      {explanation && (
-                        <>
-                          <Separator />
-                          <div className="p-2 sm:p-3 bg-blue-50 rounded-lg">
-                            <p className="text-[10px] sm:text-xs font-medium text-blue-700 mb-1">
-                              Explanation
-                            </p>
-                            <p className="text-xs sm:text-sm text-blue-600 leading-relaxed">
-                              {explanation}
-                            </p>
-                          </div>
-                        </>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+            
+            </div>
+          </div>
         )}
 
         {/* Topic Selection Dialog */}
@@ -2103,3 +1927,4 @@ export default function QuestionEditor() {
     </DashboardLayout>
   );
 }
+

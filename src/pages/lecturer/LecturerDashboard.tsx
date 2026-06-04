@@ -340,6 +340,71 @@ export default function LecturerDashboard() {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Quick Actions */}
+            <Card className="card-elevated">
+              <CardHeader>
+                <CardTitle className="text-lg font-bold">Quick Actions</CardTitle>
+                <CardDescription>Common tasks and shortcuts</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid gap-4 md:grid-cols-4">
+                  {[
+                    {
+                      icon: Plus,
+                      label: "Create Exam",
+                      href: "/lecturer/exams/create",
+                      color: "text-blue-600",
+                      bg: "bg-blue-500/10",
+                    },
+                    {
+                      icon: GraduationCap,
+                      label: "Manage Courses",
+                      href: "/lecturer/courses",
+                      color: "text-fuchsia-600",
+                      bg: "bg-fuchsia-500/10",
+                    },
+                    {
+                      icon: BookOpen,
+                      label: "Question Bank",
+                      href: "/lecturer/question-bank",
+                      color: "text-violet-600",
+                      bg: "bg-violet-500/10",
+                    },
+                    {
+                      icon: FileText,
+                      label: "Manage Exams",
+                      href: "/lecturer/exams",
+                      color: "text-amber-600",
+                      bg: "bg-amber-500/10",
+                    },
+                    {
+                      icon: BarChart3,
+                      label: "View Analytics",
+                      href: "/lecturer/analytics",
+                      color: "text-emerald-600",
+                      bg: "bg-emerald-500/10",
+                    },
+                  ].map((action) => (
+                    <Button
+                      key={action.label}
+                      variant="outline"
+                      className="h-auto py-5 flex-col gap-3 rounded-xl border-border/50 hover:border-primary/20 hover:bg-secondary/50 transition-all"
+                      asChild
+                    >
+                      <Link to={action.href}>
+                        <div
+                          className={`h-10 w-10 rounded-xl ${action.bg} flex items-center justify-center`}
+                        >
+                          <action.icon className={`h-5 w-5 ${action.color}`} />
+                        </div>
+                        <span className="font-medium">{action.label}</span>
+                      </Link>
+                    </Button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Right panel */}
@@ -425,71 +490,6 @@ export default function LecturerDashboard() {
             </Card>
           </div>
         </div>
-
-        {/* Quick Actions */}
-        <Card className="card-elevated">
-          <CardHeader>
-            <CardTitle className="text-lg font-bold">Quick Actions</CardTitle>
-            <CardDescription>Common tasks and shortcuts</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid gap-4 md:grid-cols-4">
-              {[
-                {
-                  icon: Plus,
-                  label: "Create Exam",
-                  href: "/lecturer/exams/create",
-                  color: "text-blue-600",
-                  bg: "bg-blue-500/10",
-                },
-                {
-                  icon: GraduationCap,
-                  label: "Manage Courses",
-                  href: "/lecturer/courses",
-                  color: "text-fuchsia-600",
-                  bg: "bg-fuchsia-500/10",
-                },
-                {
-                  icon: BookOpen,
-                  label: "Question Bank",
-                  href: "/lecturer/question-bank",
-                  color: "text-violet-600",
-                  bg: "bg-violet-500/10",
-                },
-                {
-                  icon: FileText,
-                  label: "Manage Exams",
-                  href: "/lecturer/exams",
-                  color: "text-amber-600",
-                  bg: "bg-amber-500/10",
-                },
-                {
-                  icon: BarChart3,
-                  label: "View Analytics",
-                  href: "/lecturer/analytics",
-                  color: "text-emerald-600",
-                  bg: "bg-emerald-500/10",
-                },
-              ].map((action) => (
-                <Button
-                  key={action.label}
-                  variant="outline"
-                  className="h-auto py-5 flex-col gap-3 rounded-xl border-border/50 hover:border-primary/20 hover:bg-secondary/50 transition-all"
-                  asChild
-                >
-                  <Link to={action.href}>
-                    <div
-                      className={`h-10 w-10 rounded-xl ${action.bg} flex items-center justify-center`}
-                    >
-                      <action.icon className={`h-5 w-5 ${action.color}`} />
-                    </div>
-                    <span className="font-medium">{action.label}</span>
-                  </Link>
-                </Button>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
       </div>
     </DashboardLayout>
   );

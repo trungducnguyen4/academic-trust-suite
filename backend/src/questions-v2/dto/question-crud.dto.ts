@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsOptional, IsObject, IsInt, Min, Max, IsArray } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsObject, IsInt, Min, Max, IsArray, IsNumber } from 'class-validator';
 
 export class CreateQuestionCrudDto {
   @IsEnum(['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE', 'SHORT_ANSWER', 'ESSAY', 'FILL_IN_BLANK', 'MATCHING', 'ORDERING'])
@@ -29,6 +29,11 @@ export class CreateQuestionCrudDto {
   @IsInt()
   @Min(1)
   points?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  defaultPoints?: number;
 
   @IsOptional()
   @IsString()
@@ -70,6 +75,11 @@ export class UpdateQuestionCrudDto {
   @IsInt()
   @Min(1)
   points?: number;
+
+  @IsOptional()
+  @IsNumber()
+  @Min(0.1)
+  defaultPoints?: number;
 
   @IsOptional()
   @IsString()

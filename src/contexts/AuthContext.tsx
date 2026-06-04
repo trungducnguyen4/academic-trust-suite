@@ -31,6 +31,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('accessToken');
+      console.log('Auth token on mount:', token);
       if (token) {
         try {
           const user = await api.getMe();
@@ -65,16 +66,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       const response = await api.login(email, password);
       api.setToken(response.accessToken);
+      console.log('Saved accessToken (first 10 chars):', response.accessToken?.slice(0, 10));
       
       setAuthState({
         user: response.user,
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch (error: unknown) {
+    } catch (error: any) {
       setAuthState((prev) => ({ ...prev, isLoading: false }));
-      const message = error instanceof Error ? error.message : 'Invalid credentials';
-      throw new Error(message);
+      throw new Error(error.message || 'Invalid credentials');
     }
   };
 
@@ -97,10 +98,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch (error: unknown) {
+    } catch (error: any) {
       setAuthState((prev) => ({ ...prev, isLoading: false }));
-      const message = error instanceof Error ? error.message : 'Registration failed';
-      throw new Error(message);
+      throw new Error(error.message || 'Registration failed');
     }
   };
 

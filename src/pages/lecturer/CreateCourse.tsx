@@ -58,6 +58,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  ArrowLeft,
   ArrowRight,
   Plus,
   BookOpen,
@@ -96,6 +97,7 @@ import {
 interface Course {
   id: string;
   code: string;
+  subjectCode?: string;
   name: string;
   academicYear?: string;
   term?: CourseTerm;
@@ -111,6 +113,7 @@ interface Course {
 interface APICourse {
   id: string;
   code: string;
+  subjectCode?: string;
   name: string;
   description?: string;
   academicYear?: string;
@@ -193,6 +196,7 @@ export default function CreateCourse() {
   // Form state
   const [newCourse, setNewCourse] = useState({
     name: "",
+    subjectCode: "",
     academicYear: defaultAcademicYear,
     term: defaultTerm,
     description: "",
@@ -201,6 +205,7 @@ export default function CreateCourse() {
 
   const [editCourse, setEditCourse] = useState({
     code: "",
+    subjectCode: "",
     name: "",
     academicYear: defaultAcademicYear,
     term: defaultTerm,
@@ -211,13 +216,17 @@ export default function CreateCourse() {
   const previewCourseCode = `${buildToken(newCourse.name, 6, "COURSE")}-${buildToken(user?.fullName || user?.email || "", 4, "USER")}-XX`;
 
   // Student enrollment state
-  const [enrollTab, setEnrollTab] = useState<"manual" | "import">("manual");
+  const [enrollTab, setEnrollTab] = useState<"manual" | "import" | "training">("manual");
   const [studentSearch, setStudentSearch] = useState("");
   const [searchResults, setSearchResults] = useState<StudentSearchResult[]>([]);
   const [selectedStudents, setSelectedStudents] = useState<
     StudentSearchResult[]
   >([]);
   const [isSearching, setIsSearching] = useState(false);
+  const [trainingSearch, setTrainingSearch] = useState("");
+  const [trainingResults, setTrainingResults] = useState<StudentSearchResult[]>([]);
+  const [selectedTrainingStudents, setSelectedTrainingStudents] = useState<StudentSearchResult[]>([]);
+  const [isTrainingSearching, setIsTrainingSearching] = useState(false);
   const [isEnrolling, setIsEnrolling] = useState(false);
   const [enrollResults, setEnrollResults] = useState<EnrollResult[]>([]);
   const [provisionedCount, setProvisionedCount] = useState(0);
@@ -226,6 +235,7 @@ export default function CreateCourse() {
   const [csvFileName, setCsvFileName] = useState("");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const trainingSearchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     const fetchCourses = async () => {
@@ -240,6 +250,7 @@ export default function CreateCourse() {
         const mapped: Course[] = data.map((c: APICourse) => ({
           id: c.id,
           code: c.code,
+          subjectCode: c.subjectCode,
           name: c.name,
           academicYear: c.academicYear || undefined,
           term: c.term || undefined,
@@ -453,6 +464,32 @@ export default function CreateCourse() {
     [selectedStudents],
   );
 
+  const handleTrainingSearch = useCallback(
+    async (query: string) => {
+      if (query.length < 2) {
+        setTrainingResults([]);
+        return;
+      }
+      try {
+        setIsTrainingSearching(true);
+        const students = await api.searchTrainingSystemStudents({
+          query,
+          courseId: createdCourseId || undefined,
+        });
+        const filtered = (Array.isArray(students) ? students : []).filter(
+          (s: StudentSearchResult) =>
+            !selectedTrainingStudents.some((sel) => sel.id === s.id),
+        );
+        setTrainingResults(filtered.slice(0, 10));
+      } catch (err) {
+        console.error("Failed to search training system students:", err);
+      } finally {
+        setIsTrainingSearching(false);
+      }
+    },
+    [createdCourseId, selectedTrainingStudents],
+  );
+
   // Debounced search
   useEffect(() => {
     if (searchTimeoutRef.current) clearTimeout(searchTimeoutRef.current);
@@ -464,6 +501,18 @@ export default function CreateCourse() {
     };
   }, [studentSearch, handleStudentSearch]);
 
+  useEffect(() => {
+    if (trainingSearchTimeoutRef.current)
+      clearTimeout(trainingSearchTimeoutRef.current);
+    trainingSearchTimeoutRef.current = setTimeout(() => {
+      handleTrainingSearch(trainingSearch);
+    }, 300);
+    return () => {
+      if (trainingSearchTimeoutRef.current)
+        clearTimeout(trainingSearchTimeoutRef.current);
+    };
+  }, [trainingSearch, handleTrainingSearch]);
+
   const addStudent = (student: StudentSearchResult) => {
     setSelectedStudents((prev) => [...prev, student]);
     setSearchResults((prev) => prev.filter((s) => s.id !== student.id));
@@ -472,6 +521,16 @@ export default function CreateCourse() {
 
   const removeStudent = (studentId: string) => {
     setSelectedStudents((prev) => prev.filter((s) => s.id !== studentId));
+  };
+
+  const addTrainingStudent = (student: StudentSearchResult) => {
+    setSelectedTrainingStudents((prev) => [...prev, student]);
+    setTrainingResults((prev) => prev.filter((s) => s.id !== student.id));
+    setTrainingSearch("");
+  };
+
+  const removeTrainingStudent = (studentId: string) => {
+    setSelectedTrainingStudents((prev) => prev.filter((s) => s.id !== studentId));
   };
 
   // CSV / Excel file handler
@@ -531,6 +590,7 @@ export default function CreateCourse() {
     try {
       const created = await api.createCourse({
         name: newCourse.name,
+        subjectCode: newCourse.subjectCode || undefined,
         description: newCourse.description || undefined,
         credits: parseNumericInput(newCourse.credits, { min: 1, max: 10 }),
         academicYear: newCourse.academicYear,
@@ -539,6 +599,7 @@ export default function CreateCourse() {
       const mapped: Course = {
         id: created.id,
         code: created.code,
+        subjectCode: created.subjectCode,
         name: created.name,
         academicYear: newCourse.academicYear,
         term: newCourse.term,
@@ -570,10 +631,90 @@ export default function CreateCourse() {
     }
   };
 
+  const handleSaveCourseInfo = async () => {
+    const creditsError = validateCreditsField(newCourse.credits);
+    if (creditsError) {
+      setCreateCreditsError(creditsError);
+      toast.error(creditsError);
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const payload = {
+        name: newCourse.name,
+        subjectCode: newCourse.subjectCode || undefined,
+        description: newCourse.description || undefined,
+        credits: parseNumericInput(newCourse.credits, { min: 1, max: 10 }),
+        academicYear: newCourse.academicYear,
+        term: newCourse.term,
+      };
+
+      if (createdCourseId) {
+        const updated = await api.updateCourse(createdCourseId, payload);
+        setCourses((prev) =>
+          prev.map((course) =>
+            course.id === createdCourseId
+              ? {
+                  ...course,
+                  code: updated.code,
+                  subjectCode: updated.subjectCode,
+                  name: updated.name,
+                  academicYear: updated.academicYear || course.academicYear,
+                  term: updated.term || course.term,
+                  semester: updated.semester || course.semester,
+                  description: updated.description,
+                  credits: updated.credits,
+                }
+              : course,
+          ),
+        );
+        setCreatedCourseCode(updated.code);
+        toast.success("Course updated successfully");
+      } else {
+        const created = await api.createCourse(payload);
+        const mapped: Course = {
+          id: created.id,
+          code: created.code,
+          subjectCode: created.subjectCode,
+          name: created.name,
+          academicYear: newCourse.academicYear,
+          term: newCourse.term,
+          students: 0,
+          exams: 0,
+          status: "active",
+          createdAt: (() => {
+            const d = new Date(created.createdAt);
+            return isNaN(d.getTime())
+              ? typeof created.createdAt === "string"
+                ? created.createdAt
+                : "â€”"
+              : d.toISOString().split("T")[0];
+          })(),
+        };
+        setCourses((prev) => [mapped, ...prev]);
+        setCreatedCourseId(created.id);
+        setCreatedCourseCode(created.code);
+        toast.success("Course created successfully");
+      }
+
+      setStep(2);
+      setCreateCreditsError("");
+    } catch (err) {
+      console.error("Failed to save course info:", err);
+      toast.error(
+        err instanceof Error ? err.message : "Failed to save course info",
+      );
+    } finally {
+      setIsCreating(false);
+    }
+  };
+
   const openEditDialog = (course: Course) => {
     setEditingCourseId(course.id);
     setEditCourse({
       code: course.code,
+      subjectCode: course.subjectCode || "",
       name: course.name,
       academicYear: course.academicYear || defaultAcademicYear,
       term: course.term || defaultTerm,
@@ -598,6 +739,7 @@ export default function CreateCourse() {
     try {
       const updated = await api.updateCourse(editingCourseId, {
         name: editCourse.name,
+        subjectCode: editCourse.subjectCode || undefined,
         academicYear: editCourse.academicYear || undefined,
         term: editCourse.term || undefined,
         description: editCourse.description || undefined,
@@ -610,6 +752,7 @@ export default function CreateCourse() {
             ? {
                 ...course,
                 code: updated.code,
+                subjectCode: updated.subjectCode,
                 name: updated.name,
                 academicYear: updated.academicYear || course.academicYear,
                 term: updated.term || course.term,
@@ -656,6 +799,39 @@ export default function CreateCourse() {
           }),
           ...result.failed.map((f: { studentId: string; reason: string }) => {
             const student = selectedStudents.find((s) => s.id === f.studentId);
+            return {
+              email: student?.email || f.studentId,
+              status: "failed" as const,
+              reason: f.reason,
+            };
+          }),
+        ];
+        setEnrollResults(results);
+        const successCount = result.success.length;
+        setCourses((prev) =>
+          prev.map((c) =>
+            c.id === createdCourseId
+              ? { ...c, students: c.students + successCount }
+              : c,
+          ),
+        );
+      } else if (enrollTab === "training" && selectedTrainingStudents.length > 0) {
+        const result = await api.bulkEnroll(
+          createdCourseId,
+          selectedTrainingStudents.map((s) => s.id),
+        );
+        const results: EnrollResult[] = [
+          ...result.success.map((id: string) => {
+            const student = selectedTrainingStudents.find((s) => s.id === id);
+            return {
+              email: student?.email || id,
+              fullName: student?.fullName,
+              studentId: student?.studentId,
+              status: "success" as const,
+            };
+          }),
+          ...result.failed.map((f: { studentId: string; reason: string }) => {
+            const student = selectedTrainingStudents.find((s) => s.id === f.studentId);
             return {
               email: student?.email || f.studentId,
               status: "failed" as const,
@@ -720,8 +896,11 @@ export default function CreateCourse() {
         credits: "",
       });
       setSelectedStudents([]);
+      setSelectedTrainingStudents([]);
       setSearchResults([]);
+      setTrainingResults([]);
       setStudentSearch("");
+      setTrainingSearch("");
       setCsvText("");
       setCsvEmails([]);
       setCsvFileName("");
@@ -846,6 +1025,22 @@ export default function CreateCourse() {
                         />
                       </div>
                       <div className="space-y-2">
+                        <Label htmlFor="subjectCode">Subject code</Label>
+                        <Input
+                          id="subjectCode"
+                          placeholder="e.g., CS101"
+                          value={newCourse.subjectCode}
+                          onChange={(e) =>
+                            setNewCourse({
+                              ...newCourse,
+                              subjectCode: e.target.value,
+                            })
+                          }
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
                         <Label htmlFor="academicYear">Academic year</Label>
                         <Select
                           value={newCourse.academicYear}
@@ -865,8 +1060,6 @@ export default function CreateCourse() {
                           </SelectContent>
                         </Select>
                       </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="courseName">Course Name *</Label>
                         <Input
@@ -958,7 +1151,7 @@ export default function CreateCourse() {
                       Cancel
                     </Button>
                     <Button
-                      onClick={handleCreate}
+                      onClick={handleSaveCourseInfo}
                       disabled={
                         isCreating ||
                         !newCourse.name ||
@@ -972,7 +1165,7 @@ export default function CreateCourse() {
                       ) : (
                         <ArrowRight className="h-4 w-4" />
                       )}
-                      Create & Add Students
+                      {createdCourseId ? "Save & Continue" : "Create & Add Students"}
                     </Button>
                   </DialogFooter>
                 </>
@@ -998,19 +1191,22 @@ export default function CreateCourse() {
                   <Tabs
                     value={enrollTab}
                     onValueChange={(v) =>
-                      setEnrollTab(v as "manual" | "import")
+                      setEnrollTab(v as "manual" | "import" | "training")
                     }
                     className="mt-2"
                   >
-                    <TabsList className="grid w-full grid-cols-2">
-                      <TabsTrigger value="manual" className="gap-2">
-                        <UserPlus className="h-4 w-4" /> Manual Search
-                      </TabsTrigger>
-                      <TabsTrigger value="import" className="gap-2">
-                        <FileSpreadsheet className="h-4 w-4" /> Import CSV /
+                    <TabsList className="grid w-full grid-cols-3">
+                    <TabsTrigger value="manual" className="gap-2">
+                      <UserPlus className="h-4 w-4" /> Manual Search
+                    </TabsTrigger>
+                    <TabsTrigger value="training" className="gap-2">
+                      <GraduationCap className="h-4 w-4" /> Training System
+                    </TabsTrigger>
+                    <TabsTrigger value="import" className="gap-2">
+                      <FileSpreadsheet className="h-4 w-4" /> Import CSV /
                         Excel
-                      </TabsTrigger>
-                    </TabsList>
+                    </TabsTrigger>
+                  </TabsList>
 
                     {/* Manual Student Search */}
                     <TabsContent value="manual" className="space-y-4 mt-4">
@@ -1116,6 +1312,110 @@ export default function CreateCourse() {
                           <UserPlus className="h-10 w-10 mx-auto mb-2 opacity-40" />
                           <p className="text-sm">
                             Search and add students to this course
+                          </p>
+                        </div>
+                      )}
+                    </TabsContent>
+
+                    {/* Training System Search */}
+                    <TabsContent value="training" className="space-y-4 mt-4">
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          placeholder="Search training system students by name, email, or student ID..."
+                          value={trainingSearch}
+                          onChange={(e) => setTrainingSearch(e.target.value)}
+                          className="bg-white pl-9"
+                        />
+                        {isTrainingSearching && (
+                          <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
+                        )}
+                      </div>
+
+                      <div className="flex items-start gap-3 p-3 rounded-lg bg-muted/40 border">
+                        <Info className="h-4 w-4 mt-0.5 text-muted-foreground shrink-0" />
+                        <p className="text-sm text-muted-foreground">
+                          This uses a training-system abstraction so we can swap in a real external API later without changing the enrollment workflow.
+                        </p>
+                      </div>
+
+                      {trainingResults.length > 0 && (
+                        <div className="border rounded-lg max-h-40 overflow-y-auto">
+                          {trainingResults.map((student) => (
+                            <div
+                              key={student.id}
+                              className="flex items-center justify-between p-2.5 hover:bg-muted/50 cursor-pointer border-b last:border-b-0 transition-colors"
+                              onClick={() => addTrainingStudent(student)}
+                            >
+                              <div className="flex items-center gap-3">
+                                <div className="h-8 w-8 rounded-full bg-primary/10 flex items-center justify-center text-xs font-medium text-primary">
+                                  {student.fullName.charAt(0)}
+                                </div>
+                                <div>
+                                  <p className="text-sm font-medium">
+                                    {student.fullName}
+                                  </p>
+                                  <p className="text-xs text-muted-foreground">
+                                    {student.email} {student.studentId && `• ${student.studentId}`}
+                                  </p>
+                                </div>
+                              </div>
+                              <Plus className="h-4 w-4 text-primary" />
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {selectedTrainingStudents.length > 0 && (
+                        <div className="space-y-2">
+                          <Label className="text-sm font-medium">
+                            Selected Training Students ({selectedTrainingStudents.length})
+                          </Label>
+                          <div className="border rounded-lg max-h-48 overflow-y-auto">
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead className="text-xs">Student</TableHead>
+                                  <TableHead className="text-xs">Email</TableHead>
+                                  <TableHead className="text-xs">Student ID</TableHead>
+                                  <TableHead className="text-xs w-10"></TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {selectedTrainingStudents.map((student) => (
+                                  <TableRow key={student.id}>
+                                    <TableCell className="text-sm py-2">
+                                      {student.fullName}
+                                    </TableCell>
+                                    <TableCell className="text-sm py-2 text-muted-foreground">
+                                      {student.email}
+                                    </TableCell>
+                                    <TableCell className="text-sm py-2 font-mono">
+                                      {student.studentId || "-"}
+                                    </TableCell>
+                                    <TableCell className="py-2">
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 text-destructive hover:text-destructive"
+                                        onClick={() => removeTrainingStudent(student.id)}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          </div>
+                        </div>
+                      )}
+
+                      {selectedTrainingStudents.length === 0 && !trainingSearch && (
+                        <div className="text-center py-8 text-muted-foreground">
+                          <GraduationCap className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                          <p className="text-sm">
+                            Search and add students from the training system
                           </p>
                         </div>
                       )}
@@ -1305,6 +1605,16 @@ export default function CreateCourse() {
                     </Button>
                     {enrollResults.length === 0 && (
                       <Button
+                        variant="outline"
+                        onClick={() => setStep(1)}
+                        className="gap-2"
+                      >
+                        <ArrowLeft className="h-4 w-4" />
+                        Back to Course Info
+                      </Button>
+                    )}
+                    {enrollResults.length === 0 && (
+                      <Button
                         onClick={handleEnrollStudents}
                         disabled={
                           isEnrolling ||
@@ -1353,6 +1663,19 @@ export default function CreateCourse() {
                       value={editCourse.code}
                       className="font-mono"
                       disabled
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="edit-subjectCode">Subject code</Label>
+                    <Input
+                      id="edit-subjectCode"
+                      value={editCourse.subjectCode}
+                      onChange={(e) =>
+                        setEditCourse((prev) => ({
+                          ...prev,
+                          subjectCode: e.target.value,
+                        }))
+                      }
                     />
                   </div>
                   <div className="space-y-2">

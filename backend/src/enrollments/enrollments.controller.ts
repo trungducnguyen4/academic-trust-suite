@@ -6,6 +6,7 @@ import {
   Patch,
   Param,
   Delete,
+  Query,
   UseGuards,
   Request,
 } from '@nestjs/common';
@@ -50,6 +51,16 @@ export class EnrollmentsController {
   @Roles('LECTURER', 'ADMIN')
   bulkImport(@Body() dto: BulkImportStudentsDto, @Request() req) {
     return this.enrollmentsService.bulkImport(dto, req.user);
+  }
+
+  @Get('training-system/students')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  searchTrainingSystemStudents(
+    @Query('query') query?: string,
+    @Query('courseId') courseId?: string,
+  ) {
+    return this.enrollmentsService.searchTrainingSystemStudents(query, courseId);
   }
 
   @Get('course/:courseId')
