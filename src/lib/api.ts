@@ -343,6 +343,7 @@ class ApiClient {
       questionType,
       sourceQuestionId: data.sourceQuestionId,
       initialContext: {
+        courseId: data.courseId,
         topicId: data.topicId || data.topic,
         topic: data.topic,
         learningObjective: data.learningObjective,
@@ -381,6 +382,7 @@ class ApiClient {
         data: {
           difficulty: data.difficulty,
           points: data.points,
+          courseId: data.courseId,
           
           topicId: data.topicId || data.topic,
           topic: data.topic,

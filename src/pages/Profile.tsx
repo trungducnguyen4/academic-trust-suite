@@ -16,17 +16,15 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
-import { AlertTriangle, CheckCircle2, Loader2, Trash2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { toast } from "sonner";
 import api from "@/lib/api";
 
 export default function Profile() {
-  const { user, isAuthenticated, logout, applyProfileToSession } = useAuth();
+  const { user, isAuthenticated, applyProfileToSession } = useAuth();
   const isStudent = user?.role === "STUDENT";
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isUpdatingPassword, setIsUpdatingPassword] = useState(false);
-  const [isDeletingProfile, setIsDeletingProfile] = useState(false);
 
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -36,11 +34,6 @@ export default function Profile() {
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
-  const [deletePassword, setDeletePassword] = useState("");
-
-  if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />;
-  }
 
   useEffect(() => {
     setFullName(user.fullName || "");
@@ -48,6 +41,10 @@ export default function Profile() {
     setDepartment(user.department || "");
     setStudentId(user.studentId || "");
   }, [user]);
+
+  if (!isAuthenticated || !user) {
+    return <Navigate to="/login" replace />;
+  }
 
   const handleProfileUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -73,8 +70,8 @@ export default function Profile() {
       });
       applyProfileToSession(updatedUser);
       toast.success("Profile updated successfully");
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to update profile");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to update profile");
     } finally {
       setIsSavingProfile(false);
     }
@@ -82,11 +79,6 @@ export default function Profile() {
 
   const handlePasswordChange = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (isStudent) {
-      toast.error("Password change is temporarily disabled for students");
-      return;
-    }
 
     if (!currentPassword || !newPassword || !confirmPassword) {
       toast.error("Please complete all password fields");
@@ -110,8 +102,8 @@ export default function Profile() {
         newPassword,
       });
       toast.success("Password updated successfully");
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to update password");
+    } catch (error: unknown) {
+      toast.error(error instanceof Error ? error.message : "Failed to update password");
     } finally {
       setIsUpdatingPassword(false);
     }
@@ -119,25 +111,6 @@ export default function Profile() {
     setCurrentPassword("");
     setNewPassword("");
     setConfirmPassword("");
-  };
-
-  const handleDeleteProfile = async () => {
-    if (!deletePassword) {
-      toast.error("Please enter your current password to delete profile");
-      return;
-    }
-
-    setIsDeletingProfile(true);
-    try {
-      await api.deleteMyProfile({ currentPassword: deletePassword });
-      toast.success("Profile deleted successfully");
-      logout();
-    } catch (error: any) {
-      toast.error(error?.message || "Failed to delete profile");
-    } finally {
-      setIsDeletingProfile(false);
-      setDeletePassword("");
-    }
   };
 
   const roleLabel =
@@ -172,11 +145,6 @@ export default function Profile() {
               <CardDescription>
                 Update personal info for your account (no avatar change)
               </CardDescription>
-              {isStudent && (
-                <p className="text-sm text-muted-foreground">
-                  Editing is temporarily disabled for student accounts.
-                </p>
-              )}
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -289,7 +257,6 @@ export default function Profile() {
                       placeholder="••••••••"
                       value={currentPassword}
                       onChange={(e) => setCurrentPassword(e.target.value)}
-                      disabled={isStudent}
                       required
                     />
                   </div>
@@ -301,7 +268,6 @@ export default function Profile() {
                       placeholder="••••••••"
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
-                      disabled={isStudent}
                       required
                       minLength={6}
                     />
@@ -316,73 +282,17 @@ export default function Profile() {
                       placeholder="••••••••"
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
-                      disabled={isStudent}
                       required
                       minLength={6}
                     />
                   </div>
-                  <Button
-                    type="submit"
-                    disabled={isUpdatingPassword || isStudent}
-                  >
+                  <Button type="submit" disabled={isUpdatingPassword}>
                     {isUpdatingPassword && (
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     )}
                     Update Password
                   </Button>
                 </form>
-              </CardContent>
-            </Card>
-
-            <Card className="border-destructive/30">
-              <CardHeader>
-                <CardTitle className="text-lg flex items-center gap-2 text-destructive">
-                  <AlertTriangle className="h-5 w-5" />
-                  Danger Zone
-                </CardTitle>
-                <CardDescription>
-                  Delete your profile permanently from active system access
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
-                    This action cannot be undone. Your account will be archived
-                    and you will be signed out.
-                  </div>
-                  <form className="grid gap-2" onSubmit={handleDeleteProfile}>
-                    <Label htmlFor="delete-password">Current Password</Label>
-                    <Input
-                      id="delete-password"
-                      type="password"
-                      placeholder="Enter current password"
-                      value={deletePassword}
-                      onChange={(e) => setDeletePassword(e.target.value)}
-                      disabled={isStudent}
-                      required
-                    />
-                  </form>
-                  <ConfirmActionDialog
-                    title="Delete profile"
-                    description="This will delete your profile and sign you out. Continue?"
-                    confirmText="Delete profile"
-                    destructive
-                    onConfirm={handleDeleteProfile}
-                  >
-                    <Button
-                      type="button"
-                      variant="destructive"
-                      disabled={isDeletingProfile}
-                    >
-                      {isDeletingProfile ? (
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      ) : (
-                        <Trash2 className="mr-2 h-4 w-4" />
-                      )}
-                      Delete Profile
-                    </Button>
-                  </ConfirmActionDialog>
-                </div>
               </CardContent>
             </Card>
           </div>

@@ -71,9 +71,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAuthState((prev) => ({ ...prev, isLoading: false }));
-      throw new Error(error.message || 'Invalid credentials');
+      const message = error instanceof Error ? error.message : 'Invalid credentials';
+      throw new Error(message);
     }
   };
 
@@ -96,9 +97,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
       });
-    } catch (error: any) {
+    } catch (error: unknown) {
       setAuthState((prev) => ({ ...prev, isLoading: false }));
-      throw new Error(error.message || 'Registration failed');
+      const message = error instanceof Error ? error.message : 'Registration failed';
+      throw new Error(message);
     }
   };
 

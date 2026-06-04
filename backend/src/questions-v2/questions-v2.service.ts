@@ -274,17 +274,23 @@ export class QuestionsService {
     this.assertCanAccessQuestion(question, user);
 
     const questionData = dto;
+    const requestedCourseId = String(questionData.courseId || '').trim();
+    const effectiveCourseId = requestedCourseId || question.courseId || '';
+
+    if (!effectiveCourseId) {
+      throw new BadRequestException('Course is required for question update');
+    }
+
+    if (requestedCourseId) {
+      await this.assertCourseAccessible(requestedCourseId, user);
+    }
 
     const topicId = String(questionData.topicId || '').trim();
     if (!topicId) {
       throw new BadRequestException('Topic is required for question update');
     }
 
-    if (!question.courseId) {
-      throw new BadRequestException('Question course is missing');
-    }
-
-    await this.assertTopicBelongsToCourse(topicId, question.courseId);
+    await this.assertTopicBelongsToCourse(topicId, effectiveCourseId);
 
     const updated = await this.prisma.question.update({
       where: { id },
@@ -296,6 +302,7 @@ export class QuestionsService {
         explanation: questionData.explanation,
         difficulty: questionData.difficulty,
         points: questionData.points,
+        courseId: effectiveCourseId,
       },
     });
 
@@ -1082,20 +1089,30 @@ export class QuestionsService {
       ? state.classification.courseScopeIds.map((x: any) => String(x)).filter(Boolean)
       : [];
 
-    const legacyCourseId = courseScopeIds.length > 0 ? courseScopeIds[0] : null;
+    const requestedCourseId =
+      courseScopeIds.length > 0
+        ? courseScopeIds[0]
+        : String(state?.classification?.courseId || '').trim() || null;
 
-    if (legacyCourseId) {
-      await this.assertTopicBelongsToCourse(topicId, legacyCourseId);
-    }
+    let existingCourseId: string | null = null;
 
     let questionId = draft.questionId;
+    let resolvedCourseId = requestedCourseId;
 
     if (questionId) {
       const existing = await this.prisma.question.findUnique({
         where: { id: questionId },
-        select: { id: true, creatorId: true },
+        select: { id: true, creatorId: true, courseId: true },
       });
       if (!existing) throw new NotFoundException('Linked question not found');
+
+      existingCourseId = existing.courseId || null;
+      resolvedCourseId = requestedCourseId || existingCourseId;
+      if (!resolvedCourseId) {
+        throw new BadRequestException('Course is required before publishing the question');
+      }
+
+      await this.assertTopicBelongsToCourse(topicId, resolvedCourseId);
 
       await this.prisma.question.update({
         where: { id: questionId },
@@ -1107,10 +1124,15 @@ export class QuestionsService {
           explanation,
           difficulty,
           points,
-          courseId: legacyCourseId,
+          courseId: requestedCourseId || existingCourseId,
         },
       });
     } else {
+      if (!requestedCourseId) {
+        throw new BadRequestException('Course is required before publishing the question');
+      }
+      resolvedCourseId = requestedCourseId;
+      await this.assertTopicBelongsToCourse(topicId, resolvedCourseId);
       const created = await this.prisma.question.create({
         data: {
           type,
@@ -1120,7 +1142,7 @@ export class QuestionsService {
           explanation,
           difficulty,
           points,
-          courseId: legacyCourseId,
+          courseId: requestedCourseId,
           creatorId: user.id,
         },
         select: {

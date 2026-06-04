@@ -48,6 +48,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { StatusBadge } from "@/components/ui/status-badge";
+import { ConfirmActionDialog } from "@/components/common/ConfirmActionDialog";
 import {
   ArrowLeft,
   Search,
@@ -587,14 +588,23 @@ export default function CourseDetail() {
                         </TableCell>
                         <TableCell>{student.joinedAt}</TableCell>
                         <TableCell className="text-right">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="text-muted-foreground hover:text-destructive"
-                            onClick={() => handleDelete(student.enrollmentId)}
+                          <ConfirmActionDialog
+                            title="Remove student from course"
+                            description="This will remove the student from the course. They will lose access to this course's content and enrollments. Continue?"
+                            confirmText="Remove"
+                            cancelText="Cancel"
+                            destructive
+                            onConfirm={() => handleDelete(student.enrollmentId)}
                           >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="text-muted-foreground hover:text-destructive"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </ConfirmActionDialog>
                         </TableCell>
                       </TableRow>
                     ))

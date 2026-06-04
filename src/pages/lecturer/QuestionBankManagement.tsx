@@ -86,8 +86,9 @@ const typeLabels: Record<string, string> = {
 };
 
 const difficultyLabel = (d: number) => {
-  if (d <= 2) return { text: "Easy", color: "text-green-600" };
-  if (d <= 3) return { text: "Medium", color: "text-yellow-600" };
+  const normalized = Number.isFinite(d) ? Math.round(d) : 1;
+  if (normalized <= 1) return { text: "Easy", color: "text-green-600" };
+  if (normalized === 2) return { text: "Medium", color: "text-yellow-600" };
   return { text: "Hard", color: "text-red-600" };
 };
 
@@ -150,7 +151,7 @@ export default function QuestionBankManagement() {
         if (pages === 1) {
           setQuestions(firstPageQuestions);
         } else {
-          const requests: Promise<any>[] = [];
+          const requests: Promise<unknown>[] = [];
           for (let currentPage = 2; currentPage <= pages; currentPage += 1) {
             requests.push(api.listQuestions({ page: currentPage, limit: 100 }));
           }
@@ -913,9 +914,14 @@ export default function QuestionBankManagement() {
                     <p className="text-xs text-muted-foreground mb-1">
                       Difficulty
                     </p>
-                    <p className="text-lg font-semibold">
-                      {previewQuestion.difficulty || 1}
-                    </p>
+                    <div className="space-y-1">
+                      <p className={`text-lg font-semibold ${difficultyLabel(previewQuestion.difficulty || 1).color}`}>
+                        {difficultyLabel(previewQuestion.difficulty || 1).text}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Level {previewQuestion.difficulty || 1}
+                      </p>
+                    </div>
                   </div>
                   <div>
                     <p className="text-xs text-muted-foreground mb-1">Points</p>

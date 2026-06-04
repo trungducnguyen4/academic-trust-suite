@@ -73,5 +73,9 @@ export class UpdateQuestionCrudDto {
 
   @IsOptional()
   @IsString()
+  courseId?: string;
+
+  @IsOptional()
+  @IsString()
   topicId?: string;
 }

@@ -56,6 +56,61 @@ enum AIJobStatus {
   REJECTED
 }
 
+enum CourseStatus {
+  DRAFT
+  ACTIVE
+  ARCHIVED
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  DROPPED
+  COMPLETED
+}
+
+enum ExamStatus {
+  DRAFT
+  PUBLISHED
+  ONGOING
+  COMPLETED
+  ARCHIVED
+}
+
+enum SubmissionStatus {
+  IN_PROGRESS
+  SUBMITTING
+  SUBMITTED
+  GRADE_PENDING
+  GRADED
+  FLAGGED
+  SUBMIT_FAILED
+}
+
+enum ExamInstanceStatus {
+  NOT_STARTED
+  IN_PROGRESS
+  SUBMITTED
+  GRADED
+  FLAGGED
+  EXPIRED
+}
+
+enum ScoringNormalization {
+  LINEAR
+}
+
+enum FocusState {
+  FOCUSED
+  BLURRED
+}
+
+enum AnomalyFlagStatus {
+  OPEN
+  REVIEWED
+  DISMISSED
+  CONFIRMED
+}
+
 model User {
   id         String    @id @default(uuid())
   email      String    @unique
@@ -74,6 +129,7 @@ model User {
   examsCreated   Exam[]           @relation("ExamCreator")
   enrollments    Enrollment[]
   submissions    ExamSubmission[] @relation("StudentSubmissions")
+  examInstances  ExamInstance[]
   questions      Question[]       @relation("AuthorQuestions")
   createdExamLinks ExamLink[]     @relation("ExamLinkCreator")
   examLinkUsages   ExamLinkUsage[] @relation("ExamLinkUsageUser")
@@ -92,6 +148,7 @@ model Course {
   description String?  @db.Text
   credits    Int?
   status     String    @default("draft")
+  statusEnum CourseStatus?
   createdAt  DateTime  @default(now())
   updatedAt  DateTime  @updatedAt
 
@@ -102,6 +159,7 @@ model Course {
   enrollments Enrollment[]
   exams       Exam[]
   questions   Question[]
+  topics      Topic[]
   courseTopics CourseTopic[]
   questionCourseScopes QuestionCourseScope[]
 
@@ -118,6 +176,7 @@ model Enrollment {
   studentId String
   joinedAt  DateTime @default(now())
   status    String   @default("active")
+  statusEnum EnrollmentStatus?
 
   @@unique([courseId, studentId])
   @@index([studentId])
@@ -136,8 +195,13 @@ model Exam {
   startTime              DateTime?
   endTime                DateTime?
   status                 String   @default("DRAFT") // DRAFT, PUBLISHED, ONGOING, COMPLETED, ARCHIVED
+  statusEnum             ExamStatus?
   mode                   ExamMode @default(NORMAL)
   settings               Json?
+  scoringScale           Int?     @default(10)
+  scoringRounding         Int?     @default(2)
+  scoringNormalization    ScoringNormalization? @default(LINEAR)
+  allowLateSubmission     Boolean? @default(false)
   creatorId              String
   creator                User     @relation("ExamCreator", fields: [creatorId], references: [id])
   createdAt              DateTime @default(now())
@@ -145,6 +209,7 @@ model Exam {
 
   examQuestions  ExamQuestion[]
   submissions    ExamSubmission[]
+  examInstances  ExamInstance[]
   links          ExamLink[]
   ipWhitelist    ExamIpWhitelist[]
   accessDeniedLogs ExamAccessDeniedLog[]
@@ -408,9 +473,14 @@ model ExamQuestion {
   questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id])
   orderIndex Int
   points     Int?     @default(1)
+  weight     Decimal? @db.Decimal(5, 2)
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
   @@unique([examId, questionId])
+  @@unique([examId, orderIndex])
   @@index([examId])
+  @@index([examId, orderIndex])
   @@index([questionVersionId])
   @@map("exam_questions")
 }
@@ -419,10 +489,13 @@ model ExamSubmission {
   id           String    @id @default(uuid())
   exam         Exam      @relation(fields: [examId], references: [id])
   examId       String
+  examInstanceId String?
+  examInstance  ExamInstance? @relation(fields: [examInstanceId], references: [id])
   student      User      @relation("StudentSubmissions", fields: [studentId], references: [id])
   studentId    String
   attemptNo    Int       @default(1) // For versioning multiple attempts per (exam, student) pair
   status       String    @default("IN_PROGRESS") // IN_PROGRESS, SUBMITTING, SUBMITTED, GRADE_PENDING, GRADED, FLAGGED, SUBMIT_FAILED
+  statusEnum   SubmissionStatus?
   version      Int       @default(0)
   submitLockedAt DateTime?
   lastAutosaveAt DateTime?
@@ -443,10 +516,99 @@ model ExamSubmission {
   @@unique([examId, studentId, attemptNo])
   @@index([examId])
   @@index([studentId])
+  @@index([examInstanceId])
   @@index([examId, studentId, status])
   @@index([studentId, status, createdAt])
   @@index([submitIdempotencyKey])
   @@map("exam_submissions")
+}
+
+model ExamInstance {
+  id             String   @id @default(uuid())
+  examId         String
+  exam           Exam     @relation(fields: [examId], references: [id])
+  studentId      String
+  student        User     @relation(fields: [studentId], references: [id])
+  status         ExamInstanceStatus @default(NOT_STARTED)
+  startedAt      DateTime?
+  submittedAt    DateTime?
+  lastActivityAt DateTime?
+  ipAddress      String?  @db.VarChar(64)
+  userAgent      String?  @db.Text
+  encryptedPayload Bytes?
+  payloadChecksum String? @db.VarChar(64)
+  rawScore       Decimal? @db.Decimal(7, 2)
+  maxRawScore    Decimal? @db.Decimal(7, 2)
+  normalizedScore Decimal? @db.Decimal(5, 2)
+  anomalyScore   Decimal? @db.Decimal(5, 2)
+  suspiciousFlag Boolean  @default(false)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  submissions    ExamSubmission[]
+  interactionLogs InteractionLog[]
+  tabSwitchEvents TabSwitchEvent[]
+  focusEvents     FocusEvent[]
+  anomalyFlags    AnomalyFlag[]
+
+  @@unique([examId, studentId])
+  @@index([examId])
+  @@index([studentId])
+  @@map("exam_instances")
+}
+
+model InteractionLog {
+  id             String   @id @default(uuid())
+  examInstanceId String
+  examInstance   ExamInstance @relation(fields: [examInstanceId], references: [id], onDelete: Cascade)
+  eventType      String
+  payload        Json?
+  createdAt      DateTime @default(now())
+
+  @@index([examInstanceId, createdAt])
+  @@map("interaction_logs")
+}
+
+model TabSwitchEvent {
+  id             String   @id @default(uuid())
+  examInstanceId String
+  examInstance   ExamInstance @relation(fields: [examInstanceId], references: [id], onDelete: Cascade)
+  occurredAt     DateTime @default(now())
+  durationMs     Int?
+  fromTab        String?
+  toTab          String?
+
+  @@index([examInstanceId, occurredAt])
+  @@map("tab_switch_events")
+}
+
+model FocusEvent {
+  id             String   @id @default(uuid())
+  examInstanceId String
+  examInstance   ExamInstance @relation(fields: [examInstanceId], references: [id], onDelete: Cascade)
+  occurredAt     DateTime @default(now())
+  focusState     FocusState
+  reason         String?
+
+  @@index([examInstanceId, occurredAt])
+  @@map("focus_events")
+}
+
+model AnomalyFlag {
+  id             String   @id @default(uuid())
+  examInstanceId String
+  examInstance   ExamInstance @relation(fields: [examInstanceId], references: [id], onDelete: Cascade)
+  kind           String
+  score          Decimal? @db.Decimal(5, 2)
+  status         AnomalyFlagStatus @default(OPEN)
+  reviewerId     String?
+  notes          String?  @db.Text
+  createdAt      DateTime @default(now())
+  reviewedAt     DateTime?
+
+  @@index([examInstanceId])
+  @@index([status])
+  @@map("anomaly_flags")
 }
 
 model SubmissionAnswer {

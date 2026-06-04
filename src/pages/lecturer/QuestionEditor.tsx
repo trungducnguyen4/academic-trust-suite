@@ -648,6 +648,7 @@ export default function QuestionEditor() {
         console.log("Updating question with data:", questionData);
         await api.saveQuestion({
           sourceQuestionId: questionId,
+          courseId: course || undefined,
           topicId: topic,
           ...questionData,
         });
