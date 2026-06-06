@@ -3,12 +3,30 @@ import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 
+function parseCsvList(value?: string | null): string[] {
+  return String(value || '')
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
   
-  // Enable CORS for frontend
+  const defaultOrigins = ['http://localhost:8080', 'http://localhost:5173', 'http://localhost:3000'];
+  const frontendUrl = process.env.FRONTEND_URL?.trim();
+  const appBaseUrl = process.env.APP_BASE_URL?.trim();
+  const corsOrigins = Array.from(
+    new Set([
+      ...defaultOrigins,
+      ...parseCsvList(process.env.CORS_ORIGINS),
+      ...(frontendUrl ? [frontendUrl] : []),
+      ...(appBaseUrl ? [appBaseUrl] : []),
+    ]),
+  );
+
   app.enableCors({
-    origin: ['http://localhost:8080', 'http://localhost:5173', 'http://localhost:3000'],
+    origin: corsOrigins,
     credentials: true,
   });
 

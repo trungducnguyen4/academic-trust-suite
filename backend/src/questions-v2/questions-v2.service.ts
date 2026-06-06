@@ -610,6 +610,7 @@ export class QuestionsService {
         instruction: dto.instruction || '',
         constraints: dto.constraints || {},
         draftState: draft.state,
+        questionId: draft.questionId,
       },
       requestedBy: user.id,
     });

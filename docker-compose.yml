@@ -1,3 +1,14 @@
+x-ai-env: &ai-env
+  AI_PROVIDER: "ollama"
+  AI_OLLAMA_URL: "http://ollama:11434"
+  AI_OLLAMA_MODEL: "gemma3:4b"
+  AI_OLLAMA_TEMPERATURE: "0.2"
+  AI_OLLAMA_TOP_P: "0.85"
+  AI_OLLAMA_REPEAT_PENALTY: "1.1"
+  AI_OLLAMA_NUM_CTX: "8192"
+  AI_APP_NAME: "ExamTrust"
+  AI_DEFAULT_LANGUAGE: "vi"
+
 services:
   nginx:
     image: nginx:1.25-alpine
@@ -24,8 +35,7 @@ services:
       SMTP_USER: "CHANGE_ME"
       SMTP_PASS: "CHANGE_ME"
       EMAIL_FROM: "ExamTrust <no-reply@example.com>"
-      AI_PROVIDER: "ollama"
-      AI_OLLAMA_URL: "http://ollama:11434"
+      <<: *ai-env
     depends_on:
       - db
       - redis
@@ -42,8 +52,7 @@ services:
       JWT_SECRET: "CHANGE_ME"
       REDIS_HOST: "redis"
       REDIS_PORT: "6379"
-      AI_PROVIDER: "ollama"
-      AI_OLLAMA_URL: "http://ollama:11434"
+      <<: *ai-env
     depends_on:
       - db
       - redis
@@ -66,7 +75,18 @@ services:
 
   ollama:
     image: ollama/ollama:latest
+    environment:
+      OLLAMA_HOST: "0.0.0.0:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD-SHELL", "ollama list >/dev/null 2>&1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 20s
     restart: unless-stopped
 
 volumes:
   db_data:
+  ollama_data:

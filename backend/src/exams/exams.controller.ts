@@ -43,7 +43,7 @@ export class ExamsController {
 
     // Resolve exam to include title and course
     const exam = await this.examsService.findOne(id);
-    const frontend = process.env.FRONTEND_URL || 'http://localhost:8080';
+    const frontend = process.env.FRONTEND_URL || process.env.APP_BASE_URL || 'http://localhost:8080';
     const link = `${frontend}/student/exam-ready?examId=${id}`;
     const subject = `Invitation to exam: ${exam?.title || 'Exam'}`;
     const html = `<p>You have been invited to join the exam <strong>${exam?.title || 'Exam'}</strong>.</p>
@@ -86,7 +86,7 @@ export class ExamsController {
     //       .filter(Boolean) as string[];
     //     const emails = Array.from(new Set(studentEmails));
     //     if (emails.length > 0) {
-    //       const frontend = process.env.FRONTEND_URL || 'http://localhost:8080';
+    //       const frontend = process.env.FRONTEND_URL || process.env.APP_BASE_URL || 'http://localhost:8080';
     //       const link = `${frontend}/student/exam-ready?examId=${created.id}`;
     //       const subject = `Invitation to exam: ${created?.title || 'Exam'}`;
     //       const html = `<p>You have been invited to join the exam <strong>${created?.title || 'Exam'}</strong>.</p>

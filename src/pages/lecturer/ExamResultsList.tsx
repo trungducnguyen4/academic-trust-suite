@@ -25,7 +25,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { StatusBadge } from "@/components/ui/status-badge";
-import api, { unwrapPaginatedData } from "@/lib/api";
+import api, { API_BASE_URL, unwrapPaginatedData } from "@/lib/api";
 
 type ExamOverview = {
   exam: {
@@ -143,7 +143,7 @@ export default function ExamResultsList() {
     try {
       const token = localStorage.getItem("accessToken");
       const res = await fetch(
-        `${process.env.REACT_APP_API_BASE || "http://localhost:3001/api"}/submissions/exam/${examId}/export`,
+        `${API_BASE_URL}/submissions/exam/${examId}/export`,
         {
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         },

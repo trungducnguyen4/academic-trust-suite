@@ -1,6 +1,8 @@
 import { CourseTerm } from './course-term';
 
-export const API_BASE_URL = 'http://localhost:3001/api';
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+export const API_BASE_URL = (rawApiBaseUrl?.trim() || 'http://localhost:3001/api').replace(/\/$/, '');
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -844,6 +846,7 @@ class ApiClient {
     language?: string;
     courseName?: string;
     useCase?: string;
+    context?: Record<string, any>;
   }) {
     const response = await this.request<{
       jobId?: string;
@@ -888,6 +891,7 @@ class ApiClient {
     courseName?: string;
     useCase?: string;
     courseId?: string;
+    context?: Record<string, any>;
   }) {
     const response = await this.request<{
       jobId?: string;
