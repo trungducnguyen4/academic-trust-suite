@@ -94,29 +94,23 @@ export default function StudentDashboard() {
   const [upcomingExams, setUpcomingExams] = useState<UpcomingExam[]>([]);
   const [examHistory, setExamHistory] = useState<ExamHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
-  const [courses, setCourses] = useState<StudentCourse[]>([]);
   const [recentCourses, setRecentCourses] = useState<StudentCourse[]>([]);
 
   useEffect(() => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [exams, submissions, myRecentCourses, myCourses] = await Promise.all([
+        const [exams, submissions, myRecentCourses] = await Promise.all([
           api.getAvailableExams(),
           api.getMySubmissions(),
           api.getMyRecentCourses(),
-          api.getMyCourses(),
         ]);
 
         const recentList = Array.isArray(myRecentCourses)
           ? (myRecentCourses as StudentCourse[])
           : [];
-        const fullCourseList = Array.isArray(myCourses)
-          ? (myCourses as StudentCourse[])
-          : [];
 
         setRecentCourses(recentList);
-        setCourses(fullCourseList);
 
         const now = new Date();
         const submissionList = Array.isArray(submissions) ? submissions : [];
@@ -217,12 +211,6 @@ export default function StudentDashboard() {
     },
   ];
 
-  const passedExams = examHistory.filter(
-    (e) =>
-      e.score !== null &&
-      e.exam?.passingScore &&
-      e.score >= e.exam.passingScore,
-  );
   const avgScore =
     examHistory.length > 0
       ? Math.round(
@@ -262,17 +250,8 @@ export default function StudentDashboard() {
         </div>
 
         {/* Quick Stats */}
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-2">
           {[
-            {
-              label: "My Courses",
-              value: courses.length,
-              icon: BookOpen,
-              color: "text-indigo-600",
-              bg: "bg-indigo-500/10",
-              gradient: "card-gradient-violet",
-              sub: "Currently enrolled",
-            },
             {
               label: "Upcoming Exams",
               value: upcomingExams.length,
@@ -281,15 +260,6 @@ export default function StudentDashboard() {
               bg: "bg-blue-500/10",
               gradient: "card-gradient-blue",
               sub: "Scheduled",
-            },
-            {
-              label: "Exams Passed",
-              value: `${passedExams.length}/${examHistory.length}`,
-              icon: Award,
-              color: "text-emerald-600",
-              bg: "bg-emerald-500/10",
-              gradient: "card-gradient-emerald",
-              sub: "Pass rate",
             },
             {
               label: "Average Score",

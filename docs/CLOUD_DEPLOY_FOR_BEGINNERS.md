@@ -1,189 +1,244 @@
-# Deploy Cloud Cho Người Mới
+# Deploy Cloud Cho Nguoi Moi
 
-Tài liệu này giải thích cách deploy dự án theo cách dễ hiểu nhất:
+Tai lieu nay huong dan deploy theo cach it thao tac nhat:
 
-- Frontend lên Cloudflare Pages
-- Backend lên Oracle Always Free
-- AI worker chạy riêng khỏi API
-- Redis và Ollama để private, không public ra internet
+- Frontend React len Cloudflare Pages
+- Backend NestJS len Oracle Always Free bang Docker Compose
+- AI worker chay rieng khoi API
+- Redis, MySQL va Ollama chi nam trong private Docker network
 
-Mục tiêu là để bạn có thể chạy production mà không cần nhiều kinh nghiệm hosting.
+Muc tieu: chay duoc production/demo thesis ma khong can kinh nghiem hosting sau.
 
-## 1) Dự án này đang chạy theo kiểu nào?
+## 1) Kien truc deploy
 
-Project của bạn không phải app chỉ có 1 server đơn giản. Nó có nhiều phần:
+Project nay gom cac tien trinh rieng:
 
-- **Frontend**: giao diện web React
-- **Backend**: API NestJS xử lý đăng nhập, exam, autosave, submit
-- **AI worker**: tiến trình riêng để xử lý job AI trong background
-- **Redis**: hàng đợi job và cache
-- **Ollama**: nơi chạy model AI local
+- `frontend`: React/Vite, build thanh static files tren Cloudflare Pages
+- `backend`: NestJS API, nhan request tu frontend
+- `ai-worker`: worker nen, lay AI job tu Redis queue
+- `redis`: queue, cache, rate-limit state
+- `db`: MySQL 8
+- `ollama`: local model runtime cho AI
+- `nginx`: reverse proxy public port 80 toi backend
 
-Điểm quan trọng:
+Dieu quan trong:
 
-- AI không chạy trực tiếp trong request của user
-- Job AI được đẩy vào queue
-- `ai-worker` lấy job sau, nên API không bị nghẽn
+- AI khong chay truc tiep trong request cua user.
+- Backend tao job va dua vao Redis.
+- `ai-worker` xu ly job sau, goi Ollama, roi ghi ket qua ve database.
+- Redis, MySQL, Ollama khong expose port ra internet.
 
-## 2) Vì sao frontend để ở Cloudflare Pages?
+## 2) Deploy frontend len Cloudflare Pages
 
-Frontend là phần giao diện.
+Cloudflare Pages chi can build frontend thanh file tinh.
 
-Cloudflare Pages phù hợp vì:
+Thiet lap trong Cloudflare Pages:
 
-- miễn phí
-- deploy nhanh
-- build ra file tĩnh nên rất nhẹ
-- có domain miễn phí dạng `*.pages.dev`
+- Framework preset: `Vite`
+- Build command: `npm run build`
+- Build output directory: `dist`
+- Root directory: de trong neu repo nay la repo deploy truc tiep
 
-Bạn chỉ cần:
-
-- build frontend bằng Vite
-- upload source vào Cloudflare Pages
-- đặt `VITE_API_BASE_URL` trỏ tới backend thật
-
-Ví dụ:
+Environment variable cua frontend:
 
 ```bash
 VITE_API_BASE_URL=https://api.example.com/api
 ```
 
-## 3) Vì sao backend để ở Oracle Always Free?
+Neu ban chua co domain rieng, co the tam thoi dung IP/domain cua Oracle:
 
-Backend cần một máy chạy liên tục để:
+```bash
+VITE_API_BASE_URL=http://YOUR_ORACLE_PUBLIC_IP/api
+```
 
-- nhận request từ frontend
-- làm việc với MySQL
-- nói chuyện với Redis
-- xử lý auth, exam, autosave, submit
+Sau khi co HTTPS/domain that, doi lai bien nay trong Cloudflare Pages va redeploy frontend.
 
-Oracle Always Free hợp với dự án này vì:
+## 3) Chuan bi Oracle Always Free
 
-- có VM miễn phí
-- chạy Docker được
-- đủ để host backend + worker + Redis + Ollama ở mức demo/thesis
+Tren Oracle VM, cai Docker va Docker Compose plugin:
 
-## 4) AI worker là gì?
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg git
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+sudo usermod -aG docker $USER
+```
 
-`ai-worker` là một tiến trình riêng.
+Dang xuat SSH va dang nhap lai, sau do kiem tra:
 
-Nó không nhận request từ trình duyệt.
-Nó chỉ:
+```bash
+docker --version
+docker compose version
+```
 
-- lấy job từ Redis queue
-- gọi Ollama
-- ghi kết quả về database
+Firewall can mo:
 
-Lợi ích:
+- Oracle Security List: TCP `80`, va `443` neu co HTTPS
+- Ubuntu firewall neu bat UFW: `sudo ufw allow 80/tcp`
 
-- API vẫn phản hồi nhanh
-- nếu AI chậm thì chỉ job AI bị chậm
-- exam flow không bị treo
+Khong mo port `3306`, `6379`, `11434`.
 
-## 5) Redis và Ollama vì sao phải private?
+## 4) Tao file .env tren Oracle
 
-### Redis
+Copy file mau:
 
-Redis dùng cho:
+```bash
+cp ops/env.oracle.example .env
+```
 
-- queue
-- cache
-- rate limiting
+Sua cac gia tri `CHANGE_ME...`:
 
-Redis không cần public.
-Nếu public thì dễ bị lộ dữ liệu hoặc bị spam job.
+```bash
+nano .env
+```
 
-### Ollama
-
-Ollama là nơi chạy model AI local.
-
-Không nên public vì:
-
-- tốn tài nguyên
-- dễ bị người ngoài gọi làm quá tải
-- không cần thiết, vì backend và worker đã đủ để gọi nó nội bộ
-
-## 6) Luồng chạy thực tế
-
-Ví dụ một job AI:
-
-1. Lecturer yêu cầu sinh câu hỏi AI
-2. Backend tạo record job
-3. Backend đẩy job vào Redis queue
-4. `ai-worker` lấy job
-5. `ai-worker` gọi Ollama
-6. Kết quả lưu về database
-7. Frontend polling hoặc nhận trạng thái job
-
-Ví dụ một bài thi:
-
-1. Student mở exam từ frontend
-2. Frontend gọi backend
-3. Backend tạo submission
-4. Student autosave đáp án
-5. Khi submit, backend ghi dữ liệu chính và đẩy job phụ sang queue
-6. Worker xử lý hậu kỳ
-
-## 7) Vì sao kiến trúc này hợp với project của bạn?
-
-Dự án của bạn cần:
-
-- exam theo từng student
-- snapshot immutable
-- integrity tracking
-- AI sinh câu hỏi nhưng có review
-- analytics
-- offline support
-
-Kiến trúc này tốt vì:
-
-- API luôn gọn và ổn định
-- AI được tách riêng nên không làm chậm luồng thi
-- Redis giúp xử lý job nền
-- Cloudflare Pages giảm chi phí frontend
-- Oracle Always Free đủ tốt cho phần backend/worker/demo
-
-## 8) Những biến môi trường quan trọng
-
-Frontend:
-
-- `VITE_API_BASE_URL`
-
-Backend:
+Toi thieu phai sua:
 
 - `FRONTEND_URL`
 - `APP_BASE_URL`
 - `CORS_ORIGINS`
-- `AI_PROVIDER`
-- `AI_OLLAMA_URL`
-- `AI_OLLAMA_MODEL`
+- `MYSQL_PASSWORD`
+- `MYSQL_ROOT_PASSWORD`
+- `DATABASE_URL`
+- `JWT_SECRET`
+- `REDIS_PASSWORD`
 
-Ví dụ local:
+Luu y: mat khau trong `DATABASE_URL` phai trung voi `MYSQL_PASSWORD`.
 
-```bash
-VITE_API_BASE_URL=http://localhost:3001/api
-FRONTEND_URL=http://localhost:5173
-APP_BASE_URL=http://localhost:5173
-CORS_ORIGINS=http://localhost:5173,http://localhost:8080
-```
-
-Ví dụ production:
+Vi du:
 
 ```bash
-VITE_API_BASE_URL=https://api.example.com/api
-FRONTEND_URL=https://app.example.com
-APP_BASE_URL=https://app.example.com
-CORS_ORIGINS=https://app.example.com
+MYSQL_PASSWORD=MyStrongDbPassword123
+DATABASE_URL=mysql://examtrust:MyStrongDbPassword123@db:3306/examtrust
 ```
 
-## 9) Checklist suy nghĩ trước khi deploy
+## 5) Chay backend, worker, Redis, MySQL
 
-- Frontend đã build được chưa?
-- Backend đã build được chưa?
-- API base trong frontend đã trỏ đúng chưa?
-- CORS đã cho phép đúng domain chưa?
-- Redis và Ollama đã để private chưa?
-- `ai-worker` có chạy riêng chưa?
+Len Oracle VM, tai source code va vao folder project:
 
-Nếu câu trả lời là “có” cho tất cả, bạn đã sẵn sàng deploy.
+```bash
+git clone <YOUR_REPO_URL>
+cd academic-trust-suite
+cp ops/env.oracle.example .env
+nano .env
+```
 
+Build va chay production:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d --build
+```
+
+Lenh tren se:
+
+1. Build image backend.
+2. Start MySQL va Redis.
+3. Chay `prisma migrate deploy` mot lan.
+4. Start backend API.
+5. Start `ai-worker`.
+
+Kiem tra container:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml ps
+```
+
+Xem log API:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml logs -f backend
+```
+
+Xem log worker:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml logs -f ai-worker
+```
+
+Kiem tra API:
+
+```bash
+curl http://localhost/api
+curl http://YOUR_ORACLE_PUBLIC_IP/docs
+```
+
+Neu `/api` tra 404 nhung backend co log dang chay thi van co the binh thuong, vi app dung cac route cu the nhu `/api/auth/login`.
+
+## 6) Bat Ollama AI local
+
+Mac dinh Docker Compose se chay Ollama trong private network, khong public port `11434` ra internet.
+
+Tai model vao container:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml exec ollama ollama pull gemma3:4b
+```
+
+Kiem tra model:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml exec ollama ollama list
+```
+
+Neu VM khong du RAM cho model, doi sang provider mock de demo luong job:
+
+```bash
+AI_PROVIDER=mock
+```
+
+Sau do restart:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d
+```
+
+## 7) Cap nhat version moi
+
+Moi lan pull code moi:
+
+```bash
+git pull
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml up -d --build
+```
+
+Migration production dung `prisma migrate deploy`, khong seed lai data va khong reset database.
+
+Khong chay cac lenh nay tren production tru khi ban that su muon pha data:
+
+```bash
+prisma migrate reset
+docker compose down -v
+```
+
+## 8) Backup database co ban
+
+Tao backup:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.deploy.yml exec db sh -c 'mysqldump -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"' > backup.sql
+```
+
+Restore backup vao database rong:
+
+```bash
+cat backup.sql | docker compose -f docker-compose.yml -f docker-compose.deploy.yml exec -T db sh -c 'mysql -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE"'
+```
+
+Nen backup truoc moi dot deploy co migration.
+
+## 9) Checklist truoc khi public
+
+- Frontend build duoc bang `npm run build`
+- `VITE_API_BASE_URL` tro dung backend public URL
+- Backend build duoc trong Docker
+- `.env` tren Oracle da doi het `CHANGE_ME`
+- `CORS_ORIGINS` chi gom domain frontend that
+- MySQL, Redis, Ollama khong public port
+- `ai-worker` dang chay rieng voi backend
+- Da backup database truoc khi apply migration moi
+
+Khi checklist nay dat, ban co the dung Cloudflare Pages cho frontend va Oracle VM cho backend production/demo.

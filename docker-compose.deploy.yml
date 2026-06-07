@@ -1,45 +1,90 @@
+x-prod-env: &prod-env
+  NODE_ENV: "production"
+  PORT: "3001"
+  FRONTEND_URL: ${FRONTEND_URL}
+  APP_BASE_URL: ${APP_BASE_URL}
+  CORS_ORIGINS: ${CORS_ORIGINS}
+  DATABASE_URL: ${DATABASE_URL}
+  JWT_SECRET: ${JWT_SECRET}
+  JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
+  SMTP_HOST: ${SMTP_HOST}
+  SMTP_PORT: ${SMTP_PORT:-587}
+  SMTP_USER: ${SMTP_USER}
+  SMTP_PASS: ${SMTP_PASS}
+  EMAIL_FROM: ${EMAIL_FROM}
+  REDIS_HOST: ${REDIS_HOST:-redis}
+  REDIS_PORT: ${REDIS_PORT:-6379}
+  REDIS_PASSWORD: ${REDIS_PASSWORD}
+  AI_PROVIDER: ${AI_PROVIDER:-ollama}
+  AI_OLLAMA_URL: ${AI_OLLAMA_URL:-http://ollama:11434}
+  AI_OLLAMA_MODEL: ${AI_OLLAMA_MODEL:-gemma3:4b}
+  AI_OLLAMA_TEMPERATURE: ${AI_OLLAMA_TEMPERATURE:-0.2}
+  AI_OLLAMA_TOP_P: ${AI_OLLAMA_TOP_P:-0.85}
+  AI_OLLAMA_REPEAT_PENALTY: ${AI_OLLAMA_REPEAT_PENALTY:-1.1}
+  AI_OLLAMA_NUM_CTX: ${AI_OLLAMA_NUM_CTX:-8192}
+  AI_APP_NAME: ${AI_APP_NAME:-ExamTrust}
+  AI_DEFAULT_LANGUAGE: ${AI_DEFAULT_LANGUAGE:-vi}
+  QUEUE_WAITING_THRESHOLD_AUTOSAVE: ${QUEUE_WAITING_THRESHOLD_AUTOSAVE:-1000}
+
 services:
+  migrate:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    command: ["npm", "run", "prisma:migrate"]
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
   backend:
     environment:
-      NODE_ENV: "production"
-      FRONTEND_URL: ${FRONTEND_URL:-https://app.example.com}
-      APP_BASE_URL: ${APP_BASE_URL:-https://app.example.com}
-      CORS_ORIGINS: ${CORS_ORIGINS:-https://app.example.com}
-      DATABASE_URL: ${DATABASE_URL:-mysql://examtrust:CHANGE_ME@db:3306/examtrust}
-      JWT_SECRET: ${JWT_SECRET:-CHANGE_ME}
-      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-15m}
-      SMTP_HOST: ${SMTP_HOST:-smtp.example.com}
-      SMTP_PORT: ${SMTP_PORT:-587}
-      SMTP_USER: ${SMTP_USER:-CHANGE_ME}
-      SMTP_PASS: ${SMTP_PASS:-CHANGE_ME}
-      EMAIL_FROM: ${EMAIL_FROM:-ExamTrust <no-reply@example.com>}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      AI_PROVIDER: ${AI_PROVIDER:-ollama}
-      AI_OLLAMA_URL: ${AI_OLLAMA_URL:-http://ollama:11434}
-      AI_OLLAMA_MODEL: ${AI_OLLAMA_MODEL:-gemma3:4b}
-      AI_OLLAMA_TEMPERATURE: ${AI_OLLAMA_TEMPERATURE:-0.2}
-      AI_OLLAMA_TOP_P: ${AI_OLLAMA_TOP_P:-0.85}
-      AI_OLLAMA_REPEAT_PENALTY: ${AI_OLLAMA_REPEAT_PENALTY:-1.1}
-      AI_OLLAMA_NUM_CTX: ${AI_OLLAMA_NUM_CTX:-8192}
-      AI_APP_NAME: ${AI_APP_NAME:-ExamTrust}
-      AI_DEFAULT_LANGUAGE: ${AI_DEFAULT_LANGUAGE:-vi}
+      <<: *prod-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
 
   ai-worker:
     environment:
-      NODE_ENV: "production"
-      DATABASE_URL: ${DATABASE_URL:-mysql://examtrust:CHANGE_ME@db:3306/examtrust}
-      JWT_SECRET: ${JWT_SECRET:-CHANGE_ME}
-      REDIS_HOST: ${REDIS_HOST:-redis}
-      REDIS_PORT: ${REDIS_PORT:-6379}
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
-      AI_PROVIDER: ${AI_PROVIDER:-ollama}
-      AI_OLLAMA_URL: ${AI_OLLAMA_URL:-http://ollama:11434}
-      AI_OLLAMA_MODEL: ${AI_OLLAMA_MODEL:-gemma3:4b}
-      AI_OLLAMA_TEMPERATURE: ${AI_OLLAMA_TEMPERATURE:-0.2}
-      AI_OLLAMA_TOP_P: ${AI_OLLAMA_TOP_P:-0.85}
-      AI_OLLAMA_REPEAT_PENALTY: ${AI_OLLAMA_REPEAT_PENALTY:-1.1}
-      AI_OLLAMA_NUM_CTX: ${AI_OLLAMA_NUM_CTX:-8192}
-      AI_APP_NAME: ${AI_APP_NAME:-ExamTrust}
-      AI_DEFAULT_LANGUAGE: ${AI_DEFAULT_LANGUAGE:-vi}
+      <<: *prod-env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  db:
+    environment:
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-examtrust}
+      MYSQL_USER: ${MYSQL_USER:-examtrust}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -u$${MYSQL_USER} -p$${MYSQL_PASSWORD} --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  redis:
+    command: ["sh", "-c", "redis-server --appendonly yes --requirepass \"$${REDIS_PASSWORD}\""]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  redis_data:

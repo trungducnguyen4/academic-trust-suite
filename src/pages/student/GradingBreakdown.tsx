@@ -208,45 +208,6 @@ const gradedQuestions: GradedQuestion[] = [
   },
 ];
 
-const gradingHistory = [
-  {
-    date: "2026-02-24 11:00",
-    action: "Auto-grading completed",
-    by: "System",
-    detail: "5 objective questions graded",
-  },
-  {
-    date: "2026-02-24 14:30",
-    action: "Manual grading: Q6 reviewed",
-    by: "Dr. Nguyen Van A",
-    detail: "Score: 8/10",
-  },
-  {
-    date: "2026-02-24 14:45",
-    action: "Manual grading: Q7 reviewed",
-    by: "Dr. Nguyen Van A",
-    detail: "Score: 14/15",
-  },
-  {
-    date: "2026-02-24 15:00",
-    action: "Manual grading: Q8 reviewed",
-    by: "Dr. Nguyen Van A",
-    detail: "Score: 5/10",
-  },
-  {
-    date: "2026-02-24 15:05",
-    action: "Final score released",
-    by: "System",
-    detail: "Total: 35/43",
-  },
-  {
-    date: "2026-02-25 09:00",
-    action: "Score adjustment: Q8",
-    by: "Dr. Nguyen Van A",
-    detail: "Revised to 6/10 after review appeal",
-  },
-];
-
 export default function GradingBreakdown() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -306,6 +267,8 @@ export default function GradingBreakdown() {
     (s: number, q: any) => s + q.points,
     0,
   );
+  const autoCorrectCount = autoQuestions.filter((q: any) => q.isCorrect).length;
+  const autoIncorrectCount = autoQuestions.length - autoCorrectCount;
   const autoMax =
     autoQuestions.reduce((s: number, q: any) => s + q.maxPoints, 0) || 1;
   const manualScore = manualQuestions.reduce(
@@ -329,43 +292,6 @@ export default function GradingBreakdown() {
         ? `Attempt ${attemptNo} / Unlimited`
         : `Attempt ${attemptNo} / ${maxAttempts}`
       : "Attempt";
-
-  const gradingHistory = (() => {
-    if (!submission) return [];
-    const history: any[] = [];
-    if (submission.submittedAt) {
-      history.push({
-        date: new Date(submission.submittedAt).toLocaleString(),
-        action: "Auto-grading completed",
-        by: "System",
-        detail: `${autoQuestions.length} objective questions graded`,
-      });
-    }
-    // Add manual grading entries for answers with feedback or pointsAwarded
-    (submission.answers || []).forEach((a: any, i: number) => {
-      if ((a.pointsAwarded != null && a.pointsAwarded !== 0) || a.feedback) {
-        history.push({
-          date: a.updatedAt
-            ? new Date(a.updatedAt).toLocaleString()
-            : submission.gradedAt
-              ? new Date(submission.gradedAt).toLocaleString()
-              : "",
-          action: `Manual grading: Q${i + 1}`,
-          by: a.gradedByName || "Instructor",
-          detail: `Score: ${a.pointsAwarded ?? 0}/${a.question?.points ?? 1}`,
-        });
-      }
-    });
-    if (submission.gradedAt) {
-      history.push({
-        date: new Date(submission.gradedAt).toLocaleString(),
-        action: "Final score released",
-        by: "System",
-        detail: `Total: ${submission.score}/${submission.exam?.totalPoints ?? totalMax}`,
-      });
-    }
-    return history;
-  })();
 
   const proctoring = submission?.proctoring;
   const tabSwitchCount = Number(proctoring?.tabSwitchCount ?? 0);
@@ -397,6 +323,33 @@ export default function GradingBreakdown() {
               size="default"
             />
           </div>
+        </div>
+      </DashboardLayout>
+    );
+  }
+
+  if (
+    submission &&
+    String(submission.status || "").toUpperCase() === "SUBMITTED" &&
+    manualQuestions.length > 0
+  ) {
+    return (
+      <DashboardLayout>
+        <div className="max-w-5xl mx-auto py-10">
+          <BackToDashboardButton to="/student/results" className="mb-4 -ml-2" />
+          <Card className="border-amber-200 bg-amber-50/70">
+            <CardHeader>
+              <CardTitle>Waiting for instructor grading</CardTitle>
+              <CardDescription>
+                This exam contains manually graded questions. Your final score will be available after your instructor publishes results.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={() => navigate("/student/results")}>
+                Back to Results
+              </Button>
+            </CardContent>
+          </Card>
         </div>
       </DashboardLayout>
     );
@@ -572,21 +525,49 @@ export default function GradingBreakdown() {
         )}
 
         {/* Auto-Graded Questions */}
-        <Card className="mb-6">
-          <CardHeader>
+        <Card className="mb-6 overflow-hidden border-slate-200 bg-white/95 shadow-medium">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/70">
             <CardTitle className="text-lg flex items-center gap-2">
-              <Cpu className="h-5 w-5 text-blue-600" />
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
+                <Cpu className="h-5 w-5" />
+              </span>
               Auto-Graded Questions
             </CardTitle>
             <CardDescription>
               Objective questions graded automatically by the system
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="pt-5">
+            <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+              <div className="rounded-lg border border-blue-200 bg-blue-50/70 p-3">
+                <p className="text-xs font-medium text-blue-700">
+                  Auto-Graded Score
+                </p>
+                <p className="mt-1 text-lg font-bold text-blue-800">
+                  {autoScore}/{autoMax}
+                </p>
+              </div>
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50/70 p-3">
+                <p className="text-xs font-medium text-emerald-700">
+                  Correct
+                </p>
+                <p className="mt-1 text-lg font-bold text-emerald-800">
+                  {autoCorrectCount}
+                </p>
+              </div>
+              <div className="rounded-lg border border-red-200 bg-red-50/70 p-3">
+                <p className="text-xs font-medium text-red-700">
+                  Incorrect
+                </p>
+                <p className="mt-1 text-lg font-bold text-red-800">
+                  {autoIncorrectCount}
+                </p>
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <Table>
-                <TableHeader>
-                  <TableRow>
+                <TableHeader className="bg-slate-50">
+                  <TableRow className="border-slate-200 hover:bg-slate-50">
                     <TableHead className="w-12">#</TableHead>
                     <TableHead>Question</TableHead>
                     <TableHead>Your Answer</TableHead>
@@ -597,31 +578,54 @@ export default function GradingBreakdown() {
                 </TableHeader>
                 <TableBody>
                   {autoQuestions.map((q: any) => (
-                    <TableRow key={q.id}>
-                      <TableCell className="font-mono">{q.id}</TableCell>
+                    <TableRow
+                      key={q.id}
+                      className={
+                        q.isCorrect
+                          ? "border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50/70"
+                          : "border-red-100 bg-red-50/50 hover:bg-red-50/80"
+                      }
+                    >
+                      <TableCell className="font-mono font-semibold text-slate-600">
+                        {q.id}
+                      </TableCell>
                       <TableCell className="font-medium">
                         {q.question}
+                      </TableCell>
+                      <TableCell>
+                        <span
+                          className={
+                            q.isCorrect
+                              ? "inline-flex rounded-full border border-emerald-200 bg-white px-2.5 py-1 text-xs font-semibold text-emerald-700"
+                              : "inline-flex rounded-full border border-red-200 bg-white px-2.5 py-1 text-xs font-semibold text-red-700"
+                          }
+                        >
+                          {q.yourAnswer || "No answer"}
+                        </span>
+                      </TableCell>
+                      <TableCell>
+                        <span className="inline-flex rounded-full border border-slate-200 bg-white px-2.5 py-1 text-xs font-semibold text-slate-700">
+                          {q.correctAnswer || "N/A"}
+                        </span>
                       </TableCell>
                       <TableCell
                         className={
                           q.isCorrect
-                            ? "text-green-700 dark:text-green-400"
-                            : "text-red-600 dark:text-red-400"
+                            ? "text-center font-bold text-emerald-700"
+                            : "text-center font-bold text-red-700"
                         }
                       >
-                        {q.yourAnswer}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {q.correctAnswer}
-                      </TableCell>
-                      <TableCell className="text-center font-medium">
                         {q.points}/{q.maxPoints}
                       </TableCell>
                       <TableCell className="text-center">
                         {q.isCorrect ? (
-                          <CheckCircle2 className="h-5 w-5 text-green-600 mx-auto" />
+                          <span className="mx-auto inline-flex h-8 w-8 items-center justify-center rounded-full border border-emerald-200 bg-white text-emerald-600">
+                            <CheckCircle2 className="h-5 w-5" />
+                          </span>
                         ) : (
-                          <XCircle className="h-5 w-5 text-red-500 mx-auto" />
+                          <span className="mx-auto inline-flex h-8 w-8 items-center justify-center rounded-full border border-red-200 bg-white text-red-600">
+                            <XCircle className="h-5 w-5" />
+                          </span>
                         )}
                       </TableCell>
                     </TableRow>
@@ -693,7 +697,7 @@ export default function GradingBreakdown() {
         </Card>
 
         {/* Grading History */}
-        <Card>
+        <Card className="hidden">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
               <History className="h-5 w-5 text-primary" />
@@ -705,7 +709,7 @@ export default function GradingBreakdown() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {gradingHistory.map((entry: any, idx: number) => (
+              {[].map((entry: any, idx: number) => (
                 <div
                   key={idx}
                   className="flex items-start gap-4 p-3 rounded-lg border border-border"

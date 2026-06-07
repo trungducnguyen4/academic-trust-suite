@@ -54,6 +54,7 @@ import ExamAnalytics from "./pages/lecturer/ExamAnalytics";
 import ExamResultsList from "./pages/lecturer/ExamResultsList";
 import ExamPreview from "./pages/lecturer/ExamPreview";
 import ExamQR from "./pages/lecturer/ExamQR";
+import ManualGradingDetail from "./pages/lecturer/ManualGradingDetail";
 
 // Admin
 import AdminDashboard from "./pages/admin/AdminDashboard";
@@ -141,6 +142,7 @@ const App = () => {
               <Route path="/lecturer/exam/:id/preview" element={<ExamPreview />} />
               <Route path="/lecturer/exam/:id/qr" element={<ExamQR />} />
               <Route path="/lecturer/exam/:id/results" element={<ExamResultsList />} />
+              <Route path="/lecturer/exam/:id/submissions/:submissionId/manual-grading" element={<ManualGradingDetail />} />
               <Route
                 path="/lecturer/exam/:id/preview"
                 element={<ExamPreview />}
@@ -190,6 +192,7 @@ const App = () => {
               <Route path="/admin/exam/:id/preview" element={<ExamPreview />} />
               <Route path="/admin/exam/:id/qr" element={<ExamQR />} />
               <Route path="/admin/exam/:id/results" element={<ExamResultsList />} />
+              <Route path="/admin/exam/:id/submissions/:submissionId/manual-grading" element={<ManualGradingDetail />} />
               <Route
                 path="/admin/courses"
                 element={<AdminCourseManagement />}

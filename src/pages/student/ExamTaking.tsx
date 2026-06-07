@@ -879,7 +879,7 @@ export default function ExamTaking() {
 
       <div className="flex pt-14 min-h-screen">
         {/* ── Navigator Sidebar ────────────────────────────────── */}
-        <aside className="fixed left-0 top-14 bottom-0 w-60 bg-card border-r flex flex-col p-4 overflow-y-auto hidden md:flex">
+        <aside className={`fixed left-0 top-14 bottom-0 w-60 bg-card border-r flex-col p-4 overflow-y-auto hidden ${isPreviewMode ? "md:hidden" : "md:flex"}`}>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
             Progress
           </h3>
@@ -961,27 +961,45 @@ export default function ExamTaking() {
         </aside>
 
         {/* ── Main Question Area ────────────────────────────────── */}
-        <main className="md:ml-60 ml-0 flex-1 p-6 flex justify-center">
-          <div className="w-full max-w-3xl">
+        <main className={`${isPreviewMode ? "ml-0" : "md:ml-60"} flex-1 p-4 sm:p-6 flex justify-center`}>
+          <div className={`w-full ${isPreviewMode ? "max-w-7xl" : "max-w-3xl"}`}>
             {isPreviewMode ? (
-              <Card>
-                <CardHeader className="pb-3">
-                  <h2 className="text-lg font-semibold">Preview Mode</h2>
-                  <p className="text-sm text-muted-foreground">
-                    Review all questions, selected answers, flagged items, and unanswered items before final submission.
-                  </p>
+              <Card className="overflow-hidden border-slate-200 bg-white shadow-medium">
+                <CardHeader className="border-b border-slate-100 bg-slate-50/80 pb-5">
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+                    <div>
+                      <h2 className="text-2xl font-semibold text-slate-900">
+                        Preview Mode
+                      </h2>
+                      <p className="mt-2 text-sm text-muted-foreground">
+                        Review your selected answers before returning to the exam.
+                      </p>
+                    </div>
+                    <Button variant="outline" onClick={leavePreview}>
+                      <ChevronLeft className="mr-2 h-4 w-4" />
+                      Back to Questions
+                    </Button>
+                  </div>
                 </CardHeader>
-                <CardContent className="space-y-4">
+                <CardContent className="space-y-4 p-5 sm:p-6">
                   {questions.map((item, idx) => {
                     const answered = isAnswered(item, answers);
                     const isFlagged = Boolean(flagged[item.id]);
                     return (
-                      <div key={item.id} className="border rounded-lg p-4 space-y-2">
+                      <div
+                        key={item.id}
+                        className="rounded-xl border border-slate-200 bg-slate-50/60 p-5 transition-colors hover:border-primary/30 hover:bg-white"
+                      >
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="text-sm font-medium">
+                          <div className="text-base font-semibold text-slate-900">
                             Q{idx + 1}. {item.title}
                           </div>
                           <div className="flex items-center gap-2">
+                            <span
+                              className={`rounded-full px-2.5 py-1 text-xs font-medium ${typeBadgeColor[item.type]}`}
+                            >
+                              {typeLabel[item.type]}
+                            </span>
                             {isFlagged && (
                               <StatusBadge status="flagged" domain="submission">
                                 Flagged
@@ -992,17 +1010,23 @@ export default function ExamTaking() {
                             )}
                           </div>
                         </div>
-                        <p className="text-xs text-muted-foreground">{item.type.replace("-", " ")}</p>
-                        <p className="text-sm">{renderAnswerPreview(item)}</p>
+                        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                          <p className="text-xs font-medium uppercase text-muted-foreground">
+                            Your Answer
+                          </p>
+                          <p className="mt-2 text-base text-slate-900">
+                            {renderAnswerPreview(item)}
+                          </p>
+                        </div>
                       </div>
                     );
                   })}
 
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-3 text-sm">
+                  <div className="hidden rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-3 text-sm">
                     Please review all information carefully before submitting your exam.
                   </div>
 
-                  <div className="flex items-center justify-between gap-3">
+                  <div className="hidden items-center justify-between gap-3">
                     <Button variant="outline" onClick={leavePreview}>
                       Continue Editing
                     </Button>

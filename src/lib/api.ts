@@ -782,8 +782,22 @@ class ApiClient {
     return this.request<any>(`/submissions/exam/${examId}/intelligence`);
   }
 
+  async getExamManualGradingStatus(examId: string) {
+    return this.request<any>(`/submissions/exam/${examId}/manual-grading-status`);
+  }
+
+  async publishExamResults(examId: string) {
+    return this.request<any>(`/submissions/exam/${examId}/publish-results`, {
+      method: 'POST',
+    });
+  }
+
   async getSubmission(id: string) {
     return this.request<any>(`/submissions/${id}`);
+  }
+
+  async getManualGradingSubmission(submissionId: string) {
+    return this.request<any>(`/submissions/${submissionId}/manual-grading`);
   }
 
   async gradeAnswer(submissionAnswerId: string, pointsAwarded: number, feedback?: string) {

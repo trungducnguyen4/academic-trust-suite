@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { Activity, AlertTriangle, Loader2, Search } from "lucide-react";
+import { Activity, AlertTriangle, ClipboardCheck, Loader2, Search, Send } from "lucide-react";
+import { toast } from "sonner";
 import {
   ResponsiveContainer,
   BarChart,
@@ -75,8 +76,10 @@ export default function ExamResultsList() {
   const [examTitle, setExamTitle] = useState("Exam Results");
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [overview, setOverview] = useState<ExamOverview | null>(null);
+  const [manualStatus, setManualStatus] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [isPublishing, setIsPublishing] = useState(false);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [search, setSearch] = useState("");
@@ -95,10 +98,11 @@ export default function ExamResultsList() {
       }
 
       try {
-        const [examRes, subsRes, overviewRes] = await Promise.all([
+        const [examRes, subsRes, overviewRes, manualStatusRes] = await Promise.all([
           api.getExam(examId),
           api.getExamSubmissions(examId, page, ITEMS_PER_PAGE),
           api.getExamOverview(examId),
+          api.getExamManualGradingStatus(examId).catch(() => null),
         ]);
 
         if (!mounted) return;
@@ -107,6 +111,7 @@ export default function ExamResultsList() {
         setSubmissions(unwrapPaginatedData(subsRes));
         setTotalPages(subsRes?.totalPages ?? 1);
         setOverview(overviewRes || null);
+        setManualStatus(manualStatusRes || null);
       } catch (err) {
         console.error("Failed to load exam results", err);
       } finally {
@@ -137,6 +142,9 @@ export default function ExamResultsList() {
       sid.toLowerCase().includes(search.toLowerCase())
     );
   });
+  const manualBySubmission = new Map(
+    (manualStatus?.submissions || []).map((row: any) => [row.submissionId, row]),
+  );
 
   const handleExport = async (format = "csv") => {
     if (!examId) return;
@@ -160,6 +168,22 @@ export default function ExamResultsList() {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error("Export error", err);
+    }
+  };
+
+  const handlePublishResults = async () => {
+    if (!examId) return;
+    try {
+      setIsPublishing(true);
+      const nextStatus = await api.publishExamResults(examId);
+      setManualStatus(nextStatus);
+      const subsRes = await api.getExamSubmissions(examId, page, ITEMS_PER_PAGE);
+      setSubmissions(unwrapPaginatedData(subsRes));
+      toast.success("Results published to students.");
+    } catch (err: any) {
+      toast.error(err?.message || "Unable to publish results.");
+    } finally {
+      setIsPublishing(false);
     }
   };
 
@@ -221,6 +245,43 @@ export default function ExamResultsList() {
             </Button>
           </div>
         </div>
+
+        {manualStatus?.hasManualGrading ? (
+          <Card className="border-amber-200 bg-amber-50/70 shadow-[0_16px_40px_-30px_rgba(180,83,9,0.45)]">
+            <CardContent className="flex flex-col gap-4 pt-5 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex items-start gap-3">
+                <div className="rounded-xl bg-amber-100 p-2 text-amber-700">
+                  <ClipboardCheck className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 className="font-semibold text-amber-950">
+                    Manual grading required
+                  </h2>
+                  <p className="mt-1 text-sm text-amber-800">
+                    {manualStatus.manualGraded}/{manualStatus.manualTotal} subjective answers graded.
+                    {manualStatus.published
+                      ? " Results have been published to students."
+                      : manualStatus.manualPending > 0
+                      ? ` ${manualStatus.manualPending} answers still need points and feedback review.`
+                      : " All subjective answers are ready to publish."}
+                  </p>
+                </div>
+              </div>
+              <Button
+                onClick={handlePublishResults}
+                disabled={!manualStatus.canPublish || isPublishing}
+                className="gap-2 shadow-sm"
+              >
+                {isPublishing ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Send className="h-4 w-4" />
+                )}
+                Publish Results
+              </Button>
+            </CardContent>
+          </Card>
+        ) : null}
 
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
           <Card className="lg:col-span-2 border-slate-200/80 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
@@ -369,20 +430,25 @@ export default function ExamResultsList() {
                     <TableHead className="bg-slate-50/80 font-semibold text-slate-600">
                       Status
                     </TableHead>
+                    <TableHead className="bg-slate-50/80 text-right font-semibold text-slate-600">
+                      Manual Grading
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {filtered.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={5}
+                        colSpan={6}
                         className="py-10 text-center text-muted-foreground"
                       >
                         No submissions found for this exam yet.
                       </TableCell>
                     </TableRow>
                   ) : (
-                    filtered.map((s) => (
+                    filtered.map((s) => {
+                      const manualRow = manualBySubmission.get(s.id) as any;
+                      return (
                       <TableRow key={s.id} className="transition-colors hover:bg-slate-50/80">
                         <TableCell className="py-4">
                           <a
@@ -406,8 +472,26 @@ export default function ExamResultsList() {
                         <TableCell className="py-4">
                           <StatusBadge domain="submission" status={s.status} />
                         </TableCell>
+                        <TableCell className="py-4 text-right">
+                          {manualRow?.manualTotal > 0 ? (
+                            <Button
+                              size="sm"
+                              variant={manualRow.completed ? "outline" : "default"}
+                              onClick={() =>
+                                navigate(`${basePath}/exam/${examId}/submissions/${s.id}/manual-grading`)
+                              }
+                            >
+                              {manualRow.completed
+                                ? "Review Grading"
+                                : `Grade ${manualRow.manualPending}/${manualRow.manualTotal}`}
+                            </Button>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">Auto only</span>
+                          )}
+                        </TableCell>
                       </TableRow>
-                    ))
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>

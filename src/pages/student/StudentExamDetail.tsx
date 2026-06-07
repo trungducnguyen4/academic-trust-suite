@@ -65,6 +65,26 @@ const formatDateTime = (value?: string | null) => {
   return format(date, "MMM d, yyyy HH:mm");
 };
 
+const statusBadgeClass = (status?: string) => {
+  const normalized = String(status || "PUBLISHED").toUpperCase();
+
+  if (["GRADED", "FINALIZED", "SUBMITTED"].includes(normalized)) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (["IN_PROGRESS", "ONGOING"].includes(normalized)) {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+};
+
+const accessBadgeClass = (state: string) => {
+  if (state === "open") return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (state === "upcoming") return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-slate-200 bg-slate-50 text-slate-600";
+};
+
 export default function StudentExamDetail() {
   const { id } = useParams();
 
@@ -153,17 +173,17 @@ export default function StudentExamDetail() {
 
   return (
     <DashboardLayout>
-      <div className="mx-auto max-w-5xl space-y-6">
+      <div className="mx-auto max-w-5xl space-y-6 rounded-2xl bg-[linear-gradient(180deg,hsl(200_40%_97%)_0%,hsl(0_0%_100%)_48%)] p-4 sm:p-5 lg:p-6">
         <BackToDashboardButton to="/student/exams" label="Back to My Exams" className="-ml-2" />
 
         {loading ? (
-          <Card>
+          <Card className="border-slate-200 bg-white/95 shadow-medium">
             <CardContent className="py-12 text-center">
               <Loader2 className="mx-auto h-6 w-6 animate-spin text-primary" />
             </CardContent>
           </Card>
         ) : error ? (
-          <Card>
+          <Card className="border-slate-200 bg-white/95 shadow-medium">
             <CardContent className="py-10 text-center">
               <p className="font-medium text-foreground">Could not load exam detail.</p>
               <p className="mt-1 text-sm text-muted-foreground">{error}</p>
@@ -171,75 +191,86 @@ export default function StudentExamDetail() {
           </Card>
         ) : (
           <>
-            <Card>
-              <CardHeader>
+            <Card className="overflow-hidden border-slate-200 bg-white/95 shadow-medium">
+              <div className="h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
+              <CardHeader className="bg-slate-50/70">
                 <div className="flex flex-wrap items-center gap-2">
-                  <CardTitle>{exam?.title || "Exam Detail"}</CardTitle>
-                  <Badge variant="outline">
+                  <CardTitle className="text-2xl text-slate-900">
+                    {exam?.title || "Exam Detail"}
+                  </CardTitle>
+                  <Badge
+                    variant="outline"
+                    className={statusBadgeClass(exam?.status)}
+                  >
                     {getStatusBadgeLabel(String(exam?.status || "PUBLISHED"))}
                   </Badge>
                   {exam?.course?.code ? (
-                    <Badge variant="secondary">{exam.course.code}</Badge>
+                    <Badge
+                      variant="secondary"
+                      className="border-slate-200 bg-white text-slate-600"
+                    >
+                      {exam.course.code}
+                    </Badge>
                   ) : null}
                 </div>
                 <CardDescription>
                   {exam?.course?.name || "Course unavailable"}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 pt-5">
                 <p className="text-sm text-muted-foreground">
                   {exam?.description || "No additional description available for this exam."}
                 </p>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
-                  <div className="rounded-lg border border-border/60 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                     <p className="text-xs text-muted-foreground">Start Time</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
-                      <CalendarClock className="h-4 w-4" />
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <CalendarClock className="h-4 w-4 text-primary" />
                       {formatDateTime(exam?.startTime)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                     <p className="text-xs text-muted-foreground">End Time</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
-                      <AlarmClock className="h-4 w-4" />
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <AlarmClock className="h-4 w-4 text-primary" />
                       {formatDateTime(exam?.endTime)}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                     <p className="text-xs text-muted-foreground">Duration</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
-                      <Clock3 className="h-4 w-4" />
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <Clock3 className="h-4 w-4 text-primary" />
                       {exam?.duration ?? "N/A"} min
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                     <p className="text-xs text-muted-foreground">Passing Score</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
-                      <CheckCircle2 className="h-4 w-4" />
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
                       {exam?.passingScore ?? "N/A"}
                     </p>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                  <div className="rounded-lg border border-border/60 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                     <p className="text-xs text-muted-foreground">Course</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
-                      <BookOpen className="h-4 w-4" />
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <BookOpen className="h-4 w-4 text-primary" />
                       {exam?.course?.code || "-"} - {exam?.course?.name || "-"}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                     <p className="text-xs text-muted-foreground">Total Points</p>
-                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-medium">
-                      <FileText className="h-4 w-4" />
+                    <p className="mt-1 inline-flex items-center gap-1.5 text-sm font-semibold text-slate-900">
+                      <FileText className="h-4 w-4 text-primary" />
                       {exam?.totalPoints ?? "N/A"}
                     </p>
                   </div>
-                  <div className="rounded-lg border border-border/60 p-3">
+                  <div className="rounded-lg border border-slate-200 bg-slate-50/70 p-3">
                     <p className="text-xs text-muted-foreground">Max Attempts</p>
-                    <p className="mt-1 text-sm font-medium">
+                    <p className="mt-1 text-sm font-semibold text-slate-900">
                       {configuredMaxAttempts === null ? "Unlimited" : configuredMaxAttempts}
                     </p>
                   </div>
@@ -247,26 +278,38 @@ export default function StudentExamDetail() {
               </CardContent>
             </Card>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Your Access And Attempt</CardTitle>
+            <Card className="overflow-hidden border-slate-200 bg-white/95 shadow-medium">
+              <CardHeader className="border-b border-slate-100 bg-slate-50/70">
+                <CardTitle className="flex items-center gap-2 text-xl text-slate-900">
+                  <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                    <CheckCircle2 className="h-5 w-5" />
+                  </span>
+                  Your Access And Attempt
+                </CardTitle>
                 <CardDescription>
                   Check whether this exam is upcoming, open, or ended and what you can do next.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-wrap gap-2">
-                  <Badge variant="outline">Window: {accessState}</Badge>
-                  <Badge variant="outline">
+                  <Badge variant="outline" className={accessBadgeClass(accessState)}>
+                    Window: {accessState}
+                  </Badge>
+                  <Badge
+                    variant="outline"
+                    className={statusBadgeClass(submissionStatus || "NOT_STARTED")}
+                  >
                     Attempt: {mySubmission ? getStatusBadgeLabel(submissionStatus || "IN_PROGRESS") : "Not started"}
                   </Badge>
                   {mySubmission?.attemptNo ? (
-                    <Badge variant="secondary">
+                    <Badge variant="secondary" className="border-slate-200 bg-slate-50 text-slate-700">
                       Attempt {mySubmission.attemptNo}
                     </Badge>
                   ) : null}
                   {typeof mySubmission?.score === "number" ? (
-                    <Badge variant="secondary">Score: {mySubmission.score}</Badge>
+                    <Badge variant="secondary" className="border-emerald-200 bg-emerald-50 text-emerald-700">
+                      Score: {mySubmission.score}
+                    </Badge>
                   ) : null}
                 </div>
 

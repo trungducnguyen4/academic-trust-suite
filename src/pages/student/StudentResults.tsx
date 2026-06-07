@@ -23,11 +23,35 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, Award } from "lucide-react";
+import { Loader2, Award, FileCheck2, RotateCcw, Trophy } from "lucide-react";
 import api from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import { getStatusBadgeLabel } from "@/components/ui/status-badge";
+
+const scoreBadgeClass = (score: unknown) => {
+  const numericScore = typeof score === "number" ? score : null;
+
+  if (numericScore === null) return "border-slate-200 bg-slate-50 text-slate-600";
+  if (numericScore >= 8) return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  if (numericScore >= 5) return "border-amber-200 bg-amber-50 text-amber-700";
+  return "border-red-200 bg-red-50 text-red-700";
+};
+
+const statusBadgeClass = (status?: string) => {
+  const normalized = String(status || "").toUpperCase();
+
+  if (["GRADED", "FINALIZED"].includes(normalized)) {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  if (normalized === "FLAGGED") {
+    return "border-amber-200 bg-amber-50 text-amber-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+};
 
 export default function StudentResults() {
   const [submissions, setSubmissions] = useState<any[]>([]);
@@ -281,33 +305,63 @@ export default function StudentResults() {
                   paginatedSubmissions.map((s: any) => (
                     <div
                       key={s.id}
-                      className="flex items-center justify-between rounded-xl border border-border/50 p-4"
+                      className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4 transition-colors hover:border-primary/30 hover:bg-white md:flex-row md:items-center md:justify-between"
                     >
-                      <div>
-                        <h4 className="font-semibold text-foreground">
-                          {s.exam?.title ?? s.title}
-                        </h4>
-                        <p className="text-sm text-muted-foreground">
-                          {s.exam?.course?.code}
+                      <div className="min-w-0 space-y-3">
+                        <div>
+                          <h4 className="font-semibold text-slate-900">
+                            {s.exam?.title ?? s.title}
+                          </h4>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          {s.exam?.course?.code || "Course unavailable"}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <div className="mt-3 flex flex-wrap items-center gap-2">
+                          <Badge
+                            variant="outline"
+                            className={statusBadgeClass(s.status)}
+                          >
+                            <FileCheck2 className="mr-1 h-3.5 w-3.5" />
+                            {getStatusBadgeLabel(s.status)}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className={scoreBadgeClass(
+                              String(s.status).toUpperCase() === "SUBMITTED" ? null : s.score,
+                            )}
+                          >
+                            <Trophy className="mr-1 h-3.5 w-3.5" />
+                            {String(s.status).toUpperCase() === "SUBMITTED"
+                              ? "Waiting for grading"
+                              : `Score: ${s.score !== null ? s.score : "N/A"}`}
+                          </Badge>
+                          <Badge
+                            variant="outline"
+                            className="border-blue-200 bg-blue-50 text-blue-700"
+                          >
+                            <RotateCcw className="mr-1 h-3.5 w-3.5" />
+                            Attempt {s.attemptNo ?? "N/A"}
+                          </Badge>
+                        </div>
+                        <p className="sr-only">
                           {getStatusBadgeLabel(s.status)} • {s.score !== null ? s.score : "—"}
                         </p>
-                        <p className="text-xs text-muted-foreground">
+                        <p className="sr-only">
                           Attempt {s.attemptNo ?? "N/A"}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button asChild size="sm">
-                          <Link to={`/student/grading?examId=${s.examId ?? s.exam?.id}&submissionId=${s.id}`}>
-                            View Result
-                          </Link>
-                        </Button>
-                        <Button asChild size="sm" variant="outline">
-                          <Link to={`/student/exams/${s.examId ?? s.exam?.id}`}>
-                            Exam Detail
-                          </Link>
-                        </Button>
+                      </div>
+                      <div className="flex items-center gap-2 md:justify-end">
+                        {String(s.status).toUpperCase() === "SUBMITTED" ? (
+                          <Button size="sm" variant="outline" disabled>
+                            Waiting for grading
+                          </Button>
+                        ) : (
+                          <Button asChild size="sm">
+                            <Link to={`/student/grading?examId=${s.examId ?? s.exam?.id}&submissionId=${s.id}`}>
+                              View Result
+                            </Link>
+                          </Button>
+                        )}
                       </div>
                     </div>
                   ))
