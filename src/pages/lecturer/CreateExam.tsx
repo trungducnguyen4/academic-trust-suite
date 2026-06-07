@@ -777,6 +777,13 @@ export default function CreateExam() {
         language: "en",
         courseName: courses.find((course) => course.id === form.course)?.name,
         useCase: "exam",
+        context: {
+          courseId: form.course,
+          courseName: courses.find((course) => course.id === form.course)?.name,
+          courseCode: courses.find((course) => course.id === form.course)?.code,
+          examTitle: form.title,
+          source: "create_exam_manual_ai",
+        },
       });
       const generated = Array.isArray(result?.questions) ? result.questions[0] : null;
       if (!generated) throw new Error("AI did not return a question.");
@@ -1000,6 +1007,13 @@ export default function CreateExam() {
         language: "en",
         courseName: courses.find((course) => course.id === form.course)?.name,
         useCase: "exam",
+        context: {
+          courseId: form.course,
+          courseName: courses.find((course) => course.id === form.course)?.name,
+          courseCode: courses.find((course) => course.id === form.course)?.code,
+          examTitle: form.title,
+          source: "create_exam_bank_ai",
+        },
       });
       setAiGeneratedQuestions(result.questions);
       toast.success(
@@ -1073,6 +1087,13 @@ export default function CreateExam() {
         language: "en",
         courseName: courses.find((course) => course.id === form.course)?.name,
         useCase: "exam",
+        context: {
+          courseId: form.course,
+          courseName: courses.find((course) => course.id === form.course)?.name,
+          courseCode: courses.find((course) => course.id === form.course)?.code,
+          examTitle: form.title,
+          source: "create_exam_doc_ai",
+        },
       });
 
       setAiGeneratedQuestions(result.questions || []);

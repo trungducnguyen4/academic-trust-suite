@@ -23,10 +23,14 @@ export class AiJobsService {
 
   async createJob(params: CreateAiJobParams) {
     const provider = process.env.AI_PROVIDER || 'google';
+    const ollamaModel = process.env.AI_OLLAMA_MODEL || 'gemma3:4b';
+    const googleModel = process.env.AI_MODEL || 'gemini-2.0-flash';
     const model =
-      params.task === 'single-question' || params.task === 'exam-questions'
-        ? process.env.AI_MODEL || process.env.AI_OLLAMA_MODEL || 'gemini-2.0-flash'
-        : process.env.AI_OLLAMA_MODEL || 'gemini-2.0-flash';
+      provider === 'ollama'
+        ? ollamaModel
+        : params.task === 'single-question' || params.task === 'exam-questions'
+          ? googleModel
+          : ollamaModel;
 
     const record = await this.prisma.aiGenerationRecord.create({
       data: {
@@ -41,6 +45,7 @@ export class AiJobsService {
           task: params.task,
           payload: params.payload,
           requestedBy: params.requestedBy ?? null,
+          context: params.payload?.context ?? {},
         },
       },
     });

@@ -49,6 +49,16 @@ const dayLabel = (date: Date) => {
   return format(date, "EEEE");
 };
 
+const statusBadgeClass = (status?: string) => {
+  const normalized = String(status || "PUBLISHED").toUpperCase();
+
+  if (normalized === "ONGOING") {
+    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+  }
+
+  return "border-sky-200 bg-sky-50 text-sky-700";
+};
+
 export default function StudentSchedule() {
   const [items, setItems] = useState<ScheduleExamItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -247,10 +257,10 @@ export default function StudentSchedule() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6">
+      <div className="space-y-6 rounded-2xl bg-[linear-gradient(180deg,hsl(200_40%_97%)_0%,hsl(0_0%_100%)_42%)] p-4 sm:p-5 lg:p-6">
         <BackToDashboardButton to="/student" className="-ml-2" />
 
-        <div className="space-y-3">
+        <div className="space-y-4 rounded-xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
           <ListPageHeader title="Exam Schedule" />
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <SearchBar
@@ -280,9 +290,14 @@ export default function StudentSchedule() {
           />
         </div>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Calendar View</CardTitle>
+        <Card className="overflow-hidden border-slate-200 bg-white/95 shadow-medium">
+          <CardHeader className="border-b border-slate-100 bg-slate-50/70">
+            <CardTitle className="flex items-center gap-2 text-xl">
+              <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                <CalendarClock className="h-5 w-5" />
+              </span>
+              Calendar View
+            </CardTitle>
             <CardDescription>
               Lightweight calendar-like timeline for your exam windows.
             </CardDescription>
@@ -303,10 +318,14 @@ export default function StudentSchedule() {
                   const representativeDate =
                     dateKey === "unscheduled" ? null : new Date(`${dateKey}T00:00:00`);
                   return (
-                    <div key={dateKey} className="rounded-xl border border-border/60 p-4">
+                    <div
+                      key={dateKey}
+                      className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                    >
+                      <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
                       <div className="mb-3 flex items-center justify-between">
                         <div>
-                          <h3 className="font-semibold text-foreground">
+                          <h3 className="text-lg font-semibold text-slate-900">
                             {representativeDate
                               ? `${dayLabel(representativeDate)} - ${format(representativeDate, "MMM d, yyyy")}`
                               : "Unscheduled"}
@@ -321,14 +340,14 @@ export default function StudentSchedule() {
                         {dateItems.map((item) => (
                           <div
                             key={item.id}
-                            className="flex flex-col gap-2 rounded-lg border border-border/50 p-3 md:flex-row md:items-center md:justify-between"
+                            className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 transition-colors hover:border-primary/30 hover:bg-white md:flex-row md:items-center md:justify-between"
                           >
-                            <div>
-                              <p className="font-medium text-foreground">{item.title}</p>
+                            <div className="border-l-2 border-primary/50 pl-3">
+                              <p className="font-semibold text-slate-900">{item.title}</p>
                               <p className="text-sm text-muted-foreground">
                                 {item.course?.code || "-"} - {item.course?.name || "Course unavailable"}
                               </p>
-                              <p className="text-xs text-muted-foreground">
+                              <p className="mt-1 text-xs text-slate-500">
                                 <span className="inline-flex items-center gap-1">
                                   <Clock3 className="h-3.5 w-3.5" />
                                   {item.startTime
@@ -339,10 +358,24 @@ export default function StudentSchedule() {
                                 </span>
                               </p>
                             </div>
-                            <div className="flex items-center gap-2">
-                              <Badge variant="outline">{item.status || "PUBLISHED"}</Badge>
-                              {item.submitted ? <Badge variant="secondary">Submitted</Badge> : null}
-                              <Button asChild size="sm" variant="outline">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <Badge variant="outline" className={statusBadgeClass(item.status)}>
+                                {item.status || "PUBLISHED"}
+                              </Badge>
+                              {item.submitted ? (
+                                <Badge
+                                  variant="secondary"
+                                  className="border-emerald-200 bg-emerald-50 text-emerald-700"
+                                >
+                                  Submitted
+                                </Badge>
+                              ) : null}
+                              <Button
+                                asChild
+                                size="sm"
+                                variant="outline"
+                                className="border-slate-200 bg-white hover:border-primary/30 hover:bg-primary/5"
+                              >
                                 <Link to={`/student/exams/${item.id}`}>Detail</Link>
                               </Button>
                             </div>

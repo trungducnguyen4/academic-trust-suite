@@ -31,7 +31,7 @@ export class ExamLinksService {
   }
 
   private getAppBaseUrl() {
-    return process.env.APP_BASE_URL || 'http://localhost:5173';
+    return process.env.APP_BASE_URL || process.env.FRONTEND_URL || 'http://localhost:5173';
   }
 
   private async assertCanManageExam(examId: string, userId: string, role: string) {

@@ -22,6 +22,8 @@ type ExistingAutosaveAnswer = {
   sequence: number;
 };
 
+const AUTO_GRADED_TYPES = new Set(['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE']);
+
 @Injectable()
 export class SubmissionsService {
   constructor(
@@ -459,8 +461,6 @@ export class SubmissionsService {
     }
 
     const answers = (submitExamDto.answers || []).slice(0, 1000);
-    const autoGradedTypes = new Set(['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE']);
-
     const result = await this.prisma.$transaction(async (tx) => {
       const locked = await tx.examSubmission.updateMany({
         where: {
@@ -636,7 +636,7 @@ export class SubmissionsService {
         let pointsAwarded = 0;
         let isCorrect = false;
 
-        if (autoGradedTypes.has(examQuestion.question.type)) {
+        if (AUTO_GRADED_TYPES.has(examQuestion.question.type)) {
           const correctAnswer = examQuestion.questionVersion?.answerKey ?? null;
           if (correctAnswer && this.compareAnswers(answerDto.answer, correctAnswer)) {
             pointsAwarded = Number(
@@ -679,7 +679,7 @@ export class SubmissionsService {
       );
       const normalizedScore = maxRawScore > 0 ? (totalScore / maxRawScore) * 10 : 0;
       const hasManualGrading = lockedSubmission.exam.examQuestions.some(
-        (eq) => !autoGradedTypes.has(eq.question.type),
+        (eq) => !AUTO_GRADED_TYPES.has(eq.question.type),
       );
 
       await tx.submissionAnswer.deleteMany({
@@ -1328,11 +1328,32 @@ export class SubmissionsService {
           submissionId: true,
           pointsAwarded: true,
           feedback: true,
+          question: {
+            select: {
+              points: true,
+              defaultPoints: true,
+            },
+          },
+          questionVersion: {
+            select: {
+              points: true,
+            },
+          },
         },
       });
 
       if (!existing) {
         throw new NotFoundException('Answer not found');
+      }
+
+      const maxPoints = Number(
+        existing.questionVersion?.points ??
+          existing.question.points ??
+          existing.question.defaultPoints ??
+          1,
+      );
+      if (gradeDto.pointsAwarded > maxPoints) {
+        throw new BadRequestException(`Points awarded cannot exceed ${maxPoints}`);
       }
 
       const next = await tx.submissionAnswer.update({
@@ -1436,6 +1457,213 @@ export class SubmissionsService {
     ]);
 
     return buildPaginatedResult(submissions, total, page, limit);
+  }
+
+  async getManualGradingStatus(examId: string) {
+    const exam = await this.prisma.exam.findUnique({
+      where: { id: examId },
+      select: { id: true, title: true },
+    });
+
+    if (!exam) {
+      throw new NotFoundException('Exam not found');
+    }
+
+    const submissions = await this.prisma.examSubmission.findMany({
+      where: {
+        examId,
+        status: { in: ['SUBMITTED', 'GRADED', 'FLAGGED', 'FINALIZED'] },
+      },
+      include: {
+        student: {
+          select: {
+            id: true,
+            fullName: true,
+            studentId: true,
+            email: true,
+          },
+        },
+        answers: {
+          include: {
+            question: {
+              select: {
+                id: true,
+                type: true,
+                points: true,
+                defaultPoints: true,
+                content: true,
+              },
+            },
+            questionVersion: {
+              select: {
+                id: true,
+                stem: true,
+                points: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: [{ submittedAt: 'desc' }, { createdAt: 'desc' }],
+    });
+
+    const rows = submissions.map((submission) => {
+      const manualAnswers = submission.answers.filter(
+        (answer) => !AUTO_GRADED_TYPES.has(String(answer.question?.type || '').toUpperCase()),
+      );
+      const graded = manualAnswers.filter((answer) => answer.pointsAwarded !== null && answer.pointsAwarded !== undefined);
+      return {
+        submissionId: submission.id,
+        student: submission.student,
+        status: submission.status,
+        attemptNo: submission.attemptNo,
+        submittedAt: submission.submittedAt,
+        score: submission.score,
+        manualTotal: manualAnswers.length,
+        manualGraded: graded.length,
+        manualPending: Math.max(0, manualAnswers.length - graded.length),
+        completed: manualAnswers.length > 0 && manualAnswers.length === graded.length,
+      };
+    });
+
+    const manualTotal = rows.reduce((sum, row) => sum + row.manualTotal, 0);
+    const manualGraded = rows.reduce((sum, row) => sum + row.manualGraded, 0);
+    const published =
+      rows.length > 0 &&
+      rows
+        .filter((row) => row.manualTotal > 0)
+        .every((row) => ['GRADED', 'FINALIZED'].includes(String(row.status).toUpperCase()));
+
+    return {
+      exam,
+      hasManualGrading: manualTotal > 0,
+      manualTotal,
+      manualGraded,
+      manualPending: Math.max(0, manualTotal - manualGraded),
+      published,
+      canPublish: manualTotal > 0 && manualTotal === manualGraded && !published,
+      submissions: rows,
+    };
+  }
+
+  async getManualGradingSubmission(submissionId: string) {
+    const submission = await this.prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+      include: {
+        student: {
+          select: {
+            id: true,
+            fullName: true,
+            studentId: true,
+            email: true,
+          },
+        },
+        exam: {
+          select: {
+            id: true,
+            title: true,
+            totalPoints: true,
+            course: {
+              select: {
+                id: true,
+                code: true,
+                name: true,
+              },
+            },
+          },
+        },
+        answers: {
+          orderBy: [{ questionId: 'asc' }, { sequence: 'asc' }],
+          include: {
+            question: {
+              select: {
+                id: true,
+                type: true,
+                content: true,
+                points: true,
+                defaultPoints: true,
+              },
+            },
+            questionVersion: {
+              select: {
+                id: true,
+                stem: true,
+                payload: true,
+                points: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    const manualAnswers = submission.answers
+      .filter((answer) => !AUTO_GRADED_TYPES.has(String(answer.question?.type || '').toUpperCase()))
+      .map((answer) => ({
+        id: answer.id,
+        questionId: answer.questionId,
+        questionType: answer.question?.type,
+        questionText: answer.questionVersion?.stem || answer.question?.content || 'Question text unavailable',
+        answer: answer.answer,
+        pointsAwarded: answer.pointsAwarded,
+        maxPoints: Number(answer.questionVersion?.points ?? answer.question?.points ?? answer.question?.defaultPoints ?? 1),
+        feedback: answer.feedback || '',
+        updatedAt: answer.updatedAt,
+      }));
+
+    return {
+      ...submission,
+      manualAnswers,
+      manualTotal: manualAnswers.length,
+      manualGraded: manualAnswers.filter((answer) => answer.pointsAwarded !== null && answer.pointsAwarded !== undefined).length,
+    };
+  }
+
+  async publishExamResults(examId: string) {
+    const status = await this.getManualGradingStatus(examId);
+    if (!status.hasManualGrading) {
+      throw new BadRequestException('This exam does not have manually graded answers.');
+    }
+    if (!status.canPublish) {
+      throw new BadRequestException('All manually graded answers must be scored before publishing results.');
+    }
+
+    const submissionIds = status.submissions.map((row) => row.submissionId);
+    const answers = await this.prisma.submissionAnswer.findMany({
+      where: { submissionId: { in: submissionIds } },
+      select: {
+        submissionId: true,
+        pointsAwarded: true,
+      },
+    });
+
+    const scoreBySubmission = new Map<string, number>();
+    for (const answer of answers) {
+      scoreBySubmission.set(
+        answer.submissionId,
+        (scoreBySubmission.get(answer.submissionId) || 0) + Number(answer.pointsAwarded || 0),
+      );
+    }
+
+    const now = new Date();
+    await this.prisma.$transaction(
+      submissionIds.map((id) =>
+        this.prisma.examSubmission.update({
+          where: { id },
+          data: {
+            status: 'GRADED',
+            gradedAt: now,
+            score: Math.round(scoreBySubmission.get(id) || 0),
+          },
+        }),
+      ),
+    );
+
+    return this.getManualGradingStatus(examId);
   }
 
   async getExamOverview(examId: string) {

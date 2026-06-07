@@ -1,8 +1,12 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
-
-// Using global fetch (Node 18+) to call a local model server when configured
+import {
+  buildExamTrustPromptHeader,
+  ExamTrustAiContext,
+  getOllamaGenerationOptions,
+  OllamaGenerationOptions,
+} from './ai-profile';
 
 @Injectable()
 export class AiService {
@@ -15,15 +19,23 @@ export class AiService {
   private ollamaModel: string;
   private appName: string;
   private defaultLanguage: string;
+  private ollamaTemperature: number;
+  private ollamaTopP: number;
+  private ollamaRepeatPenalty: number;
+  private ollamaNumCtx: number;
 
   constructor(private configService: ConfigService) {
     const apiKey = this.configService.get<string>('GOOGLE_AI_API_KEY');
-    this.provider = this.configService.get<string>('AI_PROVIDER') || 'google'; // 'google' | 'ollama' | 'local' | 'mock'
+    this.provider = this.configService.get<string>('AI_PROVIDER') || 'google';
     this.localUrl = this.configService.get<string>('AI_LOCAL_URL') || undefined;
     this.ollamaUrl = this.configService.get<string>('AI_OLLAMA_URL') || 'http://localhost:11434';
-    this.ollamaModel = this.configService.get<string>('AI_OLLAMA_MODEL') || 'mistral';
+    this.ollamaModel = this.configService.get<string>('AI_OLLAMA_MODEL') || 'gemma3:4b';
     this.appName = this.configService.get<string>('AI_APP_NAME') || 'Academic Trust Suite';
     this.defaultLanguage = this.configService.get<string>('AI_DEFAULT_LANGUAGE') || 'vi';
+    this.ollamaTemperature = Number(this.configService.get<string>('AI_OLLAMA_TEMPERATURE') || 0.2);
+    this.ollamaTopP = Number(this.configService.get<string>('AI_OLLAMA_TOP_P') || 0.85);
+    this.ollamaRepeatPenalty = Number(this.configService.get<string>('AI_OLLAMA_REPEAT_PENALTY') || 1.1);
+    this.ollamaNumCtx = Number(this.configService.get<string>('AI_OLLAMA_NUM_CTX') || 8192);
 
     if (this.provider === 'google') {
       if (!apiKey) {
@@ -38,16 +50,14 @@ export class AiService {
     }
   }
 
-  /**
-   * Generate a single question based on a prompt
-   */
   async generateQuestion(params: {
     prompt: string;
     questionType?: string;
-    difficulty?: number; // 0.0 - 1.0
+    difficulty?: number;
     language?: string;
     courseName?: string;
     useCase?: string;
+    context?: ExamTrustAiContext;
   }) {
     const {
       prompt,
@@ -56,23 +66,29 @@ export class AiService {
       language,
       courseName,
       useCase = 'question_bank',
+      context,
     } = params;
 
     const targetLanguage = language || this.defaultLanguage;
-
-    // normalize to a 1-5 scale for instructions, but keep internal difficulty as 0..1
-    const diffScale5 = Math.round(difficulty * 4) + 1; // maps 0..1 -> 1..5
     const difficultyLabel = difficulty <= 0.4 ? 'Easy' : difficulty <= 0.7 ? 'Medium' : 'Hard';
     const langInstruction = targetLanguage === 'vi'
       ? 'Generate the question and all content in Vietnamese.'
       : 'Generate the question and all content in English.';
 
-    const profilePrompt = this.buildAppProfilePrompt({
-      useCase,
-      courseName,
-      targetLanguage,
+    const profilePrompt = buildExamTrustPromptHeader({
+      appName: this.appName,
+      useCase: 'question_generation',
+      language: targetLanguage,
       questionType,
       questionCount: 1,
+      context: {
+        courseName,
+        questionType,
+        difficulty,
+        currentStem: prompt,
+        extra: { useCase },
+        ...(context || {}),
+      },
     });
 
     const systemPrompt = `${profilePrompt}
@@ -111,9 +127,11 @@ Rules:
       let responseText: string;
 
       if (this.provider === 'ollama') {
-        responseText = await this._callOllama(systemPrompt);
+        responseText = await this._callOllama(
+          systemPrompt,
+          this.buildOllamaOptions('question_generation'),
+        );
       } else if (this.provider === 'local' && this.localUrl) {
-        // Call custom local model server (POST { prompt })
         const resp = await fetch(this.localUrl, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -131,61 +149,56 @@ Rules:
           options: questionType === 'MULTIPLE_CHOICE' ? { A: 'Option A', B: 'Option B', C: 'Option C', D: 'Option D' } : null,
           correctAnswer: questionType === 'MULTIPLE_CHOICE' ? { answer: 'A' } : null,
         });
-        } else {
-          const result = await this.model.generateContent(systemPrompt);
-          responseText = result.response.text();
+      } else {
+        const result = await this.model.generateContent(systemPrompt);
+        responseText = result.response.text();
+      }
+
+      const cleaned = responseText
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/gi, '')
+        .trim();
+
+      const parsed = JSON.parse(cleaned);
+
+      const normalizeDifficulty = (val: any): number | undefined => {
+        if (val === undefined || val === null) return undefined;
+        const n = Number(val);
+        if (Number.isNaN(n)) return undefined;
+        if (n > 1) {
+          return Math.max(0, Math.min(1, (n - 1) / 4));
         }
+        return Math.max(0, Math.min(1, n));
+      };
 
-        // Clean the response - remove code fences if present
-        const cleaned = responseText
-          .replace(/```json\s*/gi, '')
-          .replace(/```\s*/gi, '')
-          .trim();
+      const parsedDifficulty = normalizeDifficulty(parsed.difficulty);
 
-        const parsed = JSON.parse(cleaned);
-
-        // helper to normalize difficulty from AI (AI may return 1-5 scale)
-        const normalizeDifficulty = (val: any): number | undefined => {
-          if (val === undefined || val === null) return undefined;
-          const n = Number(val);
-          if (Number.isNaN(n)) return undefined;
-          if (n > 1) {
-            // assume 1-5 scale -> convert to 0..1
-            return Math.max(0, Math.min(1, (n - 1) / 4));
-          }
-          return Math.max(0, Math.min(1, n));
-        };
-
-        const parsedDifficulty = normalizeDifficulty(parsed.difficulty);
-
-        return {
-          content: parsed.content || '',
-          type: parsed.type || questionType,
-          explanation: parsed.explanation || '',
-          difficulty: parsedDifficulty !== undefined ? parsedDifficulty : difficulty,
-          points: parsed.points || 1,
-          topic: parsed.topic || '',
-          learningObjective: parsed.learningObjective || '',
-          options: parsed.options || null,
-          correctAnswer: parsed.correctAnswer || null,
-        };
+      return {
+        content: parsed.content || '',
+        type: parsed.type || questionType,
+        explanation: parsed.explanation || '',
+        difficulty: parsedDifficulty !== undefined ? parsedDifficulty : difficulty,
+        points: parsed.points || 1,
+        topic: parsed.topic || '',
+        learningObjective: parsed.learningObjective || '',
+        options: parsed.options || null,
+        correctAnswer: parsed.correctAnswer || null,
+      };
     } catch (error: any) {
       this.logger.error('Failed to generate question:', error);
       throw new Error(`AI generation failed: ${error.message}`);
     }
   }
 
-  /**
-   * Generate multiple questions for an exam
-   */
   async generateExamQuestions(params: {
     prompt: string;
     questionCount: number;
-    difficulty?: number; // 0.0 - 1.0
+    difficulty?: number;
     questionType?: string;
     language?: string;
     courseName?: string;
     useCase?: string;
+    context?: ExamTrustAiContext;
   }) {
     const {
       prompt,
@@ -195,10 +208,10 @@ Rules:
       language,
       courseName,
       useCase = 'exam',
+      context,
     } = params;
 
     const targetLanguage = language || this.defaultLanguage;
-
     const diffLabel = difficulty <= 0.3 ? 'Easy' : difficulty <= 0.5 ? 'Medium' : 'Hard';
     const courseContext = courseName ? `for the course "${courseName}"` : '';
     const normalizedType = this.normalizeQuestionType(questionType);
@@ -209,12 +222,21 @@ Rules:
     const langInstruction = targetLanguage === 'vi'
       ? 'Generate the question set in Vietnamese.'
       : 'Generate the question set in English.';
-    const profilePrompt = this.buildAppProfilePrompt({
-      useCase,
-      courseName,
-      targetLanguage,
+
+    const profilePrompt = buildExamTrustPromptHeader({
+      appName: this.appName,
+      useCase: 'exam_generation',
+      language: targetLanguage,
       questionType: normalizedType,
       questionCount,
+      context: {
+        courseName,
+        questionType: normalizedType,
+        questionCount,
+        difficulty,
+        extra: { useCase },
+        ...(context || {}),
+      },
     });
 
     const systemPrompt = `${profilePrompt}
@@ -257,7 +279,10 @@ ${typeInstruction}
       let responseText: string;
 
       if (this.provider === 'ollama') {
-        responseText = await this._callOllama(systemPrompt);
+        responseText = await this._callOllama(
+          systemPrompt,
+          this.buildOllamaOptions('exam_generation'),
+        );
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -322,6 +347,7 @@ ${typeInstruction}
     existingTopics: string[];
     language?: string;
     courseName?: string;
+    context?: ExamTrustAiContext;
   }) {
     const topicName = String(params.topicName || '').trim();
     const existingTopics = Array.from(
@@ -379,12 +405,18 @@ ${typeInstruction}
         reason: 'Heuristic similarity based on topic text',
       }));
 
-    const prompt = `${this.buildAppProfilePrompt({
-      useCase: 'question_bank',
-      courseName: params.courseName,
-      targetLanguage: params.language || this.defaultLanguage,
+    const prompt = `${buildExamTrustPromptHeader({
+      appName: this.appName,
+      useCase: 'topic_matching',
+      language: params.language || this.defaultLanguage,
       questionType: 'TOPIC_MATCHING',
       questionCount: 1,
+      context: {
+        courseName: params.courseName,
+        topicName,
+        existingTopics,
+        ...(params.context || {}),
+      },
     })}
 
 You are helping a lecturer find an existing topic similar to a proposed new topic.
@@ -415,7 +447,10 @@ Rules:
       let responseText: string | null = null;
 
       if (this.provider === 'ollama') {
-        responseText = await this._callOllama(prompt);
+        responseText = await this._callOllama(
+          prompt,
+          this.buildOllamaOptions('topic_matching'),
+        );
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -460,11 +495,7 @@ Rules:
     }
   }
 
-  /**
-   * Call Ollama's HTTP API and return the generated text.
-   * Ollama exposes POST /api/generate — we use streaming=false for simplicity.
-   */
-  private async _callOllama(prompt: string): Promise<string> {
+  private async _callOllama(prompt: string, options?: Partial<OllamaGenerationOptions>): Promise<string> {
     const url = `${this.ollamaUrl}/api/generate`;
     const resp = await fetch(url, {
       method: 'POST',
@@ -473,7 +504,12 @@ Rules:
         model: this.ollamaModel,
         prompt,
         stream: false,
-        options: { temperature: 0.2 },
+        options: {
+          temperature: options?.temperature ?? this.ollamaTemperature,
+          top_p: options?.top_p ?? this.ollamaTopP,
+          repeat_penalty: options?.repeat_penalty ?? this.ollamaRepeatPenalty,
+          num_ctx: options?.num_ctx ?? this.ollamaNumCtx,
+        },
       }),
     });
     if (!resp.ok) {
@@ -481,8 +517,11 @@ Rules:
       throw new Error(`Ollama returned ${resp.status}: ${body}`);
     }
     const data: any = await resp.json();
-    // Ollama non-streaming response: { response: "...", ... }
     return data.response || data.choices?.[0]?.text || '';
+  }
+
+  private buildOllamaOptions(useCase: 'question_generation' | 'exam_generation' | 'topic_matching' | 'grading_support') {
+    return getOllamaGenerationOptions(useCase);
   }
 
   private getTypeLabel(type: string): string {
@@ -511,32 +550,6 @@ Rules:
       default:
         return '"options": {"A": "option text", "B": "option text", "C": "option text", "D": "option text"},\n  "correctAnswer": {"answer": "B"}';
     }
-  }
-
-  private buildAppProfilePrompt(params: {
-    useCase?: string;
-    courseName?: string;
-    targetLanguage: string;
-    questionType?: string;
-    questionCount: number;
-  }): string {
-    const { useCase = 'question_bank', courseName, targetLanguage, questionType, questionCount } = params;
-    const scope = useCase === 'exam' ? 'exam-ready questions' : 'question-bank quality questions';
-    const courseLine = courseName ? `Course context: ${courseName}.` : 'Course context: not explicitly provided.';
-    const typeLine = questionType ? `Preferred question type: ${questionType}.` : '';
-
-    return `You are the official AI item-writer for ${this.appName}.
-Primary objective: generate ${scope} for a university assessment platform.
-${courseLine}
-Language target: ${targetLanguage}.
-Requested quantity: ${questionCount} question(s).
-${typeLine}
-
-Hard constraints:
-- Keep questions academically rigorous, clear, and testable.
-- Avoid vague wording and avoid trivia-only questions.
-- Prefer practical, scenario-based prompts when possible.
-- Ensure output can be saved directly into the app schema without manual rewriting.`;
   }
 
   private normalizeQuestionType(type?: string): string {

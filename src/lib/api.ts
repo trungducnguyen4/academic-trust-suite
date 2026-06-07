@@ -1,6 +1,8 @@
 import { CourseTerm } from './course-term';
 
-export const API_BASE_URL = 'http://localhost:3001/api';
+const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+
+export const API_BASE_URL = (rawApiBaseUrl?.trim() || 'http://localhost:3001/api').replace(/\/$/, '');
 
 interface RequestOptions {
   method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
@@ -780,8 +782,22 @@ class ApiClient {
     return this.request<any>(`/submissions/exam/${examId}/intelligence`);
   }
 
+  async getExamManualGradingStatus(examId: string) {
+    return this.request<any>(`/submissions/exam/${examId}/manual-grading-status`);
+  }
+
+  async publishExamResults(examId: string) {
+    return this.request<any>(`/submissions/exam/${examId}/publish-results`, {
+      method: 'POST',
+    });
+  }
+
   async getSubmission(id: string) {
     return this.request<any>(`/submissions/${id}`);
+  }
+
+  async getManualGradingSubmission(submissionId: string) {
+    return this.request<any>(`/submissions/${submissionId}/manual-grading`);
   }
 
   async gradeAnswer(submissionAnswerId: string, pointsAwarded: number, feedback?: string) {
@@ -844,6 +860,7 @@ class ApiClient {
     language?: string;
     courseName?: string;
     useCase?: string;
+    context?: Record<string, any>;
   }) {
     const response = await this.request<{
       jobId?: string;
@@ -888,6 +905,7 @@ class ApiClient {
     courseName?: string;
     useCase?: string;
     courseId?: string;
+    context?: Record<string, any>;
   }) {
     const response = await this.request<{
       jobId?: string;

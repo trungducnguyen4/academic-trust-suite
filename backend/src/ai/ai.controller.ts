@@ -28,6 +28,7 @@ export class AiController {
         language: dto.language,
         courseName: dto.courseName,
         useCase: dto.useCase,
+        context: dto.context || {},
       },
     });
 
@@ -47,6 +48,7 @@ export class AiController {
         language: dto.language,
         courseName: dto.courseName,
         useCase: dto.useCase,
+        context: dto.context || {},
       },
     });
 
@@ -60,6 +62,7 @@ export class AiController {
       existingTopics: dto.existingTopics,
       language: dto.language,
       courseName: dto.courseName,
+      context: dto.context || {},
     });
   }
 }

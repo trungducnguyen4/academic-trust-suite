@@ -156,6 +156,20 @@ export class SubmissionsController {
     return this.submissionsService.getExamIntelligence(examId);
   }
 
+  @Get('exam/:examId/manual-grading-status')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  getManualGradingStatus(@Param('examId') examId: string) {
+    return this.submissionsService.getManualGradingStatus(examId);
+  }
+
+  @Post('exam/:examId/publish-results')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  publishExamResults(@Param('examId') examId: string) {
+    return this.submissionsService.publishExamResults(examId);
+  }
+
   @Get('exam/:examId/export')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('LECTURER', 'ADMIN')
@@ -213,6 +227,13 @@ export class SubmissionsController {
   getStudentSubmissionForInstructor(@Param('examId') examId: string, @Param('studentId') studentId: string) {
     // Lecturer / admin endpoint - returns full submission including proctoring.logs
     return this.submissionsService.getStudentSubmission(examId, studentId);
+  }
+
+  @Get(':id/manual-grading')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  getManualGradingSubmission(@Param('id') id: string) {
+    return this.submissionsService.getManualGradingSubmission(id);
   }
 
   @Get(':id')

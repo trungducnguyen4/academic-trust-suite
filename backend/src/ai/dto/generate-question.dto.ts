@@ -1,4 +1,4 @@
-import { IsArray, IsNumber, IsOptional, IsString, Max, Min } from 'class-validator';
+import { IsArray, IsNumber, IsObject, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class GenerateQuestionDto {
   @IsString()
@@ -25,6 +25,10 @@ export class GenerateQuestionDto {
   @IsOptional()
   @IsString()
   useCase?: string; // 'exam' | 'question_bank'
+
+  @IsOptional()
+  @IsObject()
+  context?: Record<string, any>;
 }
 
 export class GenerateExamQuestionsDto {
@@ -61,6 +65,10 @@ export class GenerateExamQuestionsDto {
   @IsOptional()
   @IsString()
   courseId?: string;
+
+  @IsOptional()
+  @IsObject()
+  context?: Record<string, any>;
 }
 
 export class SuggestSimilarTopicsDto {
@@ -78,4 +86,8 @@ export class SuggestSimilarTopicsDto {
   @IsOptional()
   @IsString()
   courseName?: string;
+
+  @IsOptional()
+  @IsObject()
+  context?: Record<string, any>;
 }

@@ -701,6 +701,13 @@ export default function QuestionEditor() {
         difficulty: snapDifficulty(Math.max(0, Math.min(1, difficulty[0]))),
         language: "en",
         useCase: "question_bank",
+        context: {
+          courseId: course || undefined,
+          courseName: courses.find((item) => item.id === course)?.name,
+          courseCode: courses.find((item) => item.id === course)?.code,
+          questionType: backendTypeMap[questionType] || "MULTIPLE_CHOICE",
+          source: "question_editor",
+        },
       });
 
       const similarityCheck = await findSimilarExistingQuestion(
