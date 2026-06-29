@@ -505,9 +505,14 @@ export default function QuestionEditor() {
         typeof questionData.correctAnswer === "object" &&
         "answer" in questionData.correctAnswer
       ) {
-        setTfAnswer(
-          questionData.correctAnswer.answer === true ? "true" : "false",
-        );
+        const answerValue = questionData.correctAnswer.answer;
+        if (answerValue === true || answerValue === "A") {
+          setTfAnswer("true");
+        } else if (answerValue === false || answerValue === "B") {
+          setTfAnswer("false");
+        } else {
+          setTfAnswer(String(answerValue).toLowerCase() === "true" ? "true" : "false");
+        }
       } else {
         // Fallback for other formats
         setTfAnswer(questionData.correctAnswer ? "true" : "false");
@@ -570,7 +575,6 @@ export default function QuestionEditor() {
         : getDefaultOptions(),
     );
     setAiPrompt("");
-    setTab("edit");
     localStorage.removeItem(DRAFT_STORAGE_KEY);
   };
 
@@ -626,7 +630,12 @@ export default function QuestionEditor() {
                   acc[opt.id] = opt.text;
                   return acc;
                 }, {} as any) // Send as object {A: "text", B: "text"}
-            : {},
+            : questionType === "true_false"
+              ? {
+                  A: "True",
+                  B: "False",
+                }
+              : {},
         correctAnswer:
           questionType === "multiple_choice"
             ? {
@@ -636,7 +645,7 @@ export default function QuestionEditor() {
                     .join(","),
                 } // Format: {answer: "A,C"}
               : questionType === "true_false"
-                ? { answer: tfAnswer === "true" }
+                ? { answer: tfAnswer === "true" ? "A" : "B" }
                 : {},
       };
 

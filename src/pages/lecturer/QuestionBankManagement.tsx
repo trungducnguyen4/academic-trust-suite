@@ -779,15 +779,6 @@ export default function QuestionBankManagement() {
                               <ArrowUpDown className="h-3 w-3" />
                             </button>
                           </TableHead>
-                          <TableHead className="w-20 text-center">
-                            <button
-                              onClick={() => toggleSort("points")}
-                              className="flex items-center justify-center gap-1 hover:text-foreground w-full"
-                            >
-                              Points
-                              <ArrowUpDown className="h-3 w-3" />
-                            </button>
-                          </TableHead>
                           <TableHead className="w-32 text-center">Actions</TableHead>
                         </TableRow>
                       </TableHeader>
@@ -809,9 +800,6 @@ export default function QuestionBankManagement() {
                                 <span className={`text-xs font-medium px-2 py-1 rounded ${diff.color}`}>
                                   {diff.text}
                                 </span>
-                              </TableCell>
-                              <TableCell className="text-center text-sm">
-                                {question.points || 1}
                               </TableCell>
                               <TableCell className="text-center">
                                 <div className="flex gap-1 justify-center">

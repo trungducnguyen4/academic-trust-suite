@@ -77,7 +77,6 @@ interface ExamForm {
   course: string;
   description: string;
   duration: string;
-  timeLimitMinutes: string;
   maxAttempts: string;
   gradingStrategy: "HIGHEST" | "AVERAGE" | "FIRST_ATTEMPT" | "LAST_ATTEMPT";
   passingScore: string;
@@ -197,7 +196,6 @@ const createDefaultForm = (): ExamForm => {
     course: "",
     description: "",
     duration: "60",
-    timeLimitMinutes: "",
     maxAttempts: "1",
     gradingStrategy: "HIGHEST",
     passingScore: "50",
@@ -893,10 +891,6 @@ export default function CreateExam() {
         description: form.description.trim() || undefined,
         courseId: form.course,
         duration: parseNumericInput(form.duration, { min: 5, integer: true })!,
-        timeLimitMinutes:
-          form.timeLimitMinutes.trim() === ""
-            ? null
-            : parseNumericInput(form.timeLimitMinutes, { min: 1, integer: true }),
         passingScore: parseNumericInput(form.passingScore, {
           min: 0,
           max: 100,
@@ -1318,22 +1312,6 @@ export default function CreateExam() {
                         {numberErrors.passingScore}
                       </p>
                     ) : null}
-                  </div>
-                  <div>
-                    <Label>Time Limit (optional)</Label>
-                    <Input
-                      type="number"
-                      value={form.timeLimitMinutes}
-                      onChange={(e) =>
-                        set(
-                          "timeLimitMinutes",
-                          sanitizeNumericInput(e.target.value, { min: 1 }),
-                        )
-                      }
-                      min={1}
-                      placeholder="Leave empty to use duration"
-                      className="mt-1"
-                    />
                   </div>
                   <div>
                     <Label>Max Attempts</Label>
@@ -2620,12 +2598,6 @@ export default function CreateExam() {
                   },
                   { label: "Description", value: form.description || "—" },
                   { label: "Duration", value: `${form.duration} minutes` },
-                  {
-                    label: "Time Limit",
-                    value: form.timeLimitMinutes
-                      ? `${form.timeLimitMinutes} minutes`
-                      : "Unlimited within exam window",
-                  },
                   {
                     label: "Max Attempts (1-10)",
                     value: form.maxAttempts || "1",

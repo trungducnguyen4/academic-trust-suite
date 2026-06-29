@@ -238,11 +238,31 @@ function parseOptions(options: any): string[] {
   return ["Option A", "Option B", "Option C", "Option D"];
 }
 
+function resolveQuestionTitle(q: any, index: number): string {
+  const candidates = [
+    q?.title,
+    q?.name,
+    q?.stem,
+    q?.content,
+    q?.questionText,
+    q?.prompt,
+  ];
+
+  for (const candidate of candidates) {
+    const value = String(candidate ?? "").trim();
+    if (value && !/^Question\s+\d+$/i.test(value)) {
+      return value;
+    }
+  }
+
+  return `Question ${index + 1}`;
+}
+
 function mapBackendToUiQuestion(q: any, index: number): Question {
   const type = String(q?.type || "").toUpperCase();
   const base = {
     id: index + 1,
-    title: `Question ${index + 1}`,
+    title: resolveQuestionTitle(q, index),
     points: Number(q?.points ?? 1),
     content: String(q?.content || ""),
   };
@@ -985,6 +1005,7 @@ export default function ExamTaking() {
                   {questions.map((item, idx) => {
                     const answered = isAnswered(item, answers);
                     const isFlagged = Boolean(flagged[item.id]);
+                    const displayTitle = item.title.trim() || `Question ${idx + 1}`;
                     return (
                       <div
                         key={item.id}
@@ -992,7 +1013,7 @@ export default function ExamTaking() {
                       >
                         <div className="flex items-center justify-between gap-2 flex-wrap">
                           <div className="text-base font-semibold text-slate-900">
-                            Q{idx + 1}. {item.title}
+                            Q{idx + 1}. {displayTitle}
                           </div>
                           <div className="flex items-center gap-2">
                             <span
@@ -1010,6 +1031,12 @@ export default function ExamTaking() {
                             )}
                           </div>
                         </div>
+                        {item.type === "multi-choice" && (
+                          <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-violet-800">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Select all that apply
+                          </div>
+                        )}
                         <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
                           <p className="text-xs font-medium uppercase text-muted-foreground">
                             Your Answer
@@ -1022,11 +1049,11 @@ export default function ExamTaking() {
                     );
                   })}
 
-                  <div className="hidden rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-3 text-sm">
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-3 text-sm">
                     Please review all information carefully before submitting your exam.
                   </div>
 
-                  <div className="hidden items-center justify-between gap-3">
+                  <div className="flex items-center justify-between gap-3">
                     <Button variant="outline" onClick={leavePreview}>
                       Continue Editing
                     </Button>
@@ -1059,7 +1086,9 @@ export default function ExamTaking() {
                       </StatusBadge>
                     )}
                   </div>
-                  <h2 className="text-lg font-semibold mt-2">{q.title}</h2>
+                  <h2 className="text-lg font-semibold mt-2">
+                    {q.title.trim() || `Question ${current + 1}`}
+                  </h2>
                 </CardHeader>
 
                 <CardContent>
@@ -1213,7 +1242,10 @@ function MultiChoiceRenderer({
       <p className="text-sm text-muted-foreground leading-relaxed">
         {q.content}
       </p>
-      <p className="text-xs font-medium text-primary">Select all that apply.</p>
+      <div className="inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-violet-800">
+        <CheckCircle2 className="h-3.5 w-3.5" />
+        Select all that apply
+      </div>
       {q.options.map((opt, idx) => {
         const isSel = selected.includes(idx);
         return (
@@ -1223,7 +1255,7 @@ function MultiChoiceRenderer({
             className={`cursor-pointer w-full flex items-center gap-3 border rounded-lg px-4 py-3 transition-all
               ${
                 isSel
-                  ? "border-primary bg-primary/10"
+                  ? "border-violet-500 bg-violet-50 ring-1 ring-violet-300"
                   : "border-border bg-card hover:bg-secondary/30"
               }`}
           >
@@ -1368,50 +1400,63 @@ function MatchingRenderer({
     setAnswer(q.id, { ...val, [leftIdx]: rightVal });
 
   return (
-    <div>
-      <p className="text-sm text-muted-foreground leading-relaxed mb-4">
+    <div className="space-y-4">
+      <p className="text-sm text-muted-foreground leading-relaxed">
         {q.content}
       </p>
-      <div className="space-y-3">
-        {q.left.map((leftItem, i) => (
-          <div key={i} className="flex items-center gap-2">
-            {/* Left concept */}
-            <div className="flex-1 min-w-0 bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg px-4 py-2.5 text-sm font-medium text-blue-800 dark:text-blue-200">
-              {leftItem}
-            </div>
-            {/* Arrow */}
-            <div className="flex items-center gap-1 text-muted-foreground shrink-0 text-xs">
-              <div className="w-4 border-t-2 border-dashed border-muted-foreground/40" />
-              →
-              <div className="w-4 border-t-2 border-dashed border-muted-foreground/40" />
-            </div>
-            {/* Right dropdown */}
-            <div className="flex-1 min-w-0">
-              <Select
-                value={val[i] ?? ""}
-                onValueChange={(v) => setMatch(i, v)}
-              >
-                <SelectTrigger
-                  className={`text-sm ${val[i] ? "border-green-500 text-green-700" : ""}`}
-                >
-                  <SelectValue placeholder="Select match…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {q.right.map((rightItem, j) => (
-                    <SelectItem key={j} value={rightItem} className="text-sm">
-                      {rightItem}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+      <div className="rounded-xl border border-slate-200 bg-slate-50/80 p-4">
+        <div className="grid gap-3 sm:grid-cols-2">
+          <div className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-blue-700">
+            Left column
           </div>
-        ))}
+          <div className="rounded-lg border border-violet-100 bg-violet-50 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-violet-700">
+            Match with
+          </div>
+        </div>
+        <div className="mt-4 space-y-3">
+          {q.left.map((leftItem, i) => (
+            <div
+              key={`${leftItem}-${i}`}
+              className="grid gap-3 sm:grid-cols-[minmax(0,1.2fr)_minmax(0,0.9fr)] sm:items-center"
+            >
+              <div className="flex items-center gap-3 rounded-lg border border-blue-200 bg-white px-4 py-3 shadow-sm">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-blue-100 text-xs font-bold text-blue-700">
+                  {i + 1}
+                </span>
+                <span className="text-sm font-medium text-slate-900">
+                  {leftItem}
+                </span>
+              </div>
+              <div className="min-w-0">
+                <Select
+                  value={val[i] ?? ""}
+                  onValueChange={(v) => setMatch(i, v)}
+                >
+                  <SelectTrigger
+                    className={`h-12 text-sm ${
+                      val[i]
+                        ? "border-violet-500 bg-violet-50 text-slate-900 ring-1 ring-violet-200"
+                        : "border-slate-300 bg-white"
+                    }`}
+                  >
+                    <SelectValue placeholder="Select a match" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {q.right.map((rightItem, j) => (
+                      <SelectItem key={j} value={rightItem} className="text-sm">
+                        {rightItem}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
 }
-
 /** 6. Find the Error */
 function FindErrorRenderer({
   q,
@@ -1564,3 +1609,4 @@ function ShortAnswerRenderer({
     </div>
   );
 }
+

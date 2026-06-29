@@ -99,11 +99,6 @@ type IntelligencePayload = {
     suggestion: string;
     action?: { path: string; params?: Record<string, string> };
   }>;
-  trackingPlan?: {
-    experimentName: string;
-    primaryMetrics: string[];
-    eventKeys: string[];
-  };
 };
 
 function toQuery(params?: Record<string, string>) {
@@ -501,26 +496,6 @@ export default function ExamAnalytics() {
               </Card>
             </div>
 
-            <Card className="overflow-hidden border-slate-200/70 bg-gradient-to-br from-slate-50/70 to-background">
-              <CardHeader>
-                <CardTitle className="text-slate-900">Experiment Tracking (Sprint 4)</CardTitle>
-                <CardDescription>{data.trackingPlan?.experimentName || "analytics-practice-loop-v1"}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-2 text-sm">
-                <p className="font-medium">Primary metrics</p>
-                <ul className="list-disc pl-5 text-muted-foreground">
-                  {(data.trackingPlan?.primaryMetrics || []).map((m) => (
-                    <li key={m}>{m}</li>
-                  ))}
-                </ul>
-                <p className="font-medium pt-2">Event keys</p>
-                <ul className="list-disc pl-5 text-muted-foreground">
-                  {(data.trackingPlan?.eventKeys || []).map((e) => (
-                    <li key={e}>{e}</li>
-                  ))}
-                </ul>
-              </CardContent>
-            </Card>
           </div>
         )}
       </AdminPageShell>

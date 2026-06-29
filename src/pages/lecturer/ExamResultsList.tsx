@@ -224,15 +224,6 @@ export default function ExamResultsList() {
             </p>
           </div>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-            <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search by Name or ID"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="min-w-[240px] bg-background/90 pl-9 shadow-sm"
-              />
-            </div>
             <Button onClick={() => handleExport("csv")} className="shadow-sm">
               Export CSV
             </Button>
@@ -360,6 +351,7 @@ export default function ExamResultsList() {
                   </p>
                 </div>
               </div>
+
             </CardContent>
           </Card>
 
@@ -411,6 +403,17 @@ export default function ExamResultsList() {
 
         <Card className="overflow-hidden border-slate-200/80 shadow-[0_18px_40px_-28px_rgba(15,23,42,0.35)]">
           <CardContent className="p-0">
+            <div className="border-b border-slate-200/80 bg-slate-50/70 px-5 py-4">
+              <div className="relative max-w-xl">
+                <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  placeholder="Search by Name or ID"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="min-w-0 bg-background/90 pl-9 shadow-sm"
+                />
+              </div>
+            </div>
             <div className="overflow-x-auto">
               <Table className="border-separate border-spacing-0">
                 <TableHeader className="bg-slate-50/80">

@@ -2138,9 +2138,16 @@ export class SubmissionsService {
       }))
       .sort((a, b) => b.avgTimeSeconds - a.avgTimeSeconds);
 
+    const mostIncorrectLimit = Math.min(8, Math.max(5, Math.round(questionMetrics.length * 0.2)));
     const mostIncorrectQuestions = [...questionMetrics]
-      .sort((a, b) => b.incorrectRate - a.incorrectRate)
-      .slice(0, 10);
+      .sort((a, b) => {
+        const incorrectDelta = b.incorrectRate - a.incorrectRate;
+        if (incorrectDelta !== 0) return incorrectDelta;
+        const skipDelta = b.skipRate - a.skipRate;
+        if (skipDelta !== 0) return skipDelta;
+        return b.flaggedCount - a.flaggedCount;
+      })
+      .slice(0, mostIncorrectLimit);
     const mostFlaggedQuestions = [...questionMetrics]
       .filter((q) => q.flaggedCount > 0)
       .sort((a, b) => b.flaggedCount - a.flaggedCount)
@@ -2203,7 +2210,12 @@ export class SubmissionsService {
 
     const creatorQualityAlerts = questionMetrics
       .filter((q) => q.incorrectRate >= 75 || q.skipRate >= 50 || q.flaggedCount >= 3)
-      .slice(0, 8)
+      .sort((a, b) => {
+        const severityA = (a.incorrectRate * 0.6) + (a.skipRate * 0.25) + (a.flaggedCount * 8);
+        const severityB = (b.incorrectRate * 0.6) + (b.skipRate * 0.25) + (b.flaggedCount * 8);
+        return severityB - severityA;
+      })
+      .slice(0, 5)
       .map((q) => ({
         questionId: q.questionId,
         questionLabel: `Q${q.orderIndex + 1}`,
