@@ -1,3 +1,5 @@
+"use client";
+
 import { DashboardLayout } from '@/components/layout/DashboardLayout';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -17,7 +19,7 @@ import {
   ExternalLink,
   MessageSquare,
 } from 'lucide-react';
-import type { FlaggedSubmission, IntegrityReason } from '@/pages/admin/IntegrityOverview';
+import type { FlaggedSubmission, IntegrityReason } from '@/features/admin/IntegrityOverview';
 import { useState } from 'react';
 
 interface IntegrityCaseDetailProps {
@@ -374,3 +376,5 @@ export function IntegrityCaseDetail({ submission, onBack }: IntegrityCaseDetailP
     </DashboardLayout>
   );
 }
+
+

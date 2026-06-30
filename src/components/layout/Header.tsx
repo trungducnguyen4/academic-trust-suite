@@ -1,4 +1,6 @@
-import { Link } from 'react-router-dom';
+"use client";
+
+import Link from "next/link";
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/contexts/AuthContext';
 import { LogOut, User, GraduationCap } from 'lucide-react';
@@ -18,7 +20,7 @@ export function Header() {
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background shadow-sm">
       <div className="container flex h-14 items-center justify-between">
-        <Link to="/" className="flex items-center gap-2 font-bold text-foreground">
+        <Link href="/" className="flex items-center gap-2 font-bold text-foreground">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <GraduationCap className="h-3.5 w-3.5" />
           </div>
@@ -46,7 +48,7 @@ export function Header() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem asChild>
-                  <Link to="/profile" className="flex items-center">
+                  <Link href="/profile" className="flex items-center">
                     <User className="mr-2 h-4 w-4" />
                     Profile
                   </Link>
@@ -60,7 +62,7 @@ export function Header() {
             </DropdownMenu>
           ) : (
             <Button asChild variant="outline" size="sm" className="px-5 text-sm">
-              <Link to="/login">Sign in/up</Link>
+              <Link href="/login">Sign in/up</Link>
             </Button>
           )}
         </nav>
@@ -68,3 +70,6 @@ export function Header() {
     </header>
   );
 }
+
+
+

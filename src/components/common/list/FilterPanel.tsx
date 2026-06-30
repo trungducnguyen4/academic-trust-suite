@@ -1,3 +1,5 @@
+"use client";
+
 import { useState } from "react";
 import { ChevronDown, Filter, Search as SearchIcon } from "lucide-react";
 
@@ -700,3 +702,4 @@ export function FilterPanel({
     </Popover>
   );
 }
+

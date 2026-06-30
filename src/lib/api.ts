@@ -1,6 +1,12 @@
 import { CourseTerm } from './course-term';
 
-const rawApiBaseUrl = import.meta.env.VITE_API_BASE_URL as string | undefined;
+const rawApiBaseUrl =
+  process.env.NEXT_PUBLIC_API_BASE_URL ||
+  (typeof import.meta !== "undefined"
+    ? ((import.meta as { env?: { VITE_API_BASE_URL?: string } }).env?.VITE_API_BASE_URL as
+        | string
+        | undefined)
+    : undefined);
 
 export const API_BASE_URL = (rawApiBaseUrl?.trim() || 'http://localhost:3001/api').replace(/\/$/, '');
 

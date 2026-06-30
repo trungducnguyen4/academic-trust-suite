@@ -1,3 +1,5 @@
+"use client";
+
 import {
   DateRangeValue,
   FilterChip,
@@ -182,3 +184,4 @@ export const getFilterChips = (
     return [];
   });
 };
+

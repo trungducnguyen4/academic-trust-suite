@@ -17,6 +17,9 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "paths": {
+      "@/features/*": [
+        "./src/features/*"
+      ],
       "@/*": [
         "./src/*"
       ]
@@ -30,6 +33,7 @@
     "useDefineForClassFields": true
   },
   "include": [
-    "src"
+    "src",
+    "next-env.d.ts"
   ]
 }

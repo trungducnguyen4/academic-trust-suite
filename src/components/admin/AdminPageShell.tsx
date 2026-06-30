@@ -1,3 +1,5 @@
+"use client";
+
 import { ReactNode } from "react";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 import { cn } from "@/lib/utils";
@@ -29,3 +31,4 @@ export function AdminPageShell({
     </div>
   );
 }
+
