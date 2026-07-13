@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { GoogleGenerativeAI } from '@google/generative-ai';
+import OpenAI from 'openai';
 import {
   buildExamTrustPromptHeader,
   ExamTrustAiContext,
@@ -12,11 +13,13 @@ import {
 export class AiService {
   private readonly logger = new Logger(AiService.name);
   private genAI: GoogleGenerativeAI;
+  private nvidiaAI: OpenAI;
   private model: any;
   private provider: string;
   private localUrl: string | undefined;
   private ollamaUrl: string;
   private ollamaModel: string;
+  private nvidiaModel: string;
   private appName: string;
   private defaultLanguage: string;
   private ollamaTemperature: number;
@@ -30,6 +33,7 @@ export class AiService {
     this.localUrl = this.configService.get<string>('AI_LOCAL_URL') || undefined;
     this.ollamaUrl = this.configService.get<string>('AI_OLLAMA_URL') || 'http://localhost:11434';
     this.ollamaModel = this.configService.get<string>('AI_OLLAMA_MODEL') || 'gemma3:4b';
+    this.nvidiaModel = this.configService.get<string>('AI_NVIDIA_MODEL') || 'z-ai/glm-5.2';
     this.appName = this.configService.get<string>('AI_APP_NAME') || 'Academic Trust Suite';
     this.defaultLanguage = this.configService.get<string>('AI_DEFAULT_LANGUAGE') || 'vi';
     this.ollamaTemperature = Number(this.configService.get<string>('AI_OLLAMA_TEMPERATURE') || 0.2);
@@ -45,6 +49,17 @@ export class AiService {
       this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     } else if (this.provider === 'ollama') {
       this.logger.log(`AI provider: Ollama @ ${this.ollamaUrl} (model: ${this.ollamaModel})`);
+    } else if (this.provider === 'nvidia') {
+      const nvidiaApiKey = this.configService.get<string>('NVIDIA_API_KEY');
+      const nvidiaBaseUrl = this.configService.get<string>('AI_NVIDIA_BASE_URL') || 'https://integrate.api.nvidia.com/v1';
+      if (!nvidiaApiKey) {
+        this.logger.warn('NVIDIA_API_KEY not set. NVIDIA AI features will not work.');
+      }
+      this.nvidiaAI = new OpenAI({
+        apiKey: nvidiaApiKey || '',
+        baseURL: nvidiaBaseUrl,
+      });
+      this.logger.log(`AI provider: NVIDIA @ ${nvidiaBaseUrl} (model: ${this.nvidiaModel})`);
     } else {
       this.logger.log(`AI provider set to '${this.provider}'. Using local/mock mode.`);
     }
@@ -131,6 +146,8 @@ Rules:
           systemPrompt,
           this.buildOllamaOptions('question_generation'),
         );
+      } else if (this.provider === 'nvidia') {
+        responseText = await this._callNvidia(systemPrompt);
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -283,6 +300,8 @@ ${typeInstruction}
           systemPrompt,
           this.buildOllamaOptions('exam_generation'),
         );
+      } else if (this.provider === 'nvidia') {
+        responseText = await this._callNvidia(systemPrompt);
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -451,6 +470,8 @@ Rules:
           prompt,
           this.buildOllamaOptions('topic_matching'),
         );
+      } else if (this.provider === 'nvidia') {
+        responseText = await this._callNvidia(prompt);
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -518,6 +539,24 @@ Rules:
     }
     const data: any = await resp.json();
     return data.response || data.choices?.[0]?.text || '';
+  }
+
+  private async _callNvidia(prompt: string): Promise<string> {
+    const completion = await this.nvidiaAI.chat.completions.create({
+      model: this.nvidiaModel,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 1,
+      top_p: 1,
+      max_tokens: 16384,
+      seed: 42,
+      stream: true,
+    });
+
+    let text = '';
+    for await (const chunk of completion as any) {
+      text += chunk.choices?.[0]?.delta?.content || '';
+    }
+    return text;
   }
 
   private buildOllamaOptions(useCase: 'question_generation' | 'exam_generation' | 'topic_matching' | 'grading_support') {

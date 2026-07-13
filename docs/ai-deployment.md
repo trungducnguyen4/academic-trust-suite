@@ -2,6 +2,19 @@
 
 This project uses a separate AI worker and a Redis queue, so exam flow is not blocked by AI generation.
 
+## NVIDIA provider
+
+Use these settings to call the NVIDIA OpenAI-compatible API:
+
+- `AI_PROVIDER=nvidia`
+- `NVIDIA_API_KEY=<your NVIDIA API key>`
+- `AI_NVIDIA_BASE_URL=https://integrate.api.nvidia.com/v1`
+- `AI_NVIDIA_MODEL=z-ai/glm-5.2`
+- `AI_APP_NAME=ExamTrust`
+- `AI_DEFAULT_LANGUAGE=vi`
+
+The backend collects the streamed response and then parses it as the existing JSON contract used by question generation.
+
 ## Recommended Ollama profile
 
 - `AI_PROVIDER=ollama`

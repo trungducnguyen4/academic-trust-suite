@@ -25,9 +25,12 @@ export class AiJobsService {
     const provider = process.env.AI_PROVIDER || 'google';
     const ollamaModel = process.env.AI_OLLAMA_MODEL || 'gemma3:4b';
     const googleModel = process.env.AI_MODEL || 'gemini-2.0-flash';
+    const nvidiaModel = process.env.AI_NVIDIA_MODEL || 'z-ai/glm-5.2';
     const model =
       provider === 'ollama'
         ? ollamaModel
+        : provider === 'nvidia'
+          ? nvidiaModel
         : params.task === 'single-question' || params.task === 'exam-questions'
           ? googleModel
           : ollamaModel;
