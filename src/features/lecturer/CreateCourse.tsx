@@ -99,11 +99,9 @@ import {
 interface Course {
   id: string;
   code: string;
-  subjectCode?: string;
   name: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
   description?: string;
   credits?: number;
   students: number;
@@ -115,12 +113,10 @@ interface Course {
 interface APICourse {
   id: string;
   code: string;
-  subjectCode?: string;
   name: string;
   description?: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
   credits?: number;
   status?: string;
   createdAt: string;
@@ -198,7 +194,6 @@ export default function CreateCourse() {
   // Form state
   const [newCourse, setNewCourse] = useState({
     name: "",
-    subjectCode: "",
     academicYear: defaultAcademicYear,
     term: defaultTerm,
     description: "",
@@ -207,7 +202,6 @@ export default function CreateCourse() {
 
   const [editCourse, setEditCourse] = useState({
     code: "",
-    subjectCode: "",
     name: "",
     academicYear: defaultAcademicYear,
     term: defaultTerm,
@@ -252,11 +246,9 @@ export default function CreateCourse() {
         const mapped: Course[] = data.map((c: APICourse) => ({
           id: c.id,
           code: c.code,
-          subjectCode: c.subjectCode,
           name: c.name,
           academicYear: c.academicYear || undefined,
           term: c.term || undefined,
-          semester: c.semester || undefined,
           description: c.description,
           credits: c.credits,
           // Accept multiple possible shapes returned by the backend:
@@ -346,7 +338,6 @@ export default function CreateCourse() {
       const termLabel = formatCourseTerm(
         course.academicYear,
         course.term,
-        course.semester,
       );
       const matchesSearch = !normalizedSearch
         ? true
@@ -592,7 +583,6 @@ export default function CreateCourse() {
     try {
       const created = await api.createCourse({
         name: newCourse.name,
-        subjectCode: newCourse.subjectCode || undefined,
         description: newCourse.description || undefined,
         credits: parseNumericInput(newCourse.credits, { min: 1, max: 10 }),
         academicYear: newCourse.academicYear,
@@ -601,7 +591,6 @@ export default function CreateCourse() {
       const mapped: Course = {
         id: created.id,
         code: created.code,
-        subjectCode: created.subjectCode,
         name: created.name,
         academicYear: newCourse.academicYear,
         term: newCourse.term,
@@ -645,7 +634,6 @@ export default function CreateCourse() {
     try {
       const payload = {
         name: newCourse.name,
-        subjectCode: newCourse.subjectCode || undefined,
         description: newCourse.description || undefined,
         credits: parseNumericInput(newCourse.credits, { min: 1, max: 10 }),
         academicYear: newCourse.academicYear,
@@ -660,11 +648,9 @@ export default function CreateCourse() {
               ? {
                   ...course,
                   code: updated.code,
-                  subjectCode: updated.subjectCode,
                   name: updated.name,
                   academicYear: updated.academicYear || course.academicYear,
                   term: updated.term || course.term,
-                  semester: updated.semester || course.semester,
                   description: updated.description,
                   credits: updated.credits,
                 }
@@ -678,7 +664,6 @@ export default function CreateCourse() {
         const mapped: Course = {
           id: created.id,
           code: created.code,
-          subjectCode: created.subjectCode,
           name: created.name,
           academicYear: newCourse.academicYear,
           term: newCourse.term,
@@ -716,7 +701,6 @@ export default function CreateCourse() {
     setEditingCourseId(course.id);
     setEditCourse({
       code: course.code,
-      subjectCode: course.subjectCode || "",
       name: course.name,
       academicYear: course.academicYear || defaultAcademicYear,
       term: course.term || defaultTerm,
@@ -741,7 +725,6 @@ export default function CreateCourse() {
     try {
       const updated = await api.updateCourse(editingCourseId, {
         name: editCourse.name,
-        subjectCode: editCourse.subjectCode || undefined,
         academicYear: editCourse.academicYear || undefined,
         term: editCourse.term || undefined,
         description: editCourse.description || undefined,
@@ -754,11 +737,9 @@ export default function CreateCourse() {
             ? {
                 ...course,
                 code: updated.code,
-                subjectCode: updated.subjectCode,
                 name: updated.name,
                 academicYear: updated.academicYear || course.academicYear,
                 term: updated.term || course.term,
-                semester: updated.semester || course.semester,
                 description: updated.description,
                 credits: updated.credits,
               }
@@ -892,7 +873,6 @@ export default function CreateCourse() {
       setCreatedCourseCode("");
       setNewCourse({
         name: "",
-        subjectCode: "",
         academicYear: defaultAcademicYear,
         term: defaultTerm,
         description: "",
@@ -1027,22 +1007,6 @@ export default function CreateCourse() {
                           disabled
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="subjectCode">Subject code</Label>
-                        <Input
-                          id="subjectCode"
-                          placeholder="e.g., CS101"
-                          value={newCourse.subjectCode}
-                          onChange={(e) =>
-                            setNewCourse({
-                              ...newCourse,
-                              subjectCode: e.target.value,
-                            })
-                          }
-                        />
-                      </div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
                         <Label htmlFor="academicYear">Academic year</Label>
                         <Select
@@ -1669,19 +1633,6 @@ export default function CreateCourse() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="edit-subjectCode">Subject code</Label>
-                    <Input
-                      id="edit-subjectCode"
-                      value={editCourse.subjectCode}
-                      onChange={(e) =>
-                        setEditCourse((prev) => ({
-                          ...prev,
-                          subjectCode: e.target.value,
-                        }))
-                      }
-                    />
-                  </div>
-                  <div className="space-y-2">
                     <Label htmlFor="edit-academicYear">Academic year</Label>
                     <Select
                       value={editCourse.academicYear}
@@ -1924,7 +1875,6 @@ export default function CreateCourse() {
                         {formatCourseTerm(
                           course.academicYear,
                           course.term,
-                          course.semester,
                         )}
                       </TableCell>
                       <TableCell className="text-center">

@@ -97,7 +97,6 @@ interface Course {
   name?: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
 }
 
 export default function CourseDetail() {
@@ -189,7 +188,6 @@ export default function CourseDetail() {
             name: courseRes.name,
             academicYear: courseRes.academicYear,
             term: courseRes.term,
-            semester: courseRes.semester,
           });
           setResolvedCourseId(courseRes.id);
         } else {
@@ -509,7 +507,6 @@ export default function CourseDetail() {
             {formatCourseTerm(
               course?.academicYear,
               course?.term,
-              course?.semester,
             )} • {students.length} Students Enrolled
           </p>
         </div>

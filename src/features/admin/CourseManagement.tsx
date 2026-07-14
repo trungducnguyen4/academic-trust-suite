@@ -89,7 +89,6 @@ interface CourseItem {
   name: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
   description?: string;
   credits?: number;
   status?: string;
@@ -280,7 +279,6 @@ export default function AdminCourseManagement() {
       const termLabel = formatCourseTerm(
         course.academicYear,
         course.term,
-        course.semester,
       );
       const matchesSearch = !normalizedSearch
         ? true
@@ -823,7 +821,6 @@ export default function AdminCourseManagement() {
                           {formatCourseTerm(
                             course.academicYear,
                             course.term,
-                            course.semester,
                           )}
                         </TableCell>
                         <TableCell>

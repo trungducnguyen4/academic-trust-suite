@@ -79,7 +79,6 @@ type StudentCourse = {
   description?: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
   credits?: number;
   progress?: number;
   lastAccessed?: string;
@@ -330,7 +329,6 @@ export default function StudentDashboard() {
                       const termText = formatCourseTerm(
                         course.academicYear,
                         course.term,
-                        course.semester,
                       );
                       const progressValue =
                         typeof course.progress === "number"

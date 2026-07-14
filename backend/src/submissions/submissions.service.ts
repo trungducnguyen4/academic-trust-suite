@@ -1,5 +1,5 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { isIpInAnyCidr, normalizeIp } from '../common/utils/ip.utils';
 import { AccessPolicyService } from '../common/services/access-policy.service';
@@ -60,6 +60,31 @@ export class SubmissionsService {
   private clampPercent(value: number): number {
     if (!Number.isFinite(value)) return 0;
     return Math.max(0, Math.min(100, value));
+  }
+
+  private seededRandom(seed: string): () => number {
+    let counter = 0;
+
+    return () => {
+      const hash = createHash('sha256')
+        .update(seed)
+        .update(':')
+        .update(String(counter++))
+        .digest();
+      return hash.readUInt32BE(0) / 0x100000000;
+    };
+  }
+
+  private shuffleWithSeed<T>(items: T[], seed: string): T[] {
+    const result = [...items];
+    const random = this.seededRandom(seed);
+
+    for (let i = result.length - 1; i > 0; i--) {
+      const j = Math.floor(random() * (i + 1));
+      [result[i], result[j]] = [result[j], result[i]];
+    }
+
+    return result;
   }
 
   private parseLogDetails(details: string | null | undefined): any {
@@ -191,22 +216,22 @@ export class SubmissionsService {
     });
 
     const examSettings: any = exam.settings || {};
-    const snapshotQuestions = Array.isArray(latestSnapshot?.questions)
+    let snapshotQuestions = Array.isArray(latestSnapshot?.questions)
       ? [...latestSnapshot.questions]
       : [];
     const shouldShuffleQuestions = Boolean(
       examSettings?.shuffleQuestions ||
         examSettings?.questionSelectionConfig?.shuffleQuestions,
     );
+    const randomizationSeed = randomUUID();
 
     if (shouldShuffleQuestions) {
-      for (let i = snapshotQuestions.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [snapshotQuestions[i], snapshotQuestions[j]] = [snapshotQuestions[j], snapshotQuestions[i]];
-      }
+      snapshotQuestions = this.shuffleWithSeed(
+        snapshotQuestions,
+        `${randomizationSeed}:questions`,
+      );
     }
 
-    const randomizationSeed = randomUUID();
     const snapshotPayload = {
       examId: exam.id,
       examSnapshotId: latestSnapshot?.id ?? null,

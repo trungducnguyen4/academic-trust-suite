@@ -40,7 +40,6 @@ type StudentCourse = {
   description?: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
   credits?: number;
   progress?: number;
   lastAccessed?: string;
@@ -100,7 +99,7 @@ export default function StudentCourses() {
       new Set(
         courses
           .map((course) =>
-            formatCourseTerm(course.academicYear, course.term, course.semester),
+            formatCourseTerm(course.academicYear, course.term),
           )
           .filter(Boolean),
       ),
@@ -147,7 +146,6 @@ export default function StudentCourses() {
       const termText = formatCourseTerm(
         course.academicYear,
         course.term,
-        course.semester,
       );
 
       const searchMatched = !normalizedSearch
@@ -318,7 +316,6 @@ export default function StudentCourses() {
                     const termText = formatCourseTerm(
                       course.academicYear,
                       course.term,
-                      course.semester,
                     );
                     const progressValue =
                       typeof course.progress === "number"

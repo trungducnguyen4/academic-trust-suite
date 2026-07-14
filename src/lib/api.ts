@@ -225,7 +225,6 @@ class ApiClient {
 
   async createCourse(data: {
     name: string;
-    subjectCode?: string;
     description?: string;
     credits?: number;
     academicYear: string;

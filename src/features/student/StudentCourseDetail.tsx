@@ -40,7 +40,6 @@ type Course = {
   description?: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
   credits?: number;
 };
 
@@ -246,7 +245,6 @@ export default function StudentCourseDetail() {
                 Term: {formatCourseTerm(
                   course?.academicYear,
                   course?.term,
-                  course?.semester,
                 )}
               </span>
               <span className="flex items-center gap-1">

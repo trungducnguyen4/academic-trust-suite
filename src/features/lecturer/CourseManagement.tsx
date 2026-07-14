@@ -59,7 +59,6 @@ interface Course {
   faculty?: string;
   academicYear?: string;
   term?: CourseTerm;
-  semester?: string;
   enrolledStudents?: number;
   totalStudents?: number;
   progress?: number;
@@ -132,7 +131,6 @@ export default function CourseManagement() {
         department: c.department,
         academicYear: c.academicYear,
         term: c.term,
-        semester: c.semester,
         enrolledStudents: c.enrolledStudents ?? c._count?.enrollments ?? 0,
         totalStudents: c.totalStudents ?? c._count?.enrollments ?? 0,
         progress: c.progress ?? 0,
@@ -244,7 +242,6 @@ export default function CourseManagement() {
       const termLabel = formatCourseTerm(
         course.academicYear,
         course.term,
-        course.semester,
       );
       const searchMatched = !normalizedSearch
         ? true
