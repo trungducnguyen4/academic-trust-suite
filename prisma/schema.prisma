@@ -157,9 +157,7 @@ model User {
 model Course {
   id         String    @id @default(uuid())
   code       String    @unique
-  subjectCode String?
   name       String
-  semester   String?
   academicYear String?
   term       CourseTerm?
   description String?  @db.Text
@@ -181,7 +179,6 @@ model Course {
   questionCourseScopes QuestionCourseScope[]
 
   @@index([code])
-  @@index([subjectCode])
   @@index([lecturerId])
   @@map("courses")
 }

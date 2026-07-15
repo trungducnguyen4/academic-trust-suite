@@ -654,8 +654,6 @@ async function main() {
     where: { code: COURSE_CODE },
     update: {
       name: COURSE_NAME,
-      subjectCode: 'ATS101',
-      semester: 'Semester 2',
       academicYear: COURSE_ACADEMIC_YEAR,
       term: COURSE_TERM as any,
       credits: 3,
@@ -665,9 +663,7 @@ async function main() {
     },
     create: {
       code: COURSE_CODE,
-      subjectCode: 'ATS101',
       name: COURSE_NAME,
-      semester: 'Semester 2',
       academicYear: COURSE_ACADEMIC_YEAR,
       term: COURSE_TERM as any,
       credits: 3,

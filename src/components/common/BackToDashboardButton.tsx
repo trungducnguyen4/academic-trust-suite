@@ -1,7 +1,8 @@
+"use client";
+
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
-import { Link } from "react-router-dom";
-
+import Link from "next/link";
 type ButtonVariant =
   | "default"
   | "destructive"
@@ -33,10 +34,13 @@ export function BackToDashboardButton({
       className={`!mb-1 gap-2 text-muted-foreground ${className ?? ""}`.trim()}
       asChild
     >
-      <Link to={to}>
+      <Link href={to as any}>
         <ArrowLeft className="h-4 w-4" />
         {label}
       </Link>
     </Button>
   );
 }
+
+
+

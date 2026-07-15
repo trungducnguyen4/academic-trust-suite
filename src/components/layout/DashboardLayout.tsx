@@ -1,5 +1,8 @@
+"use client";
+
 import { ReactNode, useState, useEffect } from "react";
-import { Link, useLocation, Navigate, useNavigate } from "react-router-dom";
+import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { useNotifications } from "@/contexts/NotificationsContext";
 import { cn } from "@/lib/utils";
@@ -162,9 +165,9 @@ export function DashboardLayout({
   children,
   notifications = [],
 }: DashboardLayoutProps) {
-  const { user, isAuthenticated, logout } = useAuth();
-  const navigate = useNavigate();
-  const location = useLocation();
+  const { user, isAuthenticated, isLoading, logout } = useAuth();
+  const router = useRouter();
+  const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const {
@@ -194,7 +197,7 @@ export function DashboardLayout({
 
   useEffect(() => {
     setMobileOpen(false);
-  }, [location.pathname]);
+  }, [pathname]);
 
   useEffect(() => {
     if (mobileOpen) {
@@ -207,8 +210,14 @@ export function DashboardLayout({
     };
   }, [mobileOpen]);
 
-  if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />;
+  useEffect(() => {
+    if (!isLoading && (!isAuthenticated || !user)) {
+      router.replace("/login");
+    }
+  }, [isAuthenticated, isLoading, router, user]);
+
+  if (isLoading || !isAuthenticated || !user) {
+    return null;
   }
 
   const navItems =
@@ -262,11 +271,11 @@ export function DashboardLayout({
           </p>
         )}
         {navItems.map((item) => {
-          const isActive = location.pathname === item.href;
+          const isActive = pathname === item.href;
           const link = (
             <Link
               key={item.href}
-              to={item.href}
+              href={item.href as any}
               onClick={() => isMobile && setMobileOpen(false)}
               className={cn(
                 "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors duration-150",
@@ -475,7 +484,7 @@ export function DashboardLayout({
                               onClick={async () => {
                                 if (!item.isRead) await markAsRead(item.id);
                                 if (item.link) {
-                                  navigate(item.link);
+                                  router.push(item.link);
                                 }
                               }}
                             >
@@ -527,7 +536,7 @@ export function DashboardLayout({
                         <Button
                           variant="outline"
                           className="w-full h-8 text-xs"
-                          onClick={() => navigate("/notifications")}
+                          onClick={() => router.push("/notifications")}
                         >
                           Open full notifications
                         </Button>
@@ -567,7 +576,7 @@ export function DashboardLayout({
                   </DropdownMenuLabel>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem asChild>
-                    <Link to="/profile" className="flex items-center">
+                    <Link href="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
                       Profile
                     </Link>
@@ -595,3 +604,6 @@ export function DashboardLayout({
 }
 
 export { FileText };
+
+
+

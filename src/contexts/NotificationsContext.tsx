@@ -1,3 +1,5 @@
+"use client";
+
 import React, {
   createContext,
   useContext,
@@ -124,3 +126,4 @@ export function useNotifications() {
   }
   return context;
 }
+

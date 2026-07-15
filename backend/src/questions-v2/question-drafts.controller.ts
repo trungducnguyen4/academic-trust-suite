@@ -101,6 +101,11 @@ export class QuestionDraftsController {
     return this.questionsService.getQuestionStats(req.user);
   }
 
+  @Get('history')
+  getQuestionHistory(@Query('courseId') courseId: string | undefined, @Request() req) {
+    return this.questionsService.getQuestionHistory({ courseId }, req.user);
+  }
+
   @Get(':id')
   findQuestionById(@Param('id') id: string, @Request() req) {
     return this.questionsService.findQuestionById(id, req.user);

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useCallback, useRef } from "react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
@@ -723,3 +725,4 @@ export function BulkStudentImport({ courseId, onImportSuccess }: BulkStudentImpo
 
   return null;
 }
+

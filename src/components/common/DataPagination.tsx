@@ -1,5 +1,7 @@
+"use client";
+
 import { useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ChevronLeft, ChevronRight } from "lucide-react";
@@ -45,7 +47,9 @@ export function DataPagination({
   urlParamKey = "page",
 }: DataPaginationProps) {
   const effectiveTotalPages = Math.max(1, totalPages);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const searchParams = useSearchParams();
+  const pathname = usePathname();
+  const router = useRouter();
   const [inputValue, setInputValue] = useState(String(currentPage));
 
   // Keep input in sync with currentPage prop
@@ -78,21 +82,17 @@ export function DataPagination({
       onPageChange(clamped);
 
       if (syncUrl) {
-        setSearchParams(
-          (prev) => {
-            const next = new URLSearchParams(prev);
-            if (clamped <= 1) {
-              next.delete(urlParamKey);
-            } else {
-              next.set(urlParamKey, String(clamped));
-            }
-            return next;
-          },
-          { replace: true },
-        );
+        const next = new URLSearchParams(searchParams.toString());
+        if (clamped <= 1) {
+          next.delete(urlParamKey);
+        } else {
+          next.set(urlParamKey, String(clamped));
+        }
+        const query = next.toString();
+        router.replace((query ? `${pathname}?${query}` : pathname) as any);
       }
     },
-    [effectiveTotalPages, onPageChange, syncUrl, setSearchParams, urlParamKey],
+    [effectiveTotalPages, onPageChange, pathname, router, searchParams, syncUrl, urlParamKey],
   );
 
   const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -175,3 +175,4 @@ export function DataPagination({
     </div>
   );
 }
+

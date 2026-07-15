@@ -1,3 +1,5 @@
+"use client";
+
 import type { SortOrder } from "./SortButton";
 
 export interface SortableItem {
@@ -105,3 +107,4 @@ export function createSortComparator<T extends SortableItem>(
     return order === "asc" ? comparison : -comparison;
   };
 }
+

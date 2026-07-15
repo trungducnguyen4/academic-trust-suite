@@ -1,3 +1,5 @@
+"use client";
+
 import React, { createContext, useContext, useState, useCallback, ReactNode, useEffect } from 'react';
 import { NotificationItem } from '@/components/common/NotificationPopup';
 
@@ -57,3 +59,4 @@ export function useNotificationPopup() {
   }
   return context;
 }
+

@@ -73,13 +73,12 @@ export class AIGenerationProcessor {
     if (courseId) {
       const course = await this.prisma.course.findUnique({
         where: { id: courseId },
-        select: { id: true, code: true, name: true, subjectCode: true },
+        select: { id: true, code: true, name: true },
       });
       if (course) {
         baseContext.courseId = course.id;
         baseContext.courseCode = course.code;
         baseContext.courseName = course.name;
-        baseContext.subjectCode = course.subjectCode || undefined;
       }
     }
 
@@ -99,7 +98,7 @@ export class AIGenerationProcessor {
               type: true,
               courseId: true,
               course: {
-                select: { id: true, code: true, name: true, subjectCode: true },
+                select: { id: true, code: true, name: true },
               },
             },
           },
@@ -116,7 +115,6 @@ export class AIGenerationProcessor {
           baseContext.courseId = version.question.course.id;
           baseContext.courseCode = version.question.course.code;
           baseContext.courseName = version.question.course.name;
-          baseContext.subjectCode = version.question.course.subjectCode || undefined;
         }
       }
     }
@@ -136,7 +134,7 @@ export class AIGenerationProcessor {
               type: true,
               courseId: true,
               course: {
-                select: { id: true, code: true, name: true, subjectCode: true },
+                select: { id: true, code: true, name: true },
               },
             },
           },
@@ -157,7 +155,6 @@ export class AIGenerationProcessor {
           baseContext.courseId = draft.question.course.id;
           baseContext.courseCode = draft.question.course.code;
           baseContext.courseName = draft.question.course.name;
-          baseContext.subjectCode = draft.question.course.subjectCode || undefined;
         }
 
         const state = this.parseJson<any>(draft.state, {});
@@ -177,7 +174,7 @@ export class AIGenerationProcessor {
           mode: true,
           status: true,
           course: {
-            select: { id: true, code: true, name: true, subjectCode: true },
+            select: { id: true, code: true, name: true },
           },
         },
       });
@@ -191,7 +188,6 @@ export class AIGenerationProcessor {
           baseContext.courseId = exam.course.id;
           baseContext.courseCode = exam.course.code;
           baseContext.courseName = exam.course.name;
-          baseContext.subjectCode = exam.course.subjectCode || undefined;
         }
       }
     }

@@ -1,3 +1,5 @@
+"use client";
+
 import * as React from "react";
 import { cva, type VariantProps } from "class-variance-authority";
 
@@ -245,3 +247,4 @@ export const StatusBadge = React.forwardRef<HTMLSpanElement, StatusBadgeProps>(
 StatusBadge.displayName = "StatusBadge";
 
 export { statusBadgeVariants };
+

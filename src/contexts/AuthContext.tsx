@@ -1,3 +1,5 @@
+"use client";
+
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, AuthState } from '@/types/auth';
 import api from '@/lib/api';
@@ -153,3 +155,4 @@ export function useAuth() {
   }
   return context;
 }
+

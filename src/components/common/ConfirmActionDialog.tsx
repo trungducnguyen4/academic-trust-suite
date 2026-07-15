@@ -1,3 +1,5 @@
+"use client";
+
 import {
   AlertDialog,
   AlertDialogAction,
@@ -51,3 +53,4 @@ export function ConfirmActionDialog({
     </AlertDialog>
   );
 }
+

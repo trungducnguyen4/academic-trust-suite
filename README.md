@@ -1,78 +1,150 @@
-# Welcome to your Lovable project
+# Academic Trust Suite
 
-## Project info
+AI-supported academic assessment platform for graduation thesis and production-oriented MVP development.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Overview
 
-## How can I edit this code?
+Academic Trust Suite is an assessment platform focused on lecturer-driven exam workflows, per-student randomized exam instances, integrity tracking, question versioning, and AI-assisted question generation with instructor review.
 
-There are several ways of editing your application.
+The repository contains:
 
-**Use Lovable**
+- `src/`: Next.js App Router frontend
+- `backend/`: NestJS + Prisma backend API
+- `prisma/`: shared database schema, seed data, and migration files
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
+## Core Features
 
-Changes made via Lovable will be committed automatically to this repo.
+- Per-student randomized exam generation
+- Immutable exam snapshots after exam start
+- Question versioning for historical auditability
+- Integrity and anti-cheat tracking
+- AI-assisted question generation with lecturer review
+- Exam analytics and difficulty analysis
+- Offline-capable exam support
+- Seeded demo data for development and testing
 
-**Use your preferred IDE**
+## Tech Stack
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Frontend
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+- Next.js 15
+- React 18
+- TypeScript
+- Tailwind CSS
+- shadcn/ui
+- Radix UI
+- TanStack Query
+- React Hook Form
+- Zod
 
-Follow these steps:
+### Backend
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+- NestJS
+- Prisma
+- MySQL
+- Redis
+- JWT authentication
+- Swagger
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+### Supporting Tools
 
-# Step 3: Install the necessary dependencies.
-npm i
+- Docker
+- Nginx
+- Chart.js / Recharts
+- Sonner
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+## Project Structure
+
+```text
+.
+|-- src/                  # Next.js frontend
+|   |-- app/              # App Router routes and layouts
+|   |-- components/       # Shared UI components
+|   |-- contexts/         # React contexts
+|   |-- features/         # Feature-based screens and domain UI
+|   |-- hooks/            # Shared hooks
+|   |-- lib/              # Utilities and API helpers
+|   |-- types/            # Shared TypeScript types
+|   `-- exam-engine/      # Exam rendering / grading logic
+|-- backend/              # NestJS backend API
+|-- prisma/               # Schema, migrations, seed scripts
+`-- docs/                 # Supporting documentation
+```
+
+## Getting Started
+
+### Prerequisites
+
+- Node.js 18+ recommended
+- npm
+- MySQL
+- Redis
+
+### Install Frontend Dependencies
+
+```bash
+npm install
+```
+
+### Install Backend Dependencies
+
+```bash
+cd backend
+npm install
+```
+
+## Run Locally
+
+### Frontend
+
+```bash
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+### Backend
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+```bash
+cd backend
+npm run start:dev
+```
 
-**Use GitHub Codespaces**
+## Database
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+The Prisma schema, migrations, and seed scripts live in [`prisma/`](./prisma).
 
-## What technologies are used for this project?
+Common backend database commands:
 
-This project is built with:
+```bash
+cd backend
+npm run prisma:generate
+npm run prisma:migrate:dev
+npm run seed
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## Build
 
-## How can I deploy this project?
+### Frontend
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+```bash
+npm run build
+```
 
-## Can I connect a custom domain to my Lovable project?
+### Backend
 
-Yes, you can!
+```bash
+cd backend
+npm run build
+```
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+## Notes
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- The frontend uses Next.js App Router with `src/app` as the canonical route tree.
+- The older Vite / React Router setup has been removed.
+- Seed data is preserved and should not be deleted when extending the project.
+- The backend is designed to support auditability, analytics, and question versioning without resetting existing data.
 
-## Deploy docs
+## Documentation
 
-- [Cloud deploy for beginners](./docs/CLOUD_DEPLOY_FOR_BEGINNERS.md)
-- [Step-by-step deploy checklist](./docs/DEPLOY_CHECKLIST_STEP_BY_STEP.md)
+- [`backend/API_DOCUMENTATION.md`](./backend/API_DOCUMENTATION.md)
+- [`backend/EMAIL_SETUP.md`](./backend/EMAIL_SETUP.md)
+- [`backend/docs/question-v2-implementation-assets.md`](./backend/docs/question-v2-implementation-assets.md)

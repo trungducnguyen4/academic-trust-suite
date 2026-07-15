@@ -1,3 +1,5 @@
+"use client";
+
 import { AlertTriangle } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -73,3 +75,4 @@ export function ExamSecurityModal({
     </div>
   );
 }
+

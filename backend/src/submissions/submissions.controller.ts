@@ -113,6 +113,39 @@ export class SubmissionsController {
     return this.submissionsService.addLogs(id, addLogsDto.logs || [], req.user.id);
   }
 
+  @Get('integrity/cases')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  getIntegrityCases(
+    @Query('page') page?: string,
+    @Query('limit') limit?: string,
+    @Query('search') search?: string,
+    @Query('confidence') confidence?: string,
+    @Query('examTitle') examTitle?: string,
+    @Query('submittedFrom') submittedFrom?: string,
+    @Query('submittedTo') submittedTo?: string,
+    @Query('timeAnomaly') timeAnomaly?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.submissionsService.getIntegrityCases({
+      page,
+      limit,
+      search,
+      confidence,
+      examTitle,
+      submittedFrom,
+      submittedTo,
+      timeAnomaly,
+      status,
+    });
+  }
+
+  @Get(':id/timeline')
+  @UseGuards(JwtAuthGuard)
+  getSubmissionTimeline(@Param('id') id: string, @Request() req) {
+    return this.submissionsService.getSubmissionTimeline(id, req.user);
+  }
+
   @Get()
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')

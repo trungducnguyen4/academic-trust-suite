@@ -1,3 +1,5 @@
+"use client";
+
 export type TextFilterOperator = "contains" | "startsWith" | "equals";
 
 export type ListFilterOption = {
@@ -86,3 +88,4 @@ export type FilterChip = {
   label: string;
   valueLabel: string;
 };
+
