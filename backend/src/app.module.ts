@@ -16,6 +16,7 @@ import { SharedRedisModule } from './redis/redis.module';
 import { QueueModule } from './queue/queue.module';
 import { CacheModule } from './cache/cache.module';
 import { EventsModule } from './events/events.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { EventsModule } from './events/events.module';
     ExamLinksModule,
     NotificationsModule,
     QuestionsContractsModule,
+    AuditModule,
   ],
 })
 export class AppModule {}

@@ -529,6 +529,30 @@ class ApiClient {
     return this.request<any>(`/questions/ai-jobs/${jobId}`);
   }
 
+  async getQuestionHistory(filters?: { courseId?: string }) {
+    const params = new URLSearchParams();
+    if (filters?.courseId && filters.courseId !== 'all') params.append('courseId', filters.courseId);
+    const query = params.toString() ? `?${params.toString()}` : '';
+    return this.request<any>(`/questions/history${query}`);
+  }
+
+  async getAuditLogs(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    kind?: string;
+    severity?: string;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.kind && params.kind !== 'all') query.append('kind', params.kind);
+    if (params?.severity && params.severity !== 'all') query.append('severity', params.severity);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request<any>(`/audit-logs${suffix}`);
+  }
+
   async listQuestionTags(filters?: { search?: string; page?: number; limit?: number }) {
     const params = new URLSearchParams();
     if (filters?.search) params.append('search', filters.search);
@@ -783,8 +807,37 @@ class ApiClient {
     return this.request<any>(`/submissions/exam/${examId}/overview`);
   }
 
+  async getIntegrityCases(params?: {
+    page?: number;
+    limit?: number;
+    search?: string;
+    confidence?: string;
+    examTitle?: string;
+    submittedFrom?: string;
+    submittedTo?: string;
+    timeAnomaly?: boolean;
+    status?: string;
+  }) {
+    const query = new URLSearchParams();
+    if (params?.page) query.append('page', String(params.page));
+    if (params?.limit) query.append('limit', String(params.limit));
+    if (params?.search) query.append('search', params.search);
+    if (params?.confidence && params.confidence !== 'all') query.append('confidence', params.confidence);
+    if (params?.examTitle) query.append('examTitle', params.examTitle);
+    if (params?.submittedFrom) query.append('submittedFrom', params.submittedFrom);
+    if (params?.submittedTo) query.append('submittedTo', params.submittedTo);
+    if (typeof params?.timeAnomaly === 'boolean') query.append('timeAnomaly', String(params.timeAnomaly));
+    if (params?.status && params.status !== 'all') query.append('status', params.status);
+    const suffix = query.toString() ? `?${query.toString()}` : '';
+    return this.request<any>(`/submissions/integrity/cases${suffix}`);
+  }
+
   async getExamIntelligence(examId: string) {
     return this.request<any>(`/submissions/exam/${examId}/intelligence`);
+  }
+
+  async getSubmissionTimeline(submissionId: string) {
+    return this.request<any>(`/submissions/${submissionId}/timeline`);
   }
 
   async getExamManualGradingStatus(examId: string) {

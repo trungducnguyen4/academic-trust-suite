@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useState } from "react";
 import { DataPagination } from "@/components/common/DataPagination";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/ui/status-badge";
-import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Table,
@@ -32,8 +31,9 @@ import {
   XCircle,
   Clock,
   TrendingUp,
-  Users,
-  FileText,
+  MousePointerClick,
+  Copy,
+  Loader2,
 } from "lucide-react";
 import { IntegrityCaseDetail } from "@/components/admin/IntegrityCaseDetail";
 import { ListPageHeader } from "@/components/common/list/ListPageHeader";
@@ -49,9 +49,11 @@ import {
   getActiveFilterCount,
   getFilterChips,
 } from "@/components/common/list/filter-utils";
+import api from "@/lib/api";
 
 export interface FlaggedSubmission {
   id: string;
+  submissionId?: string;
   studentId: string;
   studentName: string;
   examId: string;
@@ -72,147 +74,44 @@ export interface IntegrityReason {
   evidence?: string;
 }
 
-// Mock data for flagged submissions
-const mockFlaggedSubmissions: FlaggedSubmission[] = [
-  {
-    id: "flag-001",
-    studentId: "STU-2024-0892",
-    studentName: "Alex Johnson",
-    examId: "exam-ds-final",
-    examTitle: "Data Structures Final",
-    submittedAt: "2024-01-15T14:32:00Z",
-    confidence: "High",
-    status: "pending",
-    similarityScore: 87,
-    timeAnomaly: true,
-    reasons: [
-      {
-        type: "similarity",
-        description: "Answer pattern similarity with STU-2024-1034",
-        weight: 0.45,
-        evidence:
-          "Questions 12-18 show 94% similarity in answer sequence and timing",
-      },
-      {
-        type: "timing",
-        description: "Abnormal response time pattern",
-        weight: 0.3,
-        evidence:
-          "Average response time dropped from 45s to 8s after question 10",
-      },
-      {
-        type: "behavior",
-        description: "Tab focus loss detected",
-        weight: 0.25,
-        evidence: "12 instances of window blur events during exam",
-      },
-    ],
-    patternMatch: ["STU-2024-1034"],
-  },
-  {
-    id: "flag-002",
-    studentId: "STU-2024-1034",
-    studentName: "Maria Garcia",
-    examId: "exam-ds-final",
-    examTitle: "Data Structures Final",
-    submittedAt: "2024-01-15T14:28:00Z",
-    confidence: "High",
-    status: "pending",
-    similarityScore: 87,
-    reasons: [
-      {
-        type: "similarity",
-        description: "Answer pattern similarity with STU-2024-0892",
-        weight: 0.5,
-        evidence: "Questions 12-18 show 94% similarity in answer sequence",
-      },
-      {
-        type: "pattern",
-        description: "Identical wrong answer pattern",
-        weight: 0.35,
-        evidence: "Same incorrect answers on questions 14, 16, 17",
-      },
-    ],
-    patternMatch: ["STU-2024-0892"],
-  },
-  {
-    id: "flag-003",
-    studentId: "STU-2024-0567",
-    studentName: "James Wilson",
-    examId: "exam-algo-mid",
-    examTitle: "Algorithms Midterm",
-    submittedAt: "2024-01-14T10:15:00Z",
-    confidence: "Medium",
-    status: "reviewed",
-    similarityScore: 62,
-    timeAnomaly: true,
-    reasons: [
-      {
-        type: "timing",
-        description: "Rapid sequential correct answers",
-        weight: 0.6,
-        evidence:
-          "Questions 5-12 answered in under 3 seconds each with 100% accuracy",
-      },
-      {
-        type: "behavior",
-        description: "Copy-paste event detected",
-        weight: 0.4,
-        evidence: "3 paste events detected in essay responses",
-      },
-    ],
-  },
-  {
-    id: "flag-004",
-    studentId: "STU-2024-0234",
-    studentName: "Sarah Chen",
-    examId: "exam-db-quiz",
-    examTitle: "Database Systems Quiz",
-    submittedAt: "2024-01-13T16:45:00Z",
-    confidence: "Low",
-    status: "dismissed",
-    reasons: [
-      {
-        type: "timing",
-        description: "Unusual submission timing",
-        weight: 1.0,
-        evidence:
-          "Submitted 2 minutes before deadline after 45 minutes of inactivity",
-      },
-    ],
-  },
-  {
-    id: "flag-005",
-    studentId: "STU-2024-0789",
-    studentName: "Michael Brown",
-    examId: "exam-os-final",
-    examTitle: "Operating Systems Final",
-    submittedAt: "2024-01-12T11:20:00Z",
-    confidence: "High",
-    status: "confirmed",
-    similarityScore: 92,
-    reasons: [
-      {
-        type: "similarity",
-        description: "Near-identical essay response",
-        weight: 0.7,
-        evidence: "Essay response shows 92% text similarity with online source",
-      },
-      {
-        type: "pattern",
-        description: "External source match",
-        weight: 0.3,
-        evidence: "Content matches published solution on external website",
-      },
-    ],
-  },
-];
+type IntegrityStats = {
+  totalFlagged: number;
+  pendingReview: number;
+  highConfidence: number;
+  confirmedCases: number;
+};
 
-const stats = {
-  totalFlagged: 23,
-  pendingReview: 8,
-  highConfidence: 5,
-  confirmedCases: 3,
+type IntegrityPatterns = {
+  tabSwitch: number;
+  mouseAnomaly: number;
+  copyPaste: number;
+  otherBehavior: number;
+};
+
+type IntegrityCasesResponse = {
+  data?: FlaggedSubmission[];
+  pagination?: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
+  stats?: IntegrityStats;
+  patterns?: IntegrityPatterns;
+};
+
+const EMPTY_STATS: IntegrityStats = {
+  totalFlagged: 0,
+  pendingReview: 0,
+  highConfidence: 0,
+  confirmedCases: 0,
+};
+
+const EMPTY_PATTERNS: IntegrityPatterns = {
+  tabSwitch: 0,
+  mouseAnomaly: 0,
+  copyPaste: 0,
+  otherBehavior: 0,
 };
 
 const EMPTY_FILTERS: FilterValues = {
@@ -221,6 +120,8 @@ const EMPTY_FILTERS: FilterValues = {
   timeAnomaly: undefined,
   examTitle: { value: "", operator: "contains" },
 };
+
+const INTEGRITY_ROWS_PER_VIEW = 10;
 
 export default function IntegrityOverview() {
   const [searchInput, setSearchInput] = useState("");
@@ -233,6 +134,13 @@ export default function IntegrityOverview() {
   );
   const [activeTab, setActiveTab] = useState("all");
   const [page, setPage] = useState(1);
+  const [submissions, setSubmissions] = useState<FlaggedSubmission[]>([]);
+  const [stats, setStats] = useState<IntegrityStats>(EMPTY_STATS);
+  const [patterns, setPatterns] = useState<IntegrityPatterns>(EMPTY_PATTERNS);
+  const [totalItems, setTotalItems] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const integrityFilters: FilterDefinition[] = [
     {
@@ -268,85 +176,60 @@ export default function IntegrityOverview() {
     },
   ];
 
-  const normalizedSearch = appliedSearch.trim().toLowerCase();
+  useEffect(() => {
+    let mounted = true;
 
-  const filteredSubmissions = mockFlaggedSubmissions.filter((submission) => {
-    const matchesSearch =
-      !normalizedSearch ||
-      submission.studentName.toLowerCase().includes(normalizedSearch) ||
-      submission.studentId.toLowerCase().includes(normalizedSearch) ||
-      submission.examTitle.toLowerCase().includes(normalizedSearch);
+    const fetchCases = async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const examTitleFilter = appliedFilters.examTitle as
+          | TextFilterValue
+          | undefined;
+        const submittedAtRange = appliedFilters.submittedAt as
+          | { from?: string; to?: string }
+          | undefined;
+        const response = (await api.getIntegrityCases({
+          page,
+          limit: INTEGRITY_ROWS_PER_VIEW,
+          search: appliedSearch || undefined,
+          confidence: (appliedFilters.confidence as string | undefined) || "all",
+          examTitle: examTitleFilter?.value?.trim() || undefined,
+          submittedFrom: submittedAtRange?.from,
+          submittedTo: submittedAtRange?.to,
+          timeAnomaly: appliedFilters.timeAnomaly as boolean | undefined,
+          status: activeTab,
+        })) as IntegrityCasesResponse;
 
-    const confidenceValue = appliedFilters.confidence as string | undefined;
-    const examTitleFilter = appliedFilters.examTitle as
-      | TextFilterValue
-      | undefined;
-    const submittedAtRange = appliedFilters.submittedAt as
-      | { from?: string; to?: string }
-      | undefined;
-    const timeAnomaly = appliedFilters.timeAnomaly as boolean | undefined;
-
-    const matchesText = (source: string, filter?: TextFilterValue) => {
-      if (!filter || !filter.value.trim()) return true;
-      const sourceValue = source.toLowerCase();
-      const filterValue = filter.value.trim().toLowerCase();
-      if (filter.operator === "startsWith")
-        return sourceValue.startsWith(filterValue);
-      if (filter.operator === "equals") return sourceValue === filterValue;
-      return sourceValue.includes(filterValue);
+        if (!mounted) return;
+        setSubmissions(Array.isArray(response.data) ? response.data : []);
+        setStats(response.stats || EMPTY_STATS);
+        setPatterns(response.patterns || EMPTY_PATTERNS);
+        setTotalItems(response.pagination?.total || 0);
+        setTotalPages(response.pagination?.totalPages || 1);
+      } catch (err) {
+        if (!mounted) return;
+        setSubmissions([]);
+        setStats(EMPTY_STATS);
+        setPatterns(EMPTY_PATTERNS);
+        setTotalItems(0);
+        setTotalPages(1);
+        setError(
+          err instanceof Error ? err.message : "Unable to load integrity cases",
+        );
+      } finally {
+        if (mounted) setLoading(false);
+      }
     };
 
-    const matchesConfidence =
-      !confidenceValue ||
-      confidenceValue === "all" ||
-      submission.confidence === confidenceValue;
-    const matchesExamTitle = matchesText(submission.examTitle, examTitleFilter);
-    const matchesTimeAnomaly =
-      typeof timeAnomaly !== "boolean" ||
-      timeAnomaly === submission.timeAnomaly;
-    const matchesSubmittedAt = (() => {
-      if (!submittedAtRange?.from && !submittedAtRange?.to) return true;
-      const submittedAt = new Date(submission.submittedAt).getTime();
-      if (submittedAtRange.from) {
-        const from = new Date(submittedAtRange.from).getTime();
-        if (!Number.isNaN(from) && submittedAt < from) return false;
-      }
-      if (submittedAtRange.to) {
-        const to = new Date(submittedAtRange.to).getTime();
-        if (!Number.isNaN(to) && submittedAt > to) return false;
-      }
-      return true;
-    })();
-
-    if (activeTab === "all") {
-      return (
-        matchesSearch &&
-        matchesConfidence &&
-        matchesExamTitle &&
-        matchesTimeAnomaly &&
-        matchesSubmittedAt
-      );
-    }
-
-    return (
-      matchesSearch &&
-      submission.status === activeTab &&
-      matchesConfidence &&
-      matchesExamTitle &&
-      matchesTimeAnomaly &&
-      matchesSubmittedAt
-    );
-  });
-
-  const INTEGRITY_ROWS_PER_VIEW = 10;
-  const displayedSubmissions = filteredSubmissions.slice(
-    (page - 1) * INTEGRITY_ROWS_PER_VIEW,
-    page * INTEGRITY_ROWS_PER_VIEW,
-  );
-  const totalPages = Math.max(1, Math.ceil(filteredSubmissions.length / INTEGRITY_ROWS_PER_VIEW));
+    fetchCases();
+    return () => {
+      mounted = false;
+    };
+  }, [activeTab, appliedFilters, appliedSearch, page]);
 
   useEffect(() => {
-    setPage((p) => Math.min(p, totalPages));
+    setPage((current) => Math.min(current, totalPages));
   }, [totalPages]);
 
   const INTEGRITY_ROW_HEIGHT = 64;
@@ -361,11 +244,19 @@ export default function IntegrityOverview() {
   );
   const activeFilterChips = getFilterChips(appliedFilters, integrityFilters);
 
-  const runSearch = () => { setAppliedSearch(searchInput.trim()); setPage(1); };
-  const applyFilters = () => { setAppliedFilters(draftFilters); setPage(1); };
+  const runSearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
+  };
+  const applyFilters = () => {
+    setAppliedFilters(draftFilters);
+    setPage(1);
+  };
   const clearFilters = () => {
     setDraftFilters(EMPTY_FILTERS);
     setAppliedFilters(EMPTY_FILTERS);
+    setSearchInput("");
+    setAppliedSearch("");
     setPage(1);
   };
   const removeFilter = (key: string) => {
@@ -375,6 +266,7 @@ export default function IntegrityOverview() {
     };
     setAppliedFilters(nextFilters);
     setDraftFilters(nextFilters);
+    setPage(1);
   };
 
   const formatDate = (dateString: string) => {
@@ -386,6 +278,45 @@ export default function IntegrityOverview() {
       minute: "2-digit",
     });
   };
+
+  const patternTotal = Math.max(
+    1,
+    patterns.tabSwitch +
+      patterns.mouseAnomaly +
+      patterns.copyPaste +
+      patterns.otherBehavior,
+  );
+
+  const detectionPatterns = [
+    {
+      label: "Tab Switching",
+      description: "Students leaving or switching exam tab",
+      value: patterns.tabSwitch,
+      icon: Shield,
+      className: "bg-warning/10 text-warning",
+    },
+    {
+      label: "Mouse Anomalies",
+      description: "Idle or abnormal pointer behavior",
+      value: patterns.mouseAnomaly,
+      icon: MousePointerClick,
+      className: "bg-destructive/10 text-destructive",
+    },
+    {
+      label: "Copy/Paste Events",
+      description: "Clipboard interactions during exam",
+      value: patterns.copyPaste,
+      icon: Copy,
+      className: "bg-info/10 text-info",
+    },
+    {
+      label: "Other Behavioral Signals",
+      description: "Focus, fullscreen, or proctoring events",
+      value: patterns.otherBehavior,
+      icon: TrendingUp,
+      className: "bg-muted text-muted-foreground",
+    },
+  ];
 
   if (selectedCase) {
     return (
@@ -463,7 +394,13 @@ export default function IntegrityOverview() {
 
         <Card>
           <CardContent className="pt-6">
-            <Tabs value={activeTab} onValueChange={(v) => { setActiveTab(v); setPage(1); }}>
+            <Tabs
+              value={activeTab}
+              onValueChange={(v) => {
+                setActiveTab(v);
+                setPage(1);
+              }}
+            >
               <TabsList className="mb-4">
                 <TabsTrigger value="all">All</TabsTrigger>
                 <TabsTrigger value="pending">Pending</TabsTrigger>
@@ -491,7 +428,28 @@ export default function IntegrityOverview() {
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {displayedSubmissions.length === 0 ? (
+                        {loading ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={7}
+                              className="py-10 text-center text-muted-foreground"
+                            >
+                              <div className="inline-flex items-center gap-2">
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                                Loading integrity cases...
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        ) : error ? (
+                          <TableRow>
+                            <TableCell
+                              colSpan={7}
+                              className="py-10 text-center text-destructive"
+                            >
+                              {error}
+                            </TableCell>
+                          </TableRow>
+                        ) : submissions.length === 0 ? (
                           <TableRow>
                             <TableCell
                               colSpan={7}
@@ -501,7 +459,7 @@ export default function IntegrityOverview() {
                             </TableCell>
                           </TableRow>
                         ) : (
-                          displayedSubmissions.map((submission) => (
+                          submissions.map((submission) => (
                             <TableRow key={submission.id}>
                               <TableCell>
                                 <div>
@@ -566,7 +524,7 @@ export default function IntegrityOverview() {
             <DataPagination
               currentPage={page}
               totalPages={totalPages}
-              totalItems={filteredSubmissions.length}
+              totalItems={totalItems}
               onPageChange={setPage}
               itemLabel="flagged submissions"
             />
@@ -578,66 +536,36 @@ export default function IntegrityOverview() {
             <CardHeader>
               <CardTitle className="text-lg">Detection Patterns</CardTitle>
               <CardDescription>
-                Common integrity violation types
+                Common integrity violation types from recorded exam sessions
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded bg-destructive/10 flex items-center justify-center">
-                    <Users className="h-4 w-4 text-destructive" />
+              {detectionPatterns.map((pattern) => {
+                const percentage = Math.round((pattern.value / patternTotal) * 100);
+                return (
+                  <div
+                    key={pattern.label}
+                    className="flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div
+                        className={`h-8 w-8 rounded flex items-center justify-center ${pattern.className}`}
+                      >
+                        <pattern.icon className="h-4 w-4" />
+                      </div>
+                      <div>
+                        <p className="text-sm font-medium">{pattern.label}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {pattern.description}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-sm font-semibold">
+                      {percentage}%
+                    </span>
                   </div>
-                  <div>
-                    <p className="text-sm font-medium">Answer Similarity</p>
-                    <p className="text-xs text-muted-foreground">
-                      Similar patterns between students
-                    </p>
-                  </div>
-                </div>
-                <span className="text-sm font-semibold">42%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded bg-warning/10 flex items-center justify-center">
-                    <Clock className="h-4 w-4 text-warning" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Timing Anomalies</p>
-                    <p className="text-xs text-muted-foreground">
-                      Abnormal response patterns
-                    </p>
-                  </div>
-                </div>
-                <span className="text-sm font-semibold">28%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded bg-info/10 flex items-center justify-center">
-                    <FileText className="h-4 w-4 text-info" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">External Sources</p>
-                    <p className="text-xs text-muted-foreground">
-                      Content matching online materials
-                    </p>
-                  </div>
-                </div>
-                <span className="text-sm font-semibold">18%</span>
-              </div>
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="h-8 w-8 rounded bg-muted flex items-center justify-center">
-                    <TrendingUp className="h-4 w-4 text-muted-foreground" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium">Behavioral Signals</p>
-                    <p className="text-xs text-muted-foreground">
-                      Tab switching, copy-paste events
-                    </p>
-                  </div>
-                </div>
-                <span className="text-sm font-semibold">12%</span>
-              </div>
+                );
+              })}
             </CardContent>
           </Card>
 
@@ -688,4 +616,3 @@ export default function IntegrityOverview() {
     </DashboardLayout>
   );
 }
-

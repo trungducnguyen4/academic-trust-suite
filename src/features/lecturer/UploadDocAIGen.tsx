@@ -1,230 +1,250 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-} from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Progress } from "@/components/ui/progress";
-import { Separator } from "@/components/ui/separator";
 import { StatusBadge } from "@/components/ui/status-badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
-  ArrowLeft,
-  Upload,
-  FileText,
-  Sparkles,
-  CheckCircle2,
-  XCircle,
-  Edit2,
-  Loader2,
-  Brain,
-  Trash2,
-  Save,
-  RefreshCw,
-  AlertTriangle,
-} from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { api } from "@/lib/api";
 import { getNumericInputError, sanitizeNumericInput } from "@/lib/number-input";
-import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { toast } from "sonner";
+import {
+  AlertTriangle,
+  ArrowLeft,
+  CheckCircle2,
+  FileSearch,
+  FileText,
+  Loader2,
+  Save,
+  Sparkles,
+  Trash2,
+  Upload,
+  XCircle,
+} from "lucide-react";
 
-interface GeneratedQuestion {
+type GeneratedQuestion = {
   id: string;
   content: string;
-  type: "multiple_choice" | "true_false";
-  options?: { id: string; text: string; isCorrect: boolean }[];
-  tfAnswer?: boolean;
-  difficulty: number;
-  topic: string;
-  approved: boolean | null; // null = pending review
-  editing: boolean;
-}
+  type: string;
+  options?: Record<string, string> | null;
+  correctAnswer?: Record<string, string> | null;
+  explanation?: string;
+  difficulty?: number;
+  points?: number;
+  approved: boolean | null;
+};
 
 type Step = "upload" | "configure" | "generating" | "review";
 
 export default function UploadDocAIGen() {
   const router = useRouter();
+  const inputRef = useRef<HTMLInputElement | null>(null);
   const [step, setStep] = useState<Step>("upload");
-
-  // Upload state
-  const [files, setFiles] = useState<
-    { name: string; size: string; type: string }[]
-  >([]);
-  const [uploadProgress, setUploadProgress] = useState(0);
-
-  // Config state
+  const [file, setFile] = useState<File | null>(null);
+  const [extractedText, setExtractedText] = useState("");
+  const [extracting, setExtracting] = useState(false);
+  const [courses, setCourses] = useState<any[]>([]);
+  const [topics, setTopics] = useState<any[]>([]);
+  const [courseId, setCourseId] = useState("");
+  const [topicId, setTopicId] = useState("");
   const [numQuestions, setNumQuestions] = useState("10");
   const [numQuestionsError, setNumQuestionsError] = useState("");
   const [targetDifficulty, setTargetDifficulty] = useState("mixed");
-  const [questionTypes, setQuestionTypes] = useState({ mc: true, tf: true });
+  const [questionType, setQuestionType] = useState("MIXED");
   const [focusTopics, setFocusTopics] = useState("");
-
-  // Generation state
-  const [genProgress, setGenProgress] = useState(0);
-
-  // Review state
   const [generated, setGenerated] = useState<GeneratedQuestion[]>([]);
+  const [saving, setSaving] = useState(false);
 
-  const simulateUpload = () => {
-    setFiles([
-      { name: "Chapter5_Algorithms.pdf", size: "2.4 MB", type: "PDF" },
-      { name: "Lecture_Notes_Graph.docx", size: "1.1 MB", type: "DOCX" },
-    ]);
-    let p = 0;
-    const interval = setInterval(() => {
-      p += 15;
-      setUploadProgress(Math.min(p, 100));
-      if (p >= 100) clearInterval(interval);
-    }, 200);
+  useEffect(() => {
+    let active = true;
+    api.getCourses({ limit: 100 })
+      .then((response) => {
+        if (!active) return;
+        const rows = Array.isArray(response) ? response : response?.data || [];
+        setCourses(rows);
+        if (rows[0]?.id) setCourseId(rows[0].id);
+      })
+      .catch(() => setCourses([]));
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!courseId) {
+      setTopics([]);
+      setTopicId("");
+      return;
+    }
+    let active = true;
+    api.listQuestionTopics({ courseId, limit: 100 })
+      .then((response) => {
+        if (!active) return;
+        const rows = Array.isArray(response) ? response : response?.data || [];
+        setTopics(rows);
+        setTopicId(rows[0]?.id || "");
+      })
+      .catch(() => {
+        if (active) {
+          setTopics([]);
+          setTopicId("");
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [courseId]);
+
+  const difficultyToValue = (value: string) => {
+    if (value === "easy") return 0.3;
+    if (value === "medium") return 0.55;
+    if (value === "hard") return 0.8;
+    return 0.55;
   };
 
-  const startGeneration = () => {
-    const message = getNumericInputError(numQuestions, {
-      min: 1,
-      max: 50,
-      integer: true,
-    });
+  const extractFileText = async (selected: File) => {
+    const name = selected.name.toLowerCase();
+    const isTextLike = /\.(txt|md|csv|json)$/i.test(name);
+    const isDocx = /\.docx$/i.test(name);
+    const isPdf = /\.pdf$/i.test(name);
+
+    setExtracting(true);
+    try {
+      let text = "";
+      if (isTextLike) {
+        text = await selected.text();
+      } else if (isDocx) {
+        const mammoth = await import("mammoth/mammoth.browser");
+        const extracted = await mammoth.extractRawText({ arrayBuffer: await selected.arrayBuffer() });
+        text = extracted.value || "";
+      } else if (isPdf) {
+        throw new Error("PDF text extraction is not enabled in this v1 screen. Please upload .docx, .txt, .md, .csv, or .json.");
+      } else {
+        throw new Error("Unsupported file type. Please upload .docx, .txt, .md, .csv, or .json.");
+      }
+
+      const normalized = text.replace(/\s+/g, " ").trim();
+      if (!normalized) throw new Error("The selected document has no extractable text.");
+      setExtractedText(normalized);
+      setStep("configure");
+      toast.success("Document text extracted. Configure AI generation next.");
+    } catch (err: any) {
+      setExtractedText("");
+      toast.error(err.message || "Could not extract text from this file.");
+    } finally {
+      setExtracting(false);
+    }
+  };
+
+  const startGeneration = async () => {
+    const message = getNumericInputError(numQuestions, { min: 1, max: 50, integer: true });
     if (message) {
       setNumQuestionsError(message);
       return;
     }
+    if (!courseId || !topicId) {
+      toast.error("Please select a course and topic before generating questions.");
+      return;
+    }
+    if (!extractedText) {
+      toast.error("Please upload and extract a document first.");
+      return;
+    }
 
     setStep("generating");
-    let p = 0;
-    const interval = setInterval(() => {
-      p += 8;
-      setGenProgress(Math.min(p, 100));
-      if (p >= 100) {
-        clearInterval(interval);
-        // Mock generated questions
-        const mockGen: GeneratedQuestion[] = [
-          {
-            id: "G1",
-            content: "What is the time complexity of BFS on an adjacency list?",
-            type: "multiple_choice",
-            options: [
-              { id: "A", text: "O(V + E)", isCorrect: true },
-              { id: "B", text: "O(V²)", isCorrect: false },
-              { id: "C", text: "O(E log V)", isCorrect: false },
-              { id: "D", text: "O(V × E)", isCorrect: false },
-            ],
-            difficulty: 0.55,
-            topic: "Graph Traversal",
-            approved: null,
-            editing: false,
-          },
-          {
-            id: "G2",
-            content:
-              "Kruskal's algorithm always produces a minimum spanning tree for any connected weighted graph.",
-            type: "true_false",
-            tfAnswer: true,
-            difficulty: 0.4,
-            topic: "Minimum Spanning Tree",
-            approved: null,
-            editing: false,
-          },
-          {
-            id: "G3",
-            content:
-              "Which data structure is used in Dijkstra's algorithm for optimal performance?",
-            type: "multiple_choice",
-            options: [
-              { id: "A", text: "Stack", isCorrect: false },
-              { id: "B", text: "Queue", isCorrect: false },
-              { id: "C", text: "Min-heap / Priority queue", isCorrect: true },
-              { id: "D", text: "Hash table", isCorrect: false },
-            ],
-            difficulty: 0.62,
-            topic: "Shortest Path",
-            approved: null,
-            editing: false,
-          },
-          {
-            id: "G4",
-            content:
-              "A topological sort is possible only on DAGs (Directed Acyclic Graphs).",
-            type: "true_false",
-            tfAnswer: true,
-            difficulty: 0.35,
-            topic: "Graph Properties",
-            approved: null,
-            editing: false,
-          },
-          {
-            id: "G5",
-            content:
-              "What is the worst-case time complexity of Bellman-Ford algorithm?",
-            type: "multiple_choice",
-            options: [
-              { id: "A", text: "O(V + E)", isCorrect: false },
-              { id: "B", text: "O(V × E)", isCorrect: true },
-              { id: "C", text: "O(V² log V)", isCorrect: false },
-              { id: "D", text: "O(E²)", isCorrect: false },
-            ],
-            difficulty: 0.72,
-            topic: "Shortest Path",
-            approved: null,
-            editing: false,
-          },
-        ];
-        setGenerated(mockGen);
-        setStep("review");
-      }
-    }, 300);
-  };
+    try {
+      const selectedCourse = courses.find((course) => course.id === courseId);
+      const selectedTopic = topics.find((topic) => topic.id === topicId);
+      const prompt = [
+        "Generate exam-ready questions grounded only in the following uploaded course material.",
+        `Document: ${file?.name || "uploaded document"}`,
+        selectedTopic?.name ? `Target topic: ${selectedTopic.name}` : "",
+        focusTopics.trim() ? `Lecturer focus: ${focusTopics.trim()}` : "",
+        "Material:",
+        extractedText.slice(0, 10000),
+      ].filter(Boolean).join("\n\n");
 
-  const approveQuestion = (id: string) => {
-    setGenerated((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, approved: true } : q)),
-    );
-  };
+      const response = await api.aiGenerateExamQuestions({
+        prompt,
+        questionCount: Number(numQuestions),
+        difficulty: difficultyToValue(targetDifficulty),
+        questionType,
+        language: "vi",
+        courseName: selectedCourse?.name,
+        useCase: "question_bank",
+        courseId,
+        context: {
+          courseId,
+          topicId,
+          source: "upload_doc_ai_gen",
+          documentName: file?.name,
+          extractedCharacters: extractedText.length,
+        },
+      });
 
-  const rejectQuestion = (id: string) => {
-    setGenerated((prev) =>
-      prev.map((q) => (q.id === id ? { ...q, approved: false } : q)),
-    );
+      const questions = (response?.questions || []).map((question: any, index: number) => ({
+        id: `gen-${index + 1}`,
+        content: question.content || "",
+        type: question.type || "MULTIPLE_CHOICE",
+        options: question.options || null,
+        correctAnswer: question.correctAnswer || null,
+        explanation: question.explanation || "",
+        difficulty: question.difficulty,
+        points: question.points || 1,
+        approved: null,
+      }));
+      setGenerated(questions);
+      setStep("review");
+      toast.success(`Generated ${questions.length} questions from real document text.`);
+    } catch (err: any) {
+      setStep("configure");
+      toast.error(err.message || "AI generation failed.");
+    }
   };
-
-  const removeQuestion = (id: string) => {
-    setGenerated((prev) => prev.filter((q) => q.id !== id));
-  };
-
-  const approvedCount = generated.filter((q) => q.approved === true).length;
-  const rejectedCount = generated.filter((q) => q.approved === false).length;
-  const pendingCount = generated.filter((q) => q.approved === null).length;
 
   const saveApproved = async () => {
-    // In real app, save to question bank
-    router.push("/lecturer/question-bank");
+    const approved = generated.filter((question) => question.approved === true);
+    if (!approved.length) return;
+    setSaving(true);
+    try {
+      for (const question of approved) {
+        await api.saveQuestion({
+          type: question.type,
+          content: question.content,
+          options: question.options || undefined,
+          correctAnswer: question.correctAnswer || undefined,
+          explanation: question.explanation,
+          difficulty: question.difficulty,
+          points: question.points || 1,
+          courseId,
+          topicId,
+          learningObjective: `Generated from ${file?.name || "uploaded document"}`,
+        });
+      }
+      toast.success(`Saved ${approved.length} approved question(s) to the versioned question bank.`);
+      router.push("/lecturer/question-bank");
+    } catch (err: any) {
+      toast.error(err.message || "Failed to save approved questions.");
+    } finally {
+      setSaving(false);
+    }
   };
+
+  const approvedCount = generated.filter((question) => question.approved === true).length;
+  const rejectedCount = generated.filter((question) => question.approved === false).length;
+  const pendingCount = generated.filter((question) => question.approved === null).length;
 
   return (
     <DashboardLayout>
       <div className="max-w-4xl mx-auto">
-        {/* <BackToDashboardButton to="/lecturer" className="mb-2 -ml-2" /> */}
-
-        <Button
-          variant="ghost"
-          size="sm"
-          className="mb-4 gap-2 text-muted-foreground"
-          onClick={() => router.push("/lecturer/question-bank")}
-        >
+        <Button variant="ghost" size="sm" className="mb-4 gap-2 text-muted-foreground" onClick={() => router.push("/lecturer/question-bank")}>
           <ArrowLeft className="h-4 w-4" /> Back to Question Bank
         </Button>
 
@@ -233,398 +253,189 @@ export default function UploadDocAIGen() {
             Upload Document & AI Generate
           </h1>
           <p className="text-muted-foreground">
-            Upload course materials and let AI generate exam questions
-            automatically
+            Text/docx grounded generation with lecturer review before publishing to the question bank.
           </p>
         </div>
 
-        {/* Step Indicator */}
-        <div className="flex items-center gap-2 mb-8">
-          {(["upload", "configure", "generating", "review"] as Step[]).map(
-            (s, i) => (
-              <div key={s} className="flex items-center gap-2">
-                <div
-                  className={`flex items-center justify-center h-8 w-8 rounded-full text-sm font-medium
-                ${
-                  step === s
-                    ? "bg-primary text-primary-foreground"
-                    : ["upload", "configure", "generating", "review"].indexOf(
-                          step,
-                        ) > i
-                      ? "bg-green-100 text-green-700"
-                      : "bg-muted text-muted-foreground"
-                }`}
-                >
-                  {["upload", "configure", "generating", "review"].indexOf(
-                    step,
-                  ) > i ? (
-                    <CheckCircle2 className="h-4 w-4" />
-                  ) : (
-                    i + 1
-                  )}
-                </div>
-                <span
-                  className={`text-sm capitalize ${step === s ? "font-medium" : "text-muted-foreground"}`}
-                >
-                  {s}
-                </span>
-                {i < 3 && <Separator className="w-8" />}
-              </div>
-            ),
-          )}
-        </div>
-
-        {/* Step 1: Upload */}
         {step === "upload" && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" /> Upload Documents
-              </CardTitle>
-              <CardDescription>
-                Upload PDF, DOCX, or TXT files containing course material
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2"><Upload className="h-5 w-5" /> Upload Documents</CardTitle>
+              <CardDescription>V1 supports .docx, .txt, .md, .csv, and .json. PDF OCR/RAG is intentionally out of scope.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div
-                className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors"
-                onClick={simulateUpload}
-              >
-                <Upload className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-                <p className="text-sm font-medium">
-                  Click to upload or drag & drop
-                </p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  PDF, DOCX, TXT up to 50MB each
-                </p>
+              <input
+                ref={inputRef}
+                type="file"
+                className="hidden"
+                accept=".docx,.txt,.md,.csv,.json,.pdf"
+                onChange={(event) => {
+                  const selected = event.target.files?.[0];
+                  if (!selected) return;
+                  setFile(selected);
+                  extractFileText(selected);
+                }}
+              />
+              <div className="border-2 border-dashed border-muted-foreground/25 rounded-lg p-8 text-center cursor-pointer hover:border-primary/50 transition-colors" onClick={() => inputRef.current?.click()}>
+                {extracting ? <Loader2 className="h-10 w-10 text-primary mx-auto mb-3 animate-spin" /> : <FileSearch className="h-10 w-10 text-muted-foreground mx-auto mb-3" />}
+                <p className="text-sm font-medium">{extracting ? "Extracting text..." : "Click to upload a real document"}</p>
+                <p className="text-xs text-muted-foreground mt-1">No mock upload. The extracted text is sent to the AI job API.</p>
               </div>
-
-              {files.length > 0 && (
-                <div className="space-y-3">
-                  <p className="text-sm font-medium">Uploaded Files</p>
-                  {files.map((f) => (
-                    <div
-                      key={f.name}
-                      className="flex items-center gap-3 p-3 rounded-lg border"
-                    >
-                      <FileText className="h-8 w-8 text-primary" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">{f.name}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {f.size} · {f.type}
-                        </p>
-                      </div>
-                      {uploadProgress >= 100 && (
-                        <CheckCircle2 className="h-5 w-5 text-green-600" />
-                      )}
-                    </div>
-                  ))}
-                  {uploadProgress > 0 && uploadProgress < 100 && (
-                    <Progress value={uploadProgress} className="h-2" />
-                  )}
-                  {uploadProgress >= 100 && (
-                    <Button
-                      onClick={() => setStep("configure")}
-                      className="w-full"
-                    >
-                      Continue to Configure
-                    </Button>
-                  )}
+              {file && (
+                <div className="flex items-center gap-3 p-3 rounded-lg border">
+                  <FileText className="h-8 w-8 text-primary" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{file.name}</p>
+                    <p className="text-xs text-muted-foreground">{(file.size / 1024).toFixed(1)} KB</p>
+                  </div>
+                  {extractedText && <CheckCircle2 className="h-5 w-5 text-green-600" />}
                 </div>
               )}
             </CardContent>
           </Card>
         )}
 
-        {/* Step 2: Configure */}
         {step === "configure" && (
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Brain className="h-5 w-5" /> AI Generation Settings
-              </CardTitle>
-              <CardDescription>
-                Configure how AI should generate questions from your documents
-              </CardDescription>
+              <CardTitle className="flex items-center gap-2"><Sparkles className="h-5 w-5" /> AI Generation Settings</CardTitle>
+              <CardDescription>{extractedText.length.toLocaleString()} characters extracted from {file?.name}</CardDescription>
             </CardHeader>
             <CardContent className="space-y-6">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Number of Questions</Label>
-                  <Input
-                    type="number"
-                    min={1}
-                    max={50}
-                    value={numQuestions}
-                    onChange={(e) =>
-                      setNumQuestions(sanitizeNumericInput(e.target.value))
-                    }
-                    onBlur={(e) =>
-                      setNumQuestionsError(
-                        getNumericInputError(e.target.value, {
-                          min: 1,
-                          max: 50,
-                          integer: true,
-                        }) || "",
-                      )
-                    }
-                  />
-                  {numQuestionsError ? (
-                    <p className="text-xs text-destructive">{numQuestionsError}</p>
-                  ) : null}
+                  <Label>Course</Label>
+                  <Select value={courseId} onValueChange={setCourseId}>
+                    <SelectTrigger><SelectValue placeholder="Select course" /></SelectTrigger>
+                    <SelectContent>
+                      {courses.map((course) => <SelectItem key={course.id} value={course.id}>{course.code || course.name} - {course.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Target Difficulty</Label>
-                  <Select
-                    value={targetDifficulty}
-                    onValueChange={setTargetDifficulty}
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
+                  <Label>Topic</Label>
+                  <Select value={topicId} onValueChange={setTopicId}>
+                    <SelectTrigger><SelectValue placeholder="Select topic" /></SelectTrigger>
+                    <SelectContent>
+                      {topics.map((topic) => <SelectItem key={topic.id} value={topic.id}>{topic.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                  {courseId && topics.length === 0 && <p className="text-xs text-yellow-600">Create a topic in Question Editor before publishing generated questions.</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label>Number of Questions</Label>
+                  <Input value={numQuestions} onChange={(event) => setNumQuestions(sanitizeNumericInput(event.target.value))} />
+                  {numQuestionsError && <p className="text-xs text-destructive">{numQuestionsError}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label>Difficulty</Label>
+                  <Select value={targetDifficulty} onValueChange={setTargetDifficulty}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
                       <SelectItem value="easy">Easy</SelectItem>
                       <SelectItem value="medium">Medium</SelectItem>
                       <SelectItem value="hard">Hard</SelectItem>
-                      <SelectItem value="mixed">Mixed (recommended)</SelectItem>
+                      <SelectItem value="mixed">Mixed</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Question Type</Label>
+                  <Select value={questionType} onValueChange={setQuestionType}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="MIXED">Mixed</SelectItem>
+                      <SelectItem value="MULTIPLE_CHOICE">Multiple Choice</SelectItem>
+                      <SelectItem value="TRUE_FALSE">True / False</SelectItem>
+                      <SelectItem value="SHORT_ANSWER">Short Answer</SelectItem>
+                      <SelectItem value="ESSAY">Essay</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               <div className="space-y-2">
-                <Label>Question Types</Label>
-                <div className="flex gap-4">
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={questionTypes.mc}
-                      onCheckedChange={(c) =>
-                        setQuestionTypes({ ...questionTypes, mc: !!c })
-                      }
-                    />
-                    <span className="text-sm">Multiple Choice</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Checkbox
-                      checked={questionTypes.tf}
-                      onCheckedChange={(c) =>
-                        setQuestionTypes({ ...questionTypes, tf: !!c })
-                      }
-                    />
-                    <span className="text-sm">True / False</span>
-                  </div>
-                </div>
+                <Label>Lecturer Focus (optional)</Label>
+                <Textarea value={focusTopics} onChange={(event) => setFocusTopics(event.target.value)} rows={2} placeholder="e.g. focus on application questions, avoid pure definition recall..." />
               </div>
 
-              <div className="space-y-2">
-                <Label>Focus Topics (optional)</Label>
-                <Textarea
-                  placeholder="e.g., Graph algorithms, Shortest path, Minimum spanning tree..."
-                  value={focusTopics}
-                  onChange={(e) => setFocusTopics(e.target.value)}
-                  rows={2}
-                />
+              <div className="rounded-lg border border-yellow-200 bg-yellow-50/50 p-3 text-sm text-yellow-800 flex gap-2">
+                <AlertTriangle className="h-4 w-4 mt-0.5" />
+                AI output is saved only after you approve it. This supports lecturer review, not automatic publishing.
               </div>
 
               <div className="flex justify-between">
-                <Button variant="outline" onClick={() => setStep("upload")}>
-                  Back
-                </Button>
-                <Button onClick={startGeneration} className="gap-2">
-                  <Sparkles className="h-4 w-4" /> Generate Questions
-                </Button>
+                <Button variant="outline" onClick={() => setStep("upload")}>Back</Button>
+                <Button onClick={startGeneration} className="gap-2"><Sparkles className="h-4 w-4" /> Generate Questions</Button>
               </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Step 3: Generating */}
         {step === "generating" && (
           <Card>
             <CardContent className="py-12 text-center">
               <Loader2 className="h-12 w-12 text-primary animate-spin mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">
-                AI is analyzing your documents...
-              </h3>
-              <p className="text-sm text-muted-foreground mb-6">
-                Extracting key concepts and generating {numQuestions} questions
-              </p>
-              <Progress value={genProgress} className="max-w-md mx-auto mb-2" />
-              <p className="text-xs text-muted-foreground">
-                {genProgress}% complete
-              </p>
+              <h3 className="text-lg font-semibold mb-2">AI job is generating grounded questions...</h3>
+              <p className="text-sm text-muted-foreground mb-6">Waiting for backend AI queue result</p>
+              <Progress value={65} className="max-w-md mx-auto" />
             </CardContent>
           </Card>
         )}
 
-        {/* Step 4: Review */}
         {step === "review" && (
           <div className="space-y-4">
-            {/* Review Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <p className="text-2xl font-semibold text-green-600">
-                    {approvedCount}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Approved</p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <p className="text-2xl font-semibold text-yellow-600">
-                    {pendingCount}
-                  </p>
-                  <p className="text-xs text-muted-foreground">
-                    Pending Review
-                  </p>
-                </CardContent>
-              </Card>
-              <Card>
-                <CardContent className="pt-4 pb-4 text-center">
-                  <p className="text-2xl font-semibold text-red-600">
-                    {rejectedCount}
-                  </p>
-                  <p className="text-xs text-muted-foreground">Rejected</p>
-                </CardContent>
-              </Card>
+              <Card><CardContent className="pt-4 pb-4 text-center"><p className="text-2xl font-semibold text-green-600">{approvedCount}</p><p className="text-xs text-muted-foreground">Approved</p></CardContent></Card>
+              <Card><CardContent className="pt-4 pb-4 text-center"><p className="text-2xl font-semibold text-yellow-600">{pendingCount}</p><p className="text-xs text-muted-foreground">Pending Review</p></CardContent></Card>
+              <Card><CardContent className="pt-4 pb-4 text-center"><p className="text-2xl font-semibold text-red-600">{rejectedCount}</p><p className="text-xs text-muted-foreground">Rejected</p></CardContent></Card>
             </div>
 
-            {/* Review Actions */}
             <div className="flex justify-between items-center">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setStep("configure");
-                  setGenerated([]);
-                }}
-                className="gap-2"
-              >
-                <RefreshCw className="h-4 w-4" /> Regenerate
-              </Button>
-              <Button
-                onClick={saveApproved}
-                disabled={approvedCount === 0}
-                className="gap-2"
-              >
-                <Save className="h-4 w-4" /> Save {approvedCount} to Question
-                Bank
+              <Button variant="outline" onClick={() => { setStep("configure"); setGenerated([]); }}>Regenerate</Button>
+              <Button onClick={saveApproved} disabled={approvedCount === 0 || saving} className="gap-2">
+                {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} Save {approvedCount} to Question Bank
               </Button>
             </div>
 
-            {/* Question Cards */}
-            {generated.map((q, idx) => (
-              <Card
-                key={q.id}
-                className={`${q.approved === false ? "opacity-50" : ""}`}
-              >
+            {generated.map((question, index) => (
+              <Card key={question.id} className={question.approved === false ? "opacity-60" : ""}>
                 <CardHeader className="pb-2">
-                  <div className="flex items-center justify-between">
+                  <div className="flex items-center justify-between gap-3">
                     <div className="flex items-center gap-2">
-                      <span className="text-sm font-mono text-muted-foreground">
-                        #{idx + 1}
-                      </span>
-                      <StatusBadge
-                        variant={
-                          q.difficulty < 0.4
-                            ? "success"
-                            : q.difficulty < 0.7
-                              ? "warning"
-                              : "destructive"
-                        }
-                      >
-                        {q.difficulty < 0.4
-                          ? "Easy"
-                          : q.difficulty < 0.7
-                            ? "Medium"
-                            : "Hard"}
+                      <span className="text-sm font-mono text-muted-foreground">#{index + 1}</span>
+                      <StatusBadge tone="info">{question.type}</StatusBadge>
+                      <StatusBadge variant={(question.difficulty || 0) < 0.4 ? "success" : (question.difficulty || 0) < 0.7 ? "warning" : "destructive"}>
+                        {(question.difficulty || 0) < 0.4 ? "Easy" : (question.difficulty || 0) < 0.7 ? "Medium" : "Hard"}
                       </StatusBadge>
-                      <StatusBadge tone="info">
-                        {q.type === "multiple_choice" ? "MC" : "T/F"}
-                      </StatusBadge>
-                      <span className="text-xs text-muted-foreground">
-                        {q.topic}
-                      </span>
                     </div>
-                    <div className="flex gap-1">
-                      {q.approved === null && (
-                        <>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => approveQuestion(q.id)}
-                            className="gap-1 text-green-600 hover:text-green-700"
-                          >
-                            <CheckCircle2 className="h-4 w-4" /> Approve
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => rejectQuestion(q.id)}
-                            className="gap-1 text-red-600 hover:text-red-700"
-                          >
-                            <XCircle className="h-4 w-4" /> Reject
-                          </Button>
-                        </>
-                      )}
-                      {q.approved === true && (
-                        <StatusBadge status="approved" domain="approval">
-                          Approved
-                        </StatusBadge>
-                      )}
-                      {q.approved === false && (
-                        <StatusBadge status="rejected" domain="approval">
-                          Rejected
-                        </StatusBadge>
-                      )}
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeQuestion(q.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="sm" onClick={() => setGenerated((items) => items.map((item) => item.id === question.id ? { ...item, approved: true } : item))} className="gap-1 text-green-600"><CheckCircle2 className="h-4 w-4" /> Approve</Button>
+                      <Button variant="outline" size="sm" onClick={() => setGenerated((items) => items.map((item) => item.id === question.id ? { ...item, approved: false } : item))} className="gap-1 text-red-600"><XCircle className="h-4 w-4" /> Reject</Button>
+                      <Button variant="ghost" size="sm" onClick={() => setGenerated((items) => items.filter((item) => item.id !== question.id))}><Trash2 className="h-4 w-4" /></Button>
                     </div>
                   </div>
                 </CardHeader>
-                <CardContent>
-                  <p className="text-sm font-medium mb-3">{q.content}</p>
-                  {q.type === "multiple_choice" && q.options && (
-                    <div className="grid grid-cols-2 gap-2">
-                      {q.options.map((o) => (
-                        <div
-                          key={o.id}
-                          className={`flex items-center gap-2 p-2 rounded border text-sm ${
-                            o.isCorrect
-                              ? "border-green-500 bg-green-50"
-                              : "border-muted"
-                          }`}
-                        >
-                          <span className="font-medium text-muted-foreground">
-                            {o.id}.
-                          </span>
-                          {o.text}
-                          {o.isCorrect && (
-                            <CheckCircle2 className="h-3.5 w-3.5 text-green-600 ml-auto" />
-                          )}
-                        </div>
-                      ))}
+                <CardContent className="space-y-3">
+                  <p className="text-sm font-medium">{question.content}</p>
+                  {question.options && (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                      {Object.entries(question.options).map(([key, value]) => {
+                        const correct = Object.values(question.correctAnswer || {}).includes(key) || Object.values(question.correctAnswer || {}).includes(value);
+                        return (
+                          <div key={key} className={`flex items-center gap-2 p-2 rounded border text-sm ${correct ? "border-green-500 bg-green-50" : "border-muted"}`}>
+                            <Checkbox checked={correct} disabled />
+                            <span className="font-medium text-muted-foreground">{key}.</span>
+                            {value}
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
-                  {q.type === "true_false" && (
-                    <div className="flex gap-2">
-                      <span
-                        className={`px-3 py-1 rounded text-sm ${q.tfAnswer ? "bg-green-50 text-green-700 font-medium" : "text-muted-foreground"}`}
-                      >
-                        True
-                      </span>
-                      <span
-                        className={`px-3 py-1 rounded text-sm ${!q.tfAnswer ? "bg-green-50 text-green-700 font-medium" : "text-muted-foreground"}`}
-                      >
-                        False
-                      </span>
-                    </div>
-                  )}
+                  {question.explanation && <p className="text-xs text-muted-foreground bg-secondary/50 rounded p-2">{question.explanation}</p>}
                 </CardContent>
               </Card>
             ))}
@@ -634,6 +445,3 @@ export default function UploadDocAIGen() {
     </DashboardLayout>
   );
 }
-
-
-

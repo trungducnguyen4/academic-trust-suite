@@ -761,6 +761,191 @@ export class QuestionsService {
     return Math.max(1, Math.min(10, Math.round(n)));
   }
 
+  async getQuestionHistory(params: { courseId?: string }, user: AuthUser) {
+    const courseId = String(params.courseId || '').trim();
+    const where: any = {};
+
+    if (courseId) {
+      where.courseId = courseId;
+    }
+
+    if (user.role === 'LECTURER') {
+      where.OR = [
+        { creatorId: user.id },
+        { course: { lecturerId: user.id } },
+      ];
+    }
+
+    const questions = await this.prisma.question.findMany({
+      where,
+      orderBy: { updatedAt: 'desc' },
+      take: 100,
+      select: {
+        id: true,
+        type: true,
+        content: true,
+        status: true,
+        createdAt: true,
+        updatedAt: true,
+        course: {
+          select: {
+            id: true,
+            code: true,
+            name: true,
+          },
+        },
+        versions: {
+          orderBy: { versionNo: 'asc' },
+          select: {
+            id: true,
+            versionNo: true,
+            stem: true,
+            metadata: true,
+            aiGenerated: true,
+            createdAt: true,
+            statistics: {
+              select: {
+                totalAttempts: true,
+                correctAttempts: true,
+                incorrectAttempts: true,
+                skippedAttempts: true,
+                pValue: true,
+                difficultyIndex: true,
+                discriminationIndex: true,
+                lastRecomputedAt: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    const versionIds = questions.flatMap((question) => question.versions.map((version) => version.id));
+    const usageRows = versionIds.length
+      ? await this.prisma.$queryRawUnsafe(
+          `
+          SELECT eq.questionVersionId, e.id AS examId, e.title AS examTitle, e.createdAt AS examCreatedAt, COUNT(DISTINCT es.id) AS submissions
+          FROM exam_questions eq
+          INNER JOIN exams e ON e.id = eq.examId
+          LEFT JOIN exam_submissions es ON es.examId = e.id AND es.status IN ('SUBMITTED', 'GRADED', 'FLAGGED')
+          WHERE eq.questionVersionId IN (${versionIds.map(() => '?').join(',')})
+          GROUP BY eq.questionVersionId, e.id, e.title, e.createdAt
+          ORDER BY e.createdAt ASC
+          `,
+          ...versionIds,
+        ) as Array<{
+          questionVersionId: string;
+          examId: string;
+          examTitle: string;
+          examCreatedAt: Date;
+          submissions: bigint | number;
+        }>
+      : [];
+
+    const usageByVersion = new Map<string, typeof usageRows>();
+    for (const row of usageRows) {
+      const list = usageByVersion.get(row.questionVersionId) || [];
+      list.push(row);
+      usageByVersion.set(row.questionVersionId, list);
+    }
+
+    const toNumber = (value: any, fallback = 0) => {
+      if (value === null || typeof value === 'undefined') return fallback;
+      if (typeof value?.toNumber === 'function') return value.toNumber();
+      const n = Number(value);
+      return Number.isFinite(n) ? n : fallback;
+    };
+
+    const rows = questions.map((question) => {
+      const metrics = question.versions.map((version) => {
+        const stats = version.statistics;
+        const usages = usageByVersion.get(version.id) || [];
+        const attempts = Number(stats?.totalAttempts || 0);
+        const correctRate = attempts > 0 ? toNumber(stats?.pValue, 0) : null;
+        const difficultyIndex = attempts > 0 ? toNumber(stats?.difficultyIndex, 0) : null;
+        const discriminationIndex = attempts > 0 ? toNumber(stats?.discriminationIndex, 0) : null;
+        return {
+          versionId: version.id,
+          versionNo: version.versionNo,
+          examId: usages[0]?.examId || null,
+          exam: usages[0]?.examTitle || `Version ${version.versionNo}`,
+          date: new Date(usages[0]?.examCreatedAt || version.createdAt).toISOString().slice(0, 10),
+          attempts,
+          correctAttempts: Number(stats?.correctAttempts || 0),
+          incorrectAttempts: Number(stats?.incorrectAttempts || 0),
+          skippedAttempts: Number(stats?.skippedAttempts || 0),
+          correctRate,
+          difficulty: difficultyIndex,
+          discrimination: discriminationIndex,
+          reliability: attempts >= 10 && discriminationIndex !== null
+            ? Math.max(0, Math.min(1, 1 - Math.abs(discriminationIndex - 0.45)))
+            : null,
+          aiGenerated: version.aiGenerated,
+          usageCount: usages.length,
+        };
+      });
+
+      const usableMetrics = metrics.filter((metric) => metric.attempts > 0);
+      const first = usableMetrics[0];
+      const last = usableMetrics[usableMetrics.length - 1];
+      const difficultyDelta = first && last && first.difficulty !== null && last.difficulty !== null
+        ? last.difficulty - first.difficulty
+        : 0;
+      const discriminationDelta = first && last && first.discrimination !== null && last.discrimination !== null
+        ? last.discrimination - first.discrimination
+        : 0;
+
+      const trend =
+        usableMetrics.length < 2
+          ? 'stable'
+          : difficultyDelta > 0.12 || discriminationDelta < -0.12
+            ? 'degrading'
+            : difficultyDelta < -0.08 || discriminationDelta > 0.08
+              ? 'improving'
+              : 'stable';
+
+      const recommendation =
+        usableMetrics.length === 0
+          ? 'No completed submission data yet. Keep collecting attempts before making quality decisions.'
+          : trend === 'degrading'
+            ? 'Review wording, distractors, and difficulty calibration before reusing this question.'
+            : null;
+
+      return {
+        id: question.id,
+        content: question.versions[question.versions.length - 1]?.stem || question.content,
+        course: question.course?.code || question.course?.name || 'Unscoped',
+        courseId: question.course?.id || null,
+        type: question.type,
+        status: question.status,
+        createdAt: question.createdAt,
+        updatedAt: question.updatedAt,
+        metrics,
+        versions: question.versions.map((version) => ({
+          id: version.id,
+          versionNo: version.versionNo,
+          stem: version.stem,
+          aiGenerated: version.aiGenerated,
+          createdAt: version.createdAt,
+          metadata: this.parseJson(version.metadata, {}),
+        })),
+        trend,
+        recommendation,
+      };
+    });
+
+    return {
+      data: rows,
+      stats: {
+        totalQuestions: rows.length,
+        withAttempts: rows.filter((row) => row.metrics.some((metric) => metric.attempts > 0)).length,
+        degrading: rows.filter((row) => row.trend === 'degrading').length,
+        aiGenerated: rows.filter((row) => row.versions.some((version) => version.aiGenerated)).length,
+      },
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
   async listTopics(params?: { search?: string; page?: number; limit?: number; courseId?: string }) {
     const page = Math.max(1, Number(params?.page || 1));
     const limit = Math.max(1, Math.min(100, Number(params?.limit || 20)));
@@ -1114,6 +1299,10 @@ export class QuestionsService {
 
     const versionNo = Number(versionRows?.[0]?.nextVersionNo || 1);
     const versionId = randomUUID();
+    const aiRecordCount = await this.prisma.aiGenerationRecord.count({
+      where: { draftId },
+    });
+    const isAiGeneratedVersion = draft.mode === 'AI_ASSISTED' || aiRecordCount > 0;
 
     await this.prisma.$executeRawUnsafe(
       `
@@ -1134,7 +1323,7 @@ export class QuestionsService {
         topic: state?.classification?.topic || null,
         defaultPoints: points ?? 1,
       }),
-      0,
+      isAiGeneratedVersion ? 1 : 0,
       user.id,
     );
 

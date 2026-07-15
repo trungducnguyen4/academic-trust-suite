@@ -22,6 +22,48 @@ type ExistingAutosaveAnswer = {
   sequence: number;
 };
 
+type IntegrityCaseConfidence = 'High' | 'Medium' | 'Low';
+type IntegrityCaseStatus = 'pending' | 'reviewed' | 'dismissed' | 'confirmed';
+type IntegrityReasonType = 'similarity' | 'timing' | 'pattern' | 'behavior';
+
+type IntegrityCasesQuery = {
+  page?: string | number;
+  limit?: string | number;
+  search?: string;
+  confidence?: string;
+  examTitle?: string;
+  submittedFrom?: string;
+  submittedTo?: string;
+  timeAnomaly?: string | boolean;
+  status?: string;
+};
+
+type IntegrityCase = {
+  id: string;
+  submissionId: string;
+  studentId: string;
+  studentName: string;
+  examId: string;
+  examTitle: string;
+  submittedAt: string;
+  confidence: IntegrityCaseConfidence;
+  status: IntegrityCaseStatus;
+  reasons: Array<{
+    type: IntegrityReasonType;
+    description: string;
+    weight: number;
+    evidence?: string;
+  }>;
+  similarityScore?: number;
+  timeAnomaly?: boolean;
+  patternMatch?: string[];
+};
+
+type RequestUser = {
+  id: string;
+  role: 'ADMIN' | 'LECTURER' | 'STUDENT';
+};
+
 const AUTO_GRADED_TYPES = new Set(['MULTIPLE_CHOICE', 'MULTI_SELECT', 'TRUE_FALSE']);
 
 @Injectable()
@@ -94,6 +136,48 @@ export class SubmissionsService {
     } catch {
       return null;
     }
+  }
+
+  private getIntegrityLogWeight(eventType: string): number {
+    const event = String(eventType || '').toLowerCase();
+    if (event === 'fullscreen_exit' || event === 'face_not_detected') return 25;
+    if (['paste', 'copy', 'window_blur', 'tab_switch'].includes(event)) return 15;
+    return 5;
+  }
+
+  private getIntegrityConfidence(
+    tabSwitchCount: number,
+    mouseAnomalies: number,
+    riskScore: number,
+  ): IntegrityCaseConfidence {
+    if (tabSwitchCount >= 5 || mouseAnomalies >= 8 || riskScore >= 70) return 'High';
+    if (tabSwitchCount >= 2 || mouseAnomalies >= 3 || riskScore >= 35) return 'Medium';
+    return 'Low';
+  }
+
+  private isTimingAnomalyLog(eventType: string, details?: string | null): boolean {
+    const text = `${eventType || ''} ${details || ''}`.toLowerCase();
+    return ['idle', 'rapid', 'time', 'inactive'].some((keyword) => text.includes(keyword));
+  }
+
+  private buildIntegrityLogReason(eventType: string, count: number): IntegrityCase['reasons'][number] | null {
+    const event = String(eventType || '').toLowerCase();
+    const labels: Record<string, string> = {
+      paste: 'Paste event detected',
+      copy: 'Copy event detected',
+      fullscreen_exit: 'Fullscreen exit detected',
+      window_blur: 'Window focus loss detected',
+      face_not_detected: 'Face not detected event recorded',
+    };
+
+    if (!labels[event]) return null;
+
+    return {
+      type: this.isTimingAnomalyLog(event) ? 'timing' : 'behavior',
+      description: labels[event],
+      weight: Math.min(1, this.getIntegrityLogWeight(event) / 100),
+      evidence: `${count} ${count === 1 ? 'event' : 'events'} recorded`,
+    };
   }
 
   private publishRealtimeLogs(
@@ -1318,6 +1402,203 @@ export class SubmissionsService {
     return submitted === correct;
   }
 
+  async getIntegrityCases(query: IntegrityCasesQuery = {}) {
+    const page = Math.max(1, Number(query.page || 1) || 1);
+    const limit = Math.max(1, Math.min(100, Number(query.limit || 10) || 10));
+    const search = String(query.search || '').trim().toLowerCase();
+    const confidenceFilter = String(query.confidence || 'all').trim();
+    const examTitleFilter = String(query.examTitle || '').trim().toLowerCase();
+    const statusFilter = String(query.status || 'all').trim().toLowerCase();
+    const timeAnomalyFilter =
+      typeof query.timeAnomaly === 'boolean'
+        ? query.timeAnomaly
+        : typeof query.timeAnomaly === 'string' && query.timeAnomaly.trim()
+          ? query.timeAnomaly.toLowerCase() === 'true'
+          : undefined;
+    const submittedFrom = query.submittedFrom ? new Date(String(query.submittedFrom)) : null;
+    const submittedTo = query.submittedTo ? new Date(String(query.submittedTo)) : null;
+    if (submittedTo && !Number.isNaN(submittedTo.getTime())) {
+      submittedTo.setHours(23, 59, 59, 999);
+    }
+
+    const sessions = await this.prisma.proctoringSession.findMany({
+      where: {
+        OR: [
+          { tabSwitchCount: { gt: 0 } },
+          { mouseAnomalies: { gt: 0 } },
+          { logs: { some: {} } },
+        ],
+      },
+      include: {
+        logs: {
+          orderBy: { timestamp: 'desc' },
+          take: 50,
+        },
+        submission: {
+          select: {
+            id: true,
+            studentId: true,
+            submittedAt: true,
+            startedAt: true,
+            createdAt: true,
+            student: {
+              select: {
+                id: true,
+                fullName: true,
+                studentId: true,
+                email: true,
+              },
+            },
+            exam: {
+              select: {
+                id: true,
+                title: true,
+              },
+            },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    const allCases: IntegrityCase[] = sessions.map((session: any) => {
+      const tabSwitchCount = Number(session.tabSwitchCount || 0);
+      const mouseAnomalies = Number(session.mouseAnomalies || 0);
+      const logs = Array.isArray(session.logs) ? session.logs : [];
+      const weightedLogScore = logs.reduce(
+        (sum: number, log: any) => sum + this.getIntegrityLogWeight(log.eventType),
+        0,
+      );
+      const riskScore = Math.min(
+        100,
+        tabSwitchCount * 10 + mouseAnomalies * 8 + weightedLogScore,
+      );
+      const confidence = this.getIntegrityConfidence(tabSwitchCount, mouseAnomalies, riskScore);
+      const reasonMap = new Map<string, number>();
+      for (const log of logs) {
+        const event = String(log.eventType || '').toLowerCase();
+        reasonMap.set(event, (reasonMap.get(event) || 0) + 1);
+      }
+
+      const reasons: IntegrityCase['reasons'] = [];
+      if (tabSwitchCount > 0) {
+        reasons.push({
+          type: 'behavior',
+          description: 'Tab switching detected',
+          weight: Math.min(1, tabSwitchCount / 10),
+          evidence: `${tabSwitchCount} tab ${tabSwitchCount === 1 ? 'switch' : 'switches'} recorded`,
+        });
+      }
+      if (mouseAnomalies > 0) {
+        reasons.push({
+          type: 'behavior',
+          description: 'Mouse anomaly pattern detected',
+          weight: Math.min(1, mouseAnomalies / 10),
+          evidence: `${mouseAnomalies} mouse ${mouseAnomalies === 1 ? 'anomaly' : 'anomalies'} recorded`,
+        });
+      }
+      for (const [event, count] of reasonMap.entries()) {
+        const reason = this.buildIntegrityLogReason(event, count);
+        if (reason) reasons.push(reason);
+      }
+
+      const hasTimingAnomaly = logs.some((log: any) =>
+        this.isTimingAnomalyLog(log.eventType, log.details),
+      );
+      const submittedAt =
+        session.submission?.submittedAt ||
+        session.submission?.startedAt ||
+        session.submission?.createdAt ||
+        session.createdAt;
+      const studentCode =
+        session.submission?.student?.studentId ||
+        session.submission?.student?.id ||
+        session.submission?.studentId;
+
+      return {
+        id: `integrity-${session.submission?.id || session.id}`,
+        submissionId: session.submission?.id || '',
+        studentId: studentCode || 'N/A',
+        studentName: session.submission?.student?.fullName || session.submission?.student?.email || 'Unknown student',
+        examId: session.submission?.exam?.id || '',
+        examTitle: session.submission?.exam?.title || 'Unknown exam',
+        submittedAt: submittedAt ? new Date(submittedAt).toISOString() : new Date().toISOString(),
+        confidence,
+        status: 'pending',
+        reasons: reasons.length
+          ? reasons
+          : [{
+              type: 'behavior',
+              description: 'Integrity event recorded',
+              weight: Math.min(1, riskScore / 100),
+              evidence: `${logs.length} ${logs.length === 1 ? 'event' : 'events'} recorded`,
+            }],
+        timeAnomaly: hasTimingAnomaly,
+        patternMatch: [],
+      };
+    });
+
+    const filteredCases = allCases.filter((item) => {
+      if (statusFilter && statusFilter !== 'all' && item.status !== statusFilter) return false;
+      if (confidenceFilter && confidenceFilter !== 'all' && item.confidence !== confidenceFilter) return false;
+      if (examTitleFilter && !item.examTitle.toLowerCase().includes(examTitleFilter)) return false;
+      if (typeof timeAnomalyFilter === 'boolean' && Boolean(item.timeAnomaly) !== timeAnomalyFilter) return false;
+
+      const submittedAt = new Date(item.submittedAt).getTime();
+      if (submittedFrom && !Number.isNaN(submittedFrom.getTime()) && submittedAt < submittedFrom.getTime()) return false;
+      if (submittedTo && !Number.isNaN(submittedTo.getTime()) && submittedAt > submittedTo.getTime()) return false;
+
+      if (search) {
+        const haystack = [
+          item.studentName,
+          item.studentId,
+          item.examTitle,
+          item.examId,
+        ].join(' ').toLowerCase();
+        if (!haystack.includes(search)) return false;
+      }
+
+      return true;
+    });
+
+    const patterns = {
+      tabSwitch: 0,
+      mouseAnomaly: 0,
+      copyPaste: 0,
+      otherBehavior: 0,
+    };
+
+    for (const item of filteredCases) {
+      for (const reason of item.reasons) {
+        const text = `${reason.description} ${reason.evidence || ''}`.toLowerCase();
+        if (text.includes('tab')) patterns.tabSwitch += 1;
+        else if (text.includes('mouse')) patterns.mouseAnomaly += 1;
+        else if (text.includes('copy') || text.includes('paste')) patterns.copyPaste += 1;
+        else patterns.otherBehavior += 1;
+      }
+    }
+
+    const total = filteredCases.length;
+    const start = (page - 1) * limit;
+
+    return {
+      data: filteredCases.slice(start, start + limit),
+      pagination: {
+        page,
+        limit,
+        total,
+        totalPages: Math.max(1, Math.ceil(total / limit)),
+      },
+      stats: {
+        totalFlagged: total,
+        pendingReview: filteredCases.filter((item) => item.status === 'pending').length,
+        highConfidence: filteredCases.filter((item) => item.confidence === 'High').length,
+        confirmedCases: 0,
+      },
+      patterns,
+    };
+  }
+
   private buildSubmitResponse(
     submission: {
       id: string;
@@ -2282,6 +2563,192 @@ export class SubmissionsService {
         primaryMetrics: ['retry_click_rate', 'practice_completion_rate', 'score_uplift_next_attempt'],
         eventKeys: ['analytics_open', 'analytics_action_click', 'practice_start_from_analytics'],
       },
+      updatedAt: new Date().toISOString(),
+    };
+  }
+
+  async getSubmissionTimeline(submissionId: string, user: RequestUser) {
+    const submission = await this.prisma.examSubmission.findUnique({
+      where: { id: submissionId },
+      select: {
+        id: true,
+        studentId: true,
+        status: true,
+        startedAt: true,
+        submittedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        exam: {
+          select: {
+            id: true,
+            title: true,
+            course: {
+              select: {
+                id: true,
+                lecturerId: true,
+              },
+            },
+          },
+        },
+        student: {
+          select: {
+            id: true,
+            fullName: true,
+            studentId: true,
+            email: true,
+          },
+        },
+        proctoring: {
+          select: {
+            id: true,
+            ipAddress: true,
+            tabSwitchCount: true,
+            mouseAnomalies: true,
+            flaggedStatus: true,
+            integrityScore: true,
+            logs: {
+              orderBy: { timestamp: 'asc' },
+              select: {
+                id: true,
+                eventType: true,
+                details: true,
+                timestamp: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!submission) {
+      throw new NotFoundException('Submission not found');
+    }
+
+    const role = String(user.role || '').toUpperCase();
+    const isOwner = submission.studentId === user.id;
+    const isLecturer = submission.exam.course?.lecturerId === user.id;
+    if (role === 'STUDENT' && !isOwner) {
+      throw new ForbiddenException('You are not allowed to view this timeline');
+    }
+    if (role === 'LECTURER' && !isLecturer) {
+      throw new ForbiddenException('You are not allowed to view this timeline');
+    }
+
+    const eventTypeLabels: Record<string, string> = {
+      exam_start: 'Exam session started',
+      submit: 'Exam submitted',
+      answer: 'Answer interaction recorded',
+      tab_switch: 'Tab switch detected',
+      fullscreen_exit: 'Fullscreen exit detected',
+      window_blur: 'Window focus lost',
+      blur: 'Window focus lost',
+      focus: 'Window focus returned',
+      mouse_idle: 'Mouse idle anomaly recorded',
+      mouse_anomaly: 'Mouse anomaly recorded',
+      copy: 'Copy event detected',
+      paste: 'Paste event detected',
+      violation_escalation: 'Integrity violation escalation',
+      face_not_detected: 'Face not detected',
+    };
+
+    const severityFor = (eventType: string): 'normal' | 'warning' | 'critical' => {
+      const event = String(eventType || '').toLowerCase();
+      if (event.includes('fullscreen') || event.includes('face') || event.includes('escalation')) return 'critical';
+      if (['tab_switch', 'window_blur', 'blur', 'copy', 'paste', 'mouse_idle', 'mouse_anomaly'].includes(event)) return 'warning';
+      return 'normal';
+    };
+
+    const formatDetails = (details?: string | null) => {
+      if (!details) return undefined;
+      const parsed = this.parseLogDetails(details);
+      if (!parsed) return details;
+      if (typeof parsed === 'string') return parsed;
+      return Object.entries(parsed)
+        .filter(([, value]) => value !== null && typeof value !== 'undefined' && value !== '')
+        .slice(0, 4)
+        .map(([key, value]) => `${key}: ${typeof value === 'object' ? JSON.stringify(value) : String(value)}`)
+        .join(' | ');
+    };
+
+    const events: Array<{
+      id: string;
+      timestamp: string;
+      type: string;
+      description: string;
+      severity: 'normal' | 'warning' | 'critical';
+      detail?: string;
+    }> = [];
+
+    if (submission.startedAt || submission.createdAt) {
+      events.push({
+        id: `${submission.id}-started`,
+        timestamp: new Date(submission.startedAt || submission.createdAt).toISOString(),
+        type: 'exam_start',
+        description: 'Exam session started',
+        severity: 'normal',
+        detail: submission.proctoring?.ipAddress ? `IP: ${submission.proctoring.ipAddress}` : undefined,
+      });
+    }
+
+    for (const log of submission.proctoring?.logs || []) {
+      const eventType = String(log.eventType || 'event').toLowerCase();
+      events.push({
+        id: log.id,
+        timestamp: new Date(log.timestamp).toISOString(),
+        type: eventType,
+        description: eventTypeLabels[eventType] || `Integrity event: ${eventType.replace(/_/g, ' ')}`,
+        severity: severityFor(eventType),
+        detail: formatDetails(log.details),
+      });
+    }
+
+    if (submission.submittedAt) {
+      events.push({
+        id: `${submission.id}-submitted`,
+        timestamp: new Date(submission.submittedAt).toISOString(),
+        type: 'submit',
+        description: 'Exam submitted',
+        severity: 'normal',
+        detail: `Status: ${submission.status}`,
+      });
+    }
+
+    events.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    const warnings = events.filter((event) => event.severity === 'warning').length;
+    const critical = events.filter((event) => event.severity === 'critical').length;
+    const integrityNotes = events
+      .filter((event) => event.severity !== 'normal')
+      .map((event, index) => ({
+        id: `note-${event.id}`,
+        question: null,
+        note: event.description,
+        severity: event.severity,
+        timestamp: event.timestamp,
+        detail: event.detail,
+        order: index + 1,
+      }));
+
+    return {
+      submission: {
+        id: submission.id,
+        status: submission.status,
+        startedAt: submission.startedAt,
+        submittedAt: submission.submittedAt,
+        exam: submission.exam,
+        student: submission.student,
+      },
+      summary: {
+        totalEvents: events.length,
+        tabSwitches: Number(submission.proctoring?.tabSwitchCount || 0),
+        mouseAnomalies: Number(submission.proctoring?.mouseAnomalies || 0),
+        warnings,
+        critical,
+        anomalyScore: submission.proctoring?.integrityScore ? Number(submission.proctoring.integrityScore) : null,
+        suspiciousFlag: Boolean(submission.proctoring?.flaggedStatus),
+      },
+      events,
+      integrityNotes,
       updatedAt: new Date().toISOString(),
     };
   }
