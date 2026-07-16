@@ -54,6 +54,7 @@ enum AISection {
   EXPLANATION
   CLASSIFICATION
   QUALITY_REVIEW
+  RISK_ASSESSMENT
 }
 
 enum AIJobStatus {
@@ -152,6 +153,7 @@ model User {
   aiReviewedRecords AIGenerationRecord[] @relation("AIReviewUser")
   examSubmissionRegradeLogs ExamSubmissionRegradeLog[] @relation("RegradeReviewer")
   qualityReviewItemsReviewed ExamQualityReviewItem[] @relation("ExamQualityReviewItemReviewer")
+  anomalyFlagsReviewed AnomalyFlag[] @relation("AnomalyFlagReviewer")
 
   @@map("users")
 }
@@ -463,6 +465,8 @@ model AIGenerationRecord {
   questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: SetNull)
   examId            String?
   exam              Exam?    @relation("ExamQualityReviewJobs", fields: [examId], references: [id], onDelete: Cascade)
+  submissionId      String?
+  submission        ExamSubmission? @relation("ExamRiskAssessmentJobs", fields: [submissionId], references: [id], onDelete: Cascade)
   section           AISection
   status            AIJobStatus @default(QUEUED)
   reviewStatus      AIReviewStatus @default(PENDING)
@@ -480,10 +484,12 @@ model AIGenerationRecord {
   completedAt       DateTime?
 
   qualityReviewItems ExamQualityReviewItem[]
+  riskAssessmentFlags AnomalyFlag[]
 
   @@index([draftId, createdAt])
   @@index([questionVersionId])
   @@index([examId, createdAt])
+  @@index([submissionId, createdAt])
   @@index([status])
   @@index([reviewStatus])
   @@index([reviewedBy])
@@ -597,6 +603,7 @@ model ExamSubmission {
   answers      SubmissionAnswer[]
   regradeLogs  ExamSubmissionRegradeLog[]
   proctoring   ProctoringSession?
+  riskAssessmentJobs AIGenerationRecord[] @relation("ExamRiskAssessmentJobs")
 
   @@unique([examId, studentId, attemptNo])
   @@index([examId])
@@ -710,15 +717,19 @@ model AnomalyFlag {
   id             String   @id @default(uuid())
   examInstanceId String
   examInstance   ExamInstance @relation(fields: [examInstanceId], references: [id], onDelete: Cascade)
+  jobId          String?
+  job            AIGenerationRecord? @relation(fields: [jobId], references: [id], onDelete: SetNull)
   kind           String
   score          Decimal? @db.Decimal(5, 2)
   status         AnomalyFlagStatus @default(OPEN)
   reviewerId     String?
+  reviewer       User?    @relation("AnomalyFlagReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   notes          String?  @db.Text
   createdAt      DateTime @default(now())
   reviewedAt     DateTime?
 
   @@index([examInstanceId])
+  @@index([jobId])
   @@index([status])
   @@map("anomaly_flags")
 }

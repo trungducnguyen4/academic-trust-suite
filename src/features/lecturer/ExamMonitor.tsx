@@ -62,6 +62,8 @@ import {
   MousePointerClick,
 } from "lucide-react";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
+import { Textarea } from "@/components/ui/textarea";
+import { toast } from "sonner";
 import api, { API_BASE_URL, unwrapPaginatedData } from "@/lib/api";
 import { Bar } from "react-chartjs-2";
 import {
@@ -207,6 +209,35 @@ export default function ExamMonitor() {
   );
   const eventSourceRef = useRef<EventSource | null>(null);
 
+  const [riskFlags, setRiskFlags] = useState<any[]>([]);
+  const [riskDialogSubmission, setRiskDialogSubmission] = useState<{ id: string; name: string } | null>(null);
+  const [riskLoading, setRiskLoading] = useState(false);
+  const [riskResult, setRiskResult] = useState<any | null>(null);
+  const [riskFlag, setRiskFlag] = useState<any | null>(null);
+  const [riskError, setRiskError] = useState<string | null>(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+
+  const riskFlagsBySubmission = useMemo(() => {
+    const map = new Map<string, any>();
+    for (const flag of riskFlags) {
+      const submissionId = flag?.job?.submissionId;
+      if (submissionId && !map.has(submissionId)) {
+        map.set(submissionId, flag);
+      }
+    }
+    return map;
+  }, [riskFlags]);
+
+  const loadRiskFlags = async () => {
+    if (!id) return;
+    try {
+      const flags = await api.listExamRiskFlags(id);
+      setRiskFlags(flags || []);
+    } catch {
+      // Non-blocking: risk flags are supplementary to the core monitor view.
+    }
+  };
+
   const loadMonitorData = async (silent = false) => {
     if (!id) return;
 
@@ -331,7 +362,66 @@ export default function ExamMonitor() {
 
   useEffect(() => {
     loadMonitorData(false);
+    loadRiskFlags();
   }, [id]);
+
+  const openRiskDialog = (submissionId: string, studentName: string) => {
+    setRiskDialogSubmission({ id: submissionId, name: studentName });
+    setRiskError(null);
+    setReviewNotes("");
+    const existingFlag = riskFlagsBySubmission.get(submissionId);
+    if (existingFlag) {
+      setRiskFlag(existingFlag);
+      setRiskResult(existingFlag.job?.output || null);
+    } else {
+      setRiskFlag(null);
+      setRiskResult(null);
+    }
+  };
+
+  const closeRiskDialog = () => {
+    setRiskDialogSubmission(null);
+    setRiskResult(null);
+    setRiskFlag(null);
+    setRiskError(null);
+  };
+
+  const handleGenerateRisk = async () => {
+    if (!riskDialogSubmission) return;
+    setRiskLoading(true);
+    setRiskError(null);
+    try {
+      const job = await api.generateExamRiskAssessment(riskDialogSubmission.id);
+      setRiskResult(job?.output || null);
+      setRiskFlag(job?.flag || null);
+      await loadRiskFlags();
+    } catch (err: any) {
+      setRiskError(err?.message || "Failed to generate AI risk assessment.");
+    } finally {
+      setRiskLoading(false);
+    }
+  };
+
+  const handleReviewFlag = async (status: "REVIEWED" | "DISMISSED" | "CONFIRMED") => {
+    if (!riskFlag?.id) return;
+    try {
+      const updated = await api.reviewExamRiskFlag(riskFlag.id, {
+        status,
+        notes: reviewNotes.trim() || undefined,
+      });
+      setRiskFlag((prev: any) => ({ ...prev, ...updated }));
+      await loadRiskFlags();
+      toast.success(
+        status === "CONFIRMED"
+          ? "Marked as needing further investigation."
+          : status === "DISMISSED"
+            ? "Flag dismissed."
+            : "Flag marked as reviewed.",
+      );
+    } catch (err: any) {
+      toast.error(err?.message || "Failed to update flag review status.");
+    }
+  };
 
   useEffect(() => {
     if (!autoRefresh) return;
@@ -372,7 +462,10 @@ export default function ExamMonitor() {
             : new Date().toLocaleTimeString(),
         };
 
-        setAlerts((prev) => [mapped, ...prev].slice(0, 100));
+        setAlerts((prev) => {
+          if (prev.some((a) => a.id === mapped.id)) return prev;
+          return [mapped, ...prev].slice(0, 100);
+        });
 
         if (mapped.submissionId) {
           setStudents((prev) =>
@@ -910,26 +1003,42 @@ export default function ExamMonitor() {
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
-                          {s.status === "in_progress" && s.submissionId && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-red-600 text-xs"
-                              onClick={() =>
-                                flagStudent(
-                                  s.submissionId,
-                                  "Manually flagged by instructor",
-                                )
-                              }
-                            >
-                              <Flag className="mr-1 h-3.5 w-3.5" /> Flag
-                            </Button>
-                          )}
-                          {s.status === "flagged" && (
-                            <Button variant="ghost" size="sm" className="text-xs">
-                              <Eye className="mr-1 h-3.5 w-3.5" /> Review
-                            </Button>
-                          )}
+                          <div className="flex items-center justify-end gap-1">
+                            {s.status === "in_progress" && s.submissionId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-red-600 text-xs"
+                                onClick={() =>
+                                  flagStudent(
+                                    s.submissionId,
+                                    "Manually flagged by instructor",
+                                  )
+                                }
+                              >
+                                <Flag className="mr-1 h-3.5 w-3.5" /> Flag
+                              </Button>
+                            )}
+                            {s.submissionId && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="text-xs"
+                                onClick={() => openRiskDialog(s.submissionId as string, s.name)}
+                              >
+                                <Eye className="mr-1 h-3.5 w-3.5" />
+                                {riskFlagsBySubmission.has(s.submissionId) ? (
+                                  <StatusBadge
+                                    domain="severity"
+                                    status={riskFlagsBySubmission.get(s.submissionId)?.job?.output?.riskLevel || "low"}
+                                    className="ml-1"
+                                  />
+                                ) : (
+                                  "AI Risk"
+                                )}
+                              </Button>
+                            )}
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))
@@ -1019,6 +1128,121 @@ export default function ExamMonitor() {
                 </div>
               )}
             </div>
+          </DialogContent>
+        </Dialog>
+
+        <Dialog open={!!riskDialogSubmission} onOpenChange={(open) => !open && closeRiskDialog()}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Eye className="h-5 w-5" />
+                AI Integrity Risk — {riskDialogSubmission?.name}
+              </DialogTitle>
+              <DialogDescription>
+                AI-assessed risk based on real proctoring signals for this attempt. This is a risk
+                indicator only — it does not conclude that the student cheated.
+              </DialogDescription>
+            </DialogHeader>
+
+            {!riskResult && !riskLoading && (
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  No AI risk assessment has been generated for this attempt yet.
+                </p>
+                <Button
+                  onClick={handleGenerateRisk}
+                  className="gap-2"
+                  disabled={!riskDialogSubmission}
+                >
+                  Generate AI Risk Assessment
+                </Button>
+                {riskError && <p className="text-sm text-red-600">{riskError}</p>}
+              </div>
+            )}
+
+            {riskLoading && (
+              <div className="flex items-center justify-center py-8 text-muted-foreground text-sm gap-2">
+                <RefreshCw className="h-4 w-4 animate-spin" /> Analyzing behavioral signals with AI...
+              </div>
+            )}
+
+            {riskResult && !riskLoading && (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <StatusBadge domain="severity" status={riskResult.riskLevel?.toLowerCase()}>
+                    {riskResult.riskLevel} risk
+                  </StatusBadge>
+                  <span className="text-sm text-muted-foreground">Score: {riskResult.riskScore}/100</span>
+                  {riskFlag?.status && (
+                    <StatusBadge
+                      domain="integrity"
+                      status={riskFlag.status === "OPEN" ? "pending" : riskFlag.status.toLowerCase()}
+                    />
+                  )}
+                </div>
+
+                <p className="text-sm">{riskResult.explanation}</p>
+
+                {Array.isArray(riskResult.signals) && riskResult.signals.length > 0 && (
+                  <div className="space-y-2">
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                      Detected signals
+                    </p>
+                    {riskResult.signals.map((sig: any, idx: number) => (
+                      <div key={idx} className="rounded-md border border-border bg-muted/30 p-2 text-sm">
+                        <span className="font-medium">{sig.type}:</span> {sig.description}
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                    Review decision
+                  </p>
+                  <Textarea
+                    placeholder="Optional review note..."
+                    value={reviewNotes}
+                    onChange={(e) => setReviewNotes(e.target.value)}
+                    className="text-sm min-h-[60px]"
+                  />
+                  <div className="flex gap-2 flex-wrap">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!riskFlag?.id}
+                      onClick={() => handleReviewFlag("REVIEWED")}
+                    >
+                      Mark Reviewed
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={!riskFlag?.id}
+                      onClick={() => handleReviewFlag("DISMISSED")}
+                    >
+                      Dismiss
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="destructive"
+                      disabled={!riskFlag?.id}
+                      onClick={() => handleReviewFlag("CONFIRMED")}
+                    >
+                      Confirm Needs Investigation
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="ml-auto"
+                      onClick={handleGenerateRisk}
+                    >
+                      Regenerate
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>

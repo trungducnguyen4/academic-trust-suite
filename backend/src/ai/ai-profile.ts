@@ -4,7 +4,8 @@ export type ExamTrustAiUseCase =
   | 'draft_section'
   | 'topic_matching'
   | 'grading_support'
-  | 'exam_quality_review';
+  | 'exam_quality_review'
+  | 'exam_risk_assessment';
 
 export interface ExamTrustAiAnalyticsSummary {
   totalAttempts?: number;
@@ -141,6 +142,7 @@ export function buildExamTrustPromptHeader(params: ExamTrustAiPromptParams): str
     topic_matching: 'topic matching',
     grading_support: 'grading support',
     exam_quality_review: 'exam quality review',
+    exam_risk_assessment: 'exam integrity risk assessment',
   };
 
   const lines = [

@@ -932,6 +932,64 @@ class ApiClient {
     });
   }
 
+  // AI exam integrity risk assessment endpoints
+  async requestExamRiskAssessment(submissionId: string) {
+    return this.request<{ jobId: string; status: string }>(`/submissions/${submissionId}/risk-assessment`, {
+      method: 'POST',
+    });
+  }
+
+  async getExamRiskAssessmentJob(submissionId: string, jobId: string) {
+    return this.request<any>(`/submissions/${submissionId}/risk-assessment/jobs/${jobId}`);
+  }
+
+  private async waitForExamRiskAssessmentJob(
+    submissionId: string,
+    jobId: string,
+    timeoutMs = 180000,
+    intervalMs = 1500,
+  ): Promise<any> {
+    const startedAt = Date.now();
+    let lastStatus = 'UNKNOWN';
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const job = await this.getExamRiskAssessmentJob(submissionId, jobId);
+      const status = String(job?.status || '').toUpperCase();
+      lastStatus = status || lastStatus;
+
+      if (status === 'SUCCEEDED') {
+        return job;
+      }
+      if (status === 'FAILED' || status === 'REJECTED') {
+        throw new Error(job?.errorMessage || `AI risk assessment failed with status ${status}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error(`AI risk assessment timed out after ${Math.round(timeoutMs / 1000)}s (jobId: ${jobId}, last status: ${lastStatus})`);
+  }
+
+  async generateExamRiskAssessment(submissionId: string) {
+    const { jobId } = await this.requestExamRiskAssessment(submissionId);
+    return this.waitForExamRiskAssessmentJob(submissionId, jobId);
+  }
+
+  async listExamRiskFlags(examId: string, params?: { status?: string }) {
+    const query = params?.status ? `?status=${encodeURIComponent(params.status)}` : '';
+    return this.request<any[]>(`/submissions/exam/${examId}/risk-flags${query}`);
+  }
+
+  async reviewExamRiskFlag(
+    flagId: string,
+    data: { status: 'REVIEWED' | 'DISMISSED' | 'CONFIRMED'; notes?: string },
+  ) {
+    return this.request<any>(`/submissions/risk-flags/${flagId}/review`, {
+      method: 'PATCH',
+      body: data,
+    });
+  }
+
   async updateSubmissionStatus(submissionId: string, status: 'IN_PROGRESS' | 'SUBMITTED' | 'GRADED' | 'FLAGGED') {
     return this.request<any>(`/submissions/${submissionId}/status`, {
       method: 'PATCH',

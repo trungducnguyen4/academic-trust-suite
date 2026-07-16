@@ -1269,19 +1269,6 @@ export class SubmissionsService {
       return { success: true };
     });
 
-    if (entries.length > 0) {
-      this.publishRealtimeLogs(
-        submission.examId,
-        submission.id,
-        {
-          id: submission.student?.id,
-          fullName: submission.student?.fullName,
-          studentId: submission.student?.studentId,
-        },
-        entries,
-      );
-    }
-
     // Publish realtime logs
     if (entries.length > 0) {
       this.publishRealtimeLogs(

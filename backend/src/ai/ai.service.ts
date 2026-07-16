@@ -550,6 +550,163 @@ Rules:
     }
   }
 
+  async assessExamIntegrityRisk(params: {
+    examTitle?: string;
+    courseName?: string;
+    language?: string;
+    submissionSummary: {
+      attemptNo?: number;
+      score?: number | null;
+      durationMinutes?: number | null;
+      timeSpentMinutes?: number | null;
+    };
+    signals: {
+      tabSwitchCount: number;
+      mouseAnomalies: number;
+      fullscreenExitCount: number;
+      focusLossCount: number;
+      pageHiddenCount: number;
+      tooFastAnswerCount: number;
+      totalAnswers: number;
+      totalIntegrityEvents: number;
+      eventBreakdown: Record<string, number>;
+    };
+    context?: ExamTrustAiContext;
+  }) {
+    const { examTitle, courseName, language, submissionSummary, signals, context } = params;
+    const targetLanguage = language || this.defaultLanguage;
+    const langInstruction = targetLanguage === 'vi'
+      ? 'Write the explanation and each signal description in Vietnamese.'
+      : 'Write the explanation and each signal description in English.';
+
+    const profilePrompt = buildExamTrustPromptHeader({
+      appName: this.appName,
+      useCase: 'exam_risk_assessment',
+      language: targetLanguage,
+      context: {
+        examTitle,
+        courseName,
+        attemptNo: submissionSummary.attemptNo,
+        analytics: {
+          averageScore: submissionSummary.score ?? undefined,
+        },
+        ...(context || {}),
+      },
+    });
+
+    const systemPrompt = `${profilePrompt}
+${langInstruction}
+
+You are assessing the integrity RISK of a single exam attempt ("${examTitle || 'Untitled exam'}") using only the real proctoring/behavioral signals below. You are NOT a judge — you must never conclude or state that the student cheated. You only surface risk indicators for a human lecturer to review.
+
+Attempt summary:
+${JSON.stringify(submissionSummary, null, 2)}
+
+Real behavioral signals recorded during this attempt:
+${JSON.stringify(signals, null, 2)}
+
+You MUST respond with a valid JSON object (no markdown, no code fences, just pure JSON) with this exact structure:
+{
+  "riskScore": 0,
+  "riskLevel": "LOW" | "MEDIUM" | "HIGH",
+  "signals": [
+    {
+      "type": "short signal identifier, e.g. tab_switch, fullscreen_exit, too_fast_answers",
+      "description": "explain what was observed and why it matters, citing the specific numbers",
+      "weight": 0.0
+    }
+  ],
+  "explanation": "2-4 sentence explanation of the overall risk assessment based only on the numbers above",
+  "recommendReview": true
+}
+
+Rules:
+- "riskScore" is an integer from 0 to 100 based strictly on the signals provided.
+- "riskLevel" must be "LOW" for riskScore < 35, "MEDIUM" for 35-69, "HIGH" for 70+.
+- Only include a signal in "signals" if its count is greater than zero and meaningfully contributes to risk.
+- "weight" is a number between 0 and 1 indicating how much that signal contributed to the score.
+- "recommendReview" must be true whenever riskLevel is "MEDIUM" or "HIGH", or when signals look unusual even at LOW risk.
+- Never state or imply that the student definitely cheated. Use neutral, evidence-based language ("elevated tab-switch frequency", not "the student cheated").
+- Base every judgment strictly on the numbers provided. Do not invent data.
+- Return ONLY the JSON object, no additional text.`;
+
+    try {
+      let responseText: string;
+
+      if (this.provider === 'ollama') {
+        responseText = await this._callOllama(
+          systemPrompt,
+          this.buildOllamaOptions('grading_support'),
+        );
+      } else if (this.provider === 'nvidia') {
+        responseText = await this._callNvidia(systemPrompt);
+      } else if (this.provider === 'openrouter') {
+        responseText = await this._callOpenRouter(systemPrompt);
+      } else if (this.provider === 'local' && this.localUrl) {
+        const resp = await fetch(this.localUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: systemPrompt }),
+        });
+        if (!resp.ok) throw new Error(`Local model server returned ${resp.status}`);
+        responseText = await resp.text();
+      } else if (this.provider === 'mock') {
+        const mockScore = Math.min(100, signals.tabSwitchCount * 10 + signals.fullscreenExitCount * 15 + signals.tooFastAnswerCount * 5);
+        responseText = JSON.stringify({
+          riskScore: mockScore,
+          riskLevel: mockScore >= 70 ? 'HIGH' : mockScore >= 35 ? 'MEDIUM' : 'LOW',
+          signals: signals.tabSwitchCount > 0
+            ? [{ type: 'tab_switch', description: 'Mocked signal for development.', weight: 0.5 }]
+            : [],
+          explanation: `Mocked risk assessment for ${examTitle || 'this exam'}.`,
+          recommendReview: mockScore >= 35,
+        });
+      } else {
+        const result = await this.model.generateContent(systemPrompt);
+        responseText = result.response.text();
+      }
+
+      const cleaned = responseText
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/gi, '')
+        .trim();
+
+      const parsed = JSON.parse(cleaned);
+
+      const validLevels = new Set(['LOW', 'MEDIUM', 'HIGH']);
+      if (
+        typeof parsed.riskScore !== 'number'
+        || !validLevels.has(String(parsed.riskLevel))
+        || typeof parsed.explanation !== 'string'
+        || !Array.isArray(parsed.signals)
+      ) {
+        throw new Error('Invalid response format: missing riskScore, riskLevel, explanation, or signals array');
+      }
+
+      const riskScore = Math.max(0, Math.min(100, Math.round(Number(parsed.riskScore))));
+      const riskLevel = riskScore >= 70 ? 'HIGH' : riskScore >= 35 ? 'MEDIUM' : 'LOW';
+
+      const parsedSignals = parsed.signals
+        .filter((s: any) => s && s.type && s.description)
+        .map((s: any) => ({
+          type: String(s.type).trim().slice(0, 100),
+          description: String(s.description).trim(),
+          weight: Math.max(0, Math.min(1, Number(s.weight) || 0)),
+        }));
+
+      return {
+        riskScore,
+        riskLevel: riskLevel as 'LOW' | 'MEDIUM' | 'HIGH',
+        signals: parsedSignals,
+        explanation: String(parsed.explanation).trim(),
+        recommendReview: riskLevel !== 'LOW' ? true : Boolean(parsed.recommendReview),
+      };
+    } catch (error: any) {
+      this.logger.error('Failed to generate exam risk assessment:', error);
+      throw new Error(`AI generation failed: ${error.message}`);
+    }
+  }
+
   async suggestSimilarTopics(params: {
     topicName: string;
     existingTopics: string[];

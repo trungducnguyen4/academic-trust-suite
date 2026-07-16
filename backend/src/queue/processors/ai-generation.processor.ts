@@ -6,7 +6,7 @@ import { AiService } from '../../ai/ai.service';
 import { AISection } from '../../questions-v2/dto/question-draft.dto';
 import { ExamTrustAiContext } from '../../ai/ai-profile';
 
-type AiTaskType = 'single-question' | 'exam-questions' | 'draft-section' | 'exam-quality-review';
+type AiTaskType = 'single-question' | 'exam-questions' | 'draft-section' | 'exam-quality-review' | 'exam-risk-assessment';
 
 @Processor('ai-generation')
 export class AIGenerationProcessor {
@@ -337,6 +337,50 @@ export class AIGenerationProcessor {
             });
           }),
         ]);
+        return;
+      }
+
+      if (task === 'exam-risk-assessment') {
+        const result = await this.aiService.assessExamIntegrityRisk({
+          examTitle: context.examTitle,
+          courseName: context.courseName,
+          language: payload.language,
+          submissionSummary: payload.submissionSummary || {},
+          signals: payload.signals || {
+            tabSwitchCount: 0,
+            mouseAnomalies: 0,
+            fullscreenExitCount: 0,
+            focusLossCount: 0,
+            pageHiddenCount: 0,
+            tooFastAnswerCount: 0,
+            totalAnswers: 0,
+            totalIntegrityEvents: 0,
+            eventBreakdown: {},
+          },
+          context,
+        });
+
+        await this.prisma.aIGenerationRecord.update({
+          where: { id: jobId },
+          data: {
+            status: 'SUCCEEDED',
+            output: result,
+            completedAt: new Date(),
+          },
+        });
+
+        const examInstanceId = payload.examInstanceId || null;
+        if (examInstanceId) {
+          await this.prisma.anomalyFlag.create({
+            data: {
+              examInstanceId,
+              jobId,
+              kind: 'AI_RISK_ASSESSMENT',
+              score: result.riskScore,
+              status: 'OPEN',
+            },
+          });
+        }
         return;
       }
 

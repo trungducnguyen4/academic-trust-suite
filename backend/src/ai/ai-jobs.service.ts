@@ -3,13 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { QueueService } from '../queue/queue.service';
 import { AISection } from '../questions-v2/dto/question-draft.dto';
 
-type AiTaskType = 'single-question' | 'exam-questions' | 'draft-section' | 'exam-quality-review';
+type AiTaskType = 'single-question' | 'exam-questions' | 'draft-section' | 'exam-quality-review' | 'exam-risk-assessment';
 
 interface CreateAiJobParams {
   task: AiTaskType;
   draftId?: string | null;
   questionVersionId?: string | null;
   examId?: string | null;
+  submissionId?: string | null;
   section?: AISection | null;
   payload: Record<string, any>;
   requestedBy?: string | null;
@@ -35,7 +36,7 @@ export class AiJobsService {
           ? nvidiaModel
         : provider === 'openrouter'
           ? openRouterModel
-        : params.task === 'single-question' || params.task === 'exam-questions' || params.task === 'exam-quality-review'
+        : params.task === 'single-question' || params.task === 'exam-questions' || params.task === 'exam-quality-review' || params.task === 'exam-risk-assessment'
           ? googleModel
           : ollamaModel;
 
@@ -44,6 +45,7 @@ export class AiJobsService {
         draftId: params.draftId ?? null,
         questionVersionId: params.questionVersionId ?? null,
         examId: params.examId ?? null,
+        submissionId: params.submissionId ?? null,
         section: params.section ?? AISection.CONTENT,
         status: 'QUEUED',
         reviewStatus: 'PENDING',
@@ -64,6 +66,7 @@ export class AiJobsService {
       draftId: params.draftId ?? null,
       questionVersionId: params.questionVersionId ?? null,
       examId: params.examId ?? null,
+      submissionId: params.submissionId ?? null,
       section: params.section ?? null,
       payload: params.payload,
     });
