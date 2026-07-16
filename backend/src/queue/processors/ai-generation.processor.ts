@@ -235,7 +235,7 @@ export class AIGenerationProcessor {
       payload: Record<string, any>;
     };
 
-    const record = await this.prisma.aiGenerationRecord.findUnique({
+    const record = await this.prisma.aIGenerationRecord.findUnique({
       where: { id: jobId },
       select: { id: true, status: true },
     });
@@ -245,7 +245,7 @@ export class AIGenerationProcessor {
       return;
     }
 
-    await this.prisma.aiGenerationRecord.update({
+    await this.prisma.aIGenerationRecord.update({
       where: { id: jobId },
       data: {
         status: 'RUNNING',
@@ -267,7 +267,7 @@ export class AIGenerationProcessor {
           context,
         });
 
-        await this.prisma.aiGenerationRecord.update({
+        await this.prisma.aIGenerationRecord.update({
           where: { id: jobId },
           data: {
             status: 'SUCCEEDED',
@@ -290,7 +290,7 @@ export class AIGenerationProcessor {
           context,
         });
 
-        await this.prisma.aiGenerationRecord.update({
+        await this.prisma.aIGenerationRecord.update({
           where: { id: jobId },
           data: {
             status: 'SUCCEEDED',
@@ -328,7 +328,7 @@ export class AIGenerationProcessor {
         });
       }
 
-      await this.prisma.aiGenerationRecord.update({
+      await this.prisma.aIGenerationRecord.update({
         where: { id: jobId },
         data: {
           status: 'SUCCEEDED',
@@ -338,7 +338,7 @@ export class AIGenerationProcessor {
       });
     } catch (error: any) {
       this.logger.error(`AI job failed: ${jobId}`, error?.stack || String(error));
-      await this.prisma.aiGenerationRecord.update({
+      await this.prisma.aIGenerationRecord.update({
         where: { id: jobId },
         data: {
           status: 'FAILED',

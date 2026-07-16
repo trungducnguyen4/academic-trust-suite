@@ -52,14 +52,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  MoreHorizontal,
 } from "lucide-react";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -725,86 +718,91 @@ export default function ExamManagement() {
                               {exam.status}
                             </StatusBadge>
                           </TableCell>
-                          <TableCell className="text-right">
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="sm">
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
+                          <TableCell>
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  router.push(
+                                    `/lecturer/exam/${exam.id}/preview`,
+                                  )
+                                }
+                                className="h-8 gap-1.5 border-sky-200 bg-sky-50 px-2.5 text-sky-700 shadow-none hover:border-sky-300 hover:bg-sky-100 hover:text-sky-800"
+                              >
+                                <Eye className="h-3.5 w-3.5" />
+                                Preview
+                              </Button>
+                              {(exam.status === "ONGOING" ||
+                                exam.status === "PUBLISHED") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
                                   onClick={() =>
                                     router.push(
-                                      `/lecturer/exam/${exam.id}/preview`,
+                                      `/lecturer/exam/${exam.id}/monitor`,
                                     )
                                   }
-                                  className="gap-2"
+                                  className="h-8 gap-1.5 border-amber-200 bg-amber-50 px-2.5 text-amber-700 shadow-none hover:border-amber-300 hover:bg-amber-100 hover:text-amber-800"
                                 >
-                                  <Eye className="h-4 w-4" />
-                                  Preview
-                                </DropdownMenuItem>
-                                {(exam.status === "ONGOING" ||
-                                  exam.status === "PUBLISHED") && (
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      router.push(
-                                        `/lecturer/exam/${exam.id}/monitor`,
-                                      )
-                                    }
-                                    className="gap-2"
+                                  <Clock className="h-3.5 w-3.5" />
+                                  Monitor
+                                </Button>
+                              )}
+                              {(exam.status === "COMPLETED" ||
+                                (exam._count?.submissions ?? 0) > 0) && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() =>
+                                    router.push(
+                                      `/lecturer/exam/${exam.id}/results`,
+                                    )
+                                  }
+                                  className="h-8 gap-1.5 border-violet-200 bg-violet-50 px-2.5 text-violet-700 shadow-none hover:border-violet-300 hover:bg-violet-100 hover:text-violet-800"
+                                >
+                                  <BarChart3 className="h-3.5 w-3.5" />
+                                  Results
+                                </Button>
+                              )}
+                              {(exam.status === "DRAFT" ||
+                                exam.status === "PUBLISHED") && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => handleOpenRescheduleDialog(exam)}
+                                  className="h-8 gap-1.5 border-indigo-200 bg-indigo-50 px-2.5 text-indigo-700 shadow-none hover:border-indigo-300 hover:bg-indigo-100 hover:text-indigo-800"
+                                >
+                                  <CalendarClock className="h-3.5 w-3.5" />
+                                  Reschedule
+                                </Button>
+                              )}
+                              {exam.status === "DRAFT" && (
+                                <>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => handleEditExam(exam)}
+                                    className="h-8 gap-1.5 border-slate-200 bg-slate-50 px-2.5 text-slate-700 shadow-none hover:border-slate-300 hover:bg-slate-100 hover:text-slate-900"
                                   >
-                                    <Clock className="h-4 w-4" />
-                                    Monitor
-                                  </DropdownMenuItem>
-                                )}
-                                {(exam.status === "COMPLETED" ||
-                                  (exam._count?.submissions ?? 0) > 0) && (
-                                  <DropdownMenuItem
-                                    onClick={() =>
-                                      router.push(
-                                        `/lecturer/exam/${exam.id}/results`,
-                                      )
-                                    }
-                                    className="gap-2"
+                                    <Edit2 className="h-3.5 w-3.5" />
+                                    Edit
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedExam(exam);
+                                      setShowDeleteDialog(true);
+                                    }}
+                                    className="h-8 gap-1.5 border-red-200 bg-red-50 px-2.5 text-red-700 shadow-none hover:border-red-300 hover:bg-red-100 hover:text-red-800"
                                   >
-                                    <BarChart3 className="h-4 w-4" />
-                                    Results
-                                  </DropdownMenuItem>
-                                )}
-                                {(exam.status === "DRAFT" ||
-                                  exam.status === "PUBLISHED") && (
-                                  <DropdownMenuItem
-                                    onClick={() => handleOpenRescheduleDialog(exam)}
-                                    className="gap-2"
-                                  >
-                                    <CalendarClock className="h-4 w-4" />
-                                    Reschedule
-                                  </DropdownMenuItem>
-                                )}
-                                {exam.status === "DRAFT" && (
-                                  <>
-                                    <DropdownMenuItem
-                                      onClick={() => handleEditExam(exam)}
-                                      className="gap-2"
-                                    >
-                                      <Edit2 className="h-4 w-4" />
-                                      Edit
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem
-                                      onClick={() => {
-                                        setSelectedExam(exam);
-                                        setShowDeleteDialog(true);
-                                      }}
-                                      className="gap-2 text-destructive"
-                                    >
-                                      <Trash2 className="h-4 w-4" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  </>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Delete
+                                  </Button>
+                                </>
+                              )}
+                            </div>
                           </TableCell>
                         </TableRow>
                       );

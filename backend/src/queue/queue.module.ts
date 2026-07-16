@@ -1,13 +1,15 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bull';
 import { QueueService } from './queue.service';
 import { IntegrityLogsProcessor } from './processors/integrity-logs.processor';
 import { NotificationsProcessor } from './processors/notifications.processor';
 import { GradingProcessor } from './processors/grading.processor';
 import { EventsProcessor } from './processors/events.processor';
+import { AIGenerationProcessor } from './processors/ai-generation.processor';
 import { PrismaModule } from '../prisma/prisma.module';
 import { NotificationsModule } from '../notifications/notifications.module';
 import { EventsModule } from '../events/events.module';
+import { AiModule } from '../ai/ai.module';
 
 @Module({
   imports: [
@@ -27,6 +29,7 @@ import { EventsModule } from '../events/events.module';
     ),
     PrismaModule,
     NotificationsModule,
+    forwardRef(() => AiModule),
     // events module used for realtime pub/sub
     EventsModule,
   ],
@@ -36,7 +39,7 @@ import { EventsModule } from '../events/events.module';
     NotificationsProcessor,
     GradingProcessor,
     EventsProcessor,
-    // events processor will be dynamically loaded below
+    AIGenerationProcessor,
   ],
   exports: [QueueService],
 })

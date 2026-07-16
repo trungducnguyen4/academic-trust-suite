@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Card,
@@ -16,12 +15,9 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Plus,
   FileText,
-  Users,
-  BarChart3,
   Clock,
   ArrowRight,
   BookOpen,
-  GraduationCap,
   Loader2,
   Sparkles,
   Zap,
@@ -29,8 +25,9 @@ import {
 import { format, addHours } from "date-fns";
 import Link from "next/link";
 import api, { unwrapPaginatedData } from "@/lib/api";
+import { AttentionSection } from "./attention/AttentionSection";
 
-interface Exam {
+export interface Exam {
   id: string;
   title: string;
   course: { code: string; name: string };
@@ -98,20 +95,6 @@ export default function LecturerDashboard() {
     },
   ];
 
-  const totalStudents = courses.reduce(
-    (acc, c) => acc + (c.enrolledStudents ?? c._count?.enrollments ?? 0),
-    0,
-  );
-
-  const stats = {
-    totalCourses: courses.length,
-    totalStudents,
-    activeExams: exams.filter(
-      (e) => e.status === "PUBLISHED" || e.status === "ONGOING",
-    ).length,
-    questionsInBank: questionCount,
-  };
-
   if (loading) {
     return (
       <DashboardLayout notifications={alerts}>
@@ -152,57 +135,15 @@ export default function LecturerDashboard() {
           </Button>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              label: "Courses",
-              value: stats.totalCourses,
-              icon: GraduationCap,
-              color: "text-blue-600",
-              bg: "bg-blue-500/10",
-            },
-            {
-              label: "Students",
-              value: stats.totalStudents,
-              icon: Users,
-              color: "text-violet-600",
-              bg: "bg-violet-500/10",
-            },
-            {
-              label: "Active Exams",
-              value: stats.activeExams,
-              icon: Clock,
-              color: "text-emerald-600",
-              bg: "bg-emerald-500/10",
-            },
-            {
-              label: "Questions",
-              value: stats.questionsInBank,
-              icon: BookOpen,
-              color: "text-amber-600",
-              bg: "bg-amber-500/10",
-            },
-          ].map((stat, i) => (
-            <div
-              key={stat.label}
-              className={`animate-fade-in-up opacity-0 stagger-${i + 1}`}
-            >
-              <AdminStatCard
-                icon={stat.icon}
-                value={stat.value}
-                label={stat.label}
-                iconWrapClassName={stat.bg}
-                iconClassName={stat.color}
-                className="card-elevated"
-              />
-            </div>
-          ))}
-        </div>
+        {/* Needs your attention */}
+        <AttentionSection
+          exams={exams}
+          examsLoading={loading}
+        />
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
           {/* Recent Exams */}
-          <div className="lg:col-span-2">
+          <div>
             <Card className="card-elevated">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
@@ -339,71 +280,6 @@ export default function LecturerDashboard() {
                       );
                     })
                   )}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Quick Actions */}
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold">Quick Actions</CardTitle>
-                <CardDescription>Common tasks and shortcuts</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-4">
-                  {[
-                    {
-                      icon: Plus,
-                      label: "Create Exam",
-                      href: "/lecturer/exams/create",
-                      color: "text-blue-600",
-                      bg: "bg-blue-500/10",
-                    },
-                    {
-                      icon: GraduationCap,
-                      label: "Manage Courses",
-                      href: "/lecturer/courses",
-                      color: "text-fuchsia-600",
-                      bg: "bg-fuchsia-500/10",
-                    },
-                    {
-                      icon: BookOpen,
-                      label: "Question Bank",
-                      href: "/lecturer/question-bank",
-                      color: "text-violet-600",
-                      bg: "bg-violet-500/10",
-                    },
-                    {
-                      icon: FileText,
-                      label: "Manage Exams",
-                      href: "/lecturer/exams",
-                      color: "text-amber-600",
-                      bg: "bg-amber-500/10",
-                    },
-                    {
-                      icon: BarChart3,
-                      label: "View Analytics",
-                      href: "/lecturer/analytics",
-                      color: "text-emerald-600",
-                      bg: "bg-emerald-500/10",
-                    },
-                  ].map((action) => (
-                    <Button
-                      key={action.label}
-                      variant="outline"
-                      className="h-auto py-5 flex-col gap-3 rounded-xl border-border/50 hover:border-primary/20 hover:bg-secondary/50 transition-all"
-                      asChild
-                    >
-                      <Link href={action.href}>
-                        <div
-                          className={`h-10 w-10 rounded-xl ${action.bg} flex items-center justify-center`}
-                        >
-                          <action.icon className={`h-5 w-5 ${action.color}`} />
-                        </div>
-                        <span className="font-medium">{action.label}</span>
-                      </Link>
-                    </Button>
-                  ))}
                 </div>
               </CardContent>
             </Card>

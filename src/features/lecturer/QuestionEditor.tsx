@@ -117,6 +117,7 @@ export default function QuestionEditor() {
   // AI Generation state
   const [aiPrompt, setAiPrompt] = useState("");
   const [isGenerating, setIsGenerating] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
   const [aiSimilarityWarning, setAiSimilarityWarning] = useState("");
 
   // Multiple choice options
@@ -691,10 +692,17 @@ export default function QuestionEditor() {
 
   const handleAiGenerate = async () => {
     if (!aiPrompt.trim()) return;
+    if (isGenerating) return; // Prevent double clicks
     setIsGenerating(true);
+    setAiError(null);
     setAiSimilarityWarning("");
 
     try {
+      // Validate course before proceeding
+      if (!course) {
+        throw new Error("Please select a course before generating a question.");
+      }
+
       // Map frontend type to backend type for the AI prompt
       const backendTypeMap: Record<string, string> = {
         multiple_choice: "MULTIPLE_CHOICE",
@@ -704,10 +712,12 @@ export default function QuestionEditor() {
         matching: "MATCHING",
         ordering: "ORDERING",
       };
+      const mappedType = backendTypeMap[questionType] || "MULTIPLE_CHOICE";
 
+      console.log("[AI] Starting generation with prompt:", aiPrompt);
       const result = await api.aiGenerateQuestion({
         prompt: aiPrompt,
-        questionType: backendTypeMap[questionType] || "MULTIPLE_CHOICE",
+        questionType: mappedType,
         difficulty: snapDifficulty(Math.max(0, Math.min(1, difficulty[0]))),
         language: "en",
         useCase: "question_bank",
@@ -715,10 +725,11 @@ export default function QuestionEditor() {
           courseId: course || undefined,
           courseName: courses.find((item) => item.id === course)?.name,
           courseCode: courses.find((item) => item.id === course)?.code,
-          questionType: backendTypeMap[questionType] || "MULTIPLE_CHOICE",
+          questionType: mappedType,
           source: "question_editor",
         },
       });
+      console.log("[AI] Generation result received:", result);
 
       const similarityCheck = await findSimilarExistingQuestion(
         result,
@@ -765,10 +776,10 @@ export default function QuestionEditor() {
 
       setAiPrompt("");
     } catch (error: any) {
-      console.error("AI generation failed:", error);
-      toast.error(
-        "AI generation failed: " + (error.message || "Unknown error"),
-      );
+      const message = error?.message || "Unknown error";
+      console.error("[AI] Generation failed:", error);
+      setAiError(message);
+      toast.error("AI generation failed: " + message);
     } finally {
       setIsGenerating(false);
     }
@@ -1156,6 +1167,11 @@ export default function QuestionEditor() {
                       {aiSimilarityWarning && (
                         <p className="text-[10px] text-red-600 font-medium px-1">
                           {aiSimilarityWarning}
+                        </p>
+                      )}
+                      {aiError && (
+                        <p className="text-[10px] text-red-600 font-medium px-1">
+                          ❌ {aiError}
                         </p>
                       )}
                     </CardContent>
@@ -1692,17 +1708,6 @@ export default function QuestionEditor() {
                             Select a course first to choose a topic.
                           </p>
                         )}
-                      </div>
-                      <div className="space-y-1.5">
-                        <Label className="text-xs text-muted-foreground">
-                          Learning Objective
-                        </Label>
-                        <Input
-                          placeholder="e.g., Apply Dijkstra's algorithm"
-                          value={learningObjective}
-                          onChange={(e) => setLearningObjective(e.target.value)}
-                          className="text-sm"
-                        />
                       </div>
                     </CardContent>
                   </Card>

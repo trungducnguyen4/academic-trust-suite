@@ -597,6 +597,8 @@ export class ExamsService {
               id: true,
               code: true,
               name: true,
+              academicYear: true,
+              term: true,
             },
           },
           creator: {

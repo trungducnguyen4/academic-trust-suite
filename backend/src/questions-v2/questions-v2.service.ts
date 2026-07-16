@@ -1299,7 +1299,7 @@ export class QuestionsService {
 
     const versionNo = Number(versionRows?.[0]?.nextVersionNo || 1);
     const versionId = randomUUID();
-    const aiRecordCount = await this.prisma.aiGenerationRecord.count({
+    const aiRecordCount = await this.prisma.aIGenerationRecord.count({
       where: { draftId },
     });
     const isAiGeneratedVersion = draft.mode === 'AI_ASSISTED' || aiRecordCount > 0;

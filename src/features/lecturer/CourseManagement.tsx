@@ -164,6 +164,7 @@ export default function CourseManagement() {
     return gradientClasses[index % gradientClasses.length];
   };
 
+
   const courseFilterDefinitions: FilterDefinition[] = useMemo(
     () => [
       {

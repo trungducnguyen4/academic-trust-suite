@@ -78,6 +78,7 @@ import {
   AlertCircle,
   Download,
   Info,
+  ChevronRight,
 } from "lucide-react";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
@@ -125,6 +126,19 @@ interface APICourse {
     exams?: number;
   };
 }
+
+const courseGradientClasses = [
+  "bg-gradient-to-br from-pink-400 to-pink-600",
+  "bg-gradient-to-br from-purple-400 to-indigo-600",
+  "bg-gradient-to-br from-blue-400 to-cyan-600",
+  "bg-gradient-to-br from-green-400 to-emerald-600",
+  "bg-gradient-to-br from-yellow-400 to-orange-600",
+  "bg-gradient-to-br from-red-400 to-pink-600",
+  "bg-gradient-to-br from-slate-400 to-slate-600",
+];
+
+const getCourseGradientClass = (index: number) =>
+  courseGradientClasses[index % courseGradientClasses.length];
 
 interface StudentSearchResult {
   id: string;
@@ -1833,122 +1847,155 @@ export default function CreateCourse() {
           />
         </div>
 
-        {/* Course List */}
-        <Card>
-          <CardHeader>
-            <div>
-              <CardTitle className="text-lg">Your Courses</CardTitle>
-              <CardDescription>
-                Manage courses and associated exams
-              </CardDescription>
+        {/* Course rows */}
+        <section>
+          <div className="mb-4">
+            <h2 className="text-lg font-semibold text-foreground">Your Courses</h2>
+            <p className="text-sm text-muted-foreground">
+              Manage courses and associated exams
+            </p>
+          </div>
+
+          <div
+            className="overflow-hidden rounded-xl border bg-card shadow-sm"
+            style={{ minHeight: COURSE_TABLE_MIN_HEIGHT }}
+          >
+            <div className="hidden border-b bg-muted/40 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-[minmax(260px,1.4fr)_80px_minmax(170px,.9fr)_90px_80px_110px_110px_24px] md:items-center md:gap-4">
+              <span>Course</span>
+              <span>Credits</span>
+              <span>Academic term</span>
+              <span>Students</span>
+              <span>Exams</span>
+              <span>Status</span>
+              <span className="text-right">Actions</span>
+              <span className="sr-only">Open</span>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div
-              className="overflow-hidden"
-              style={{ minHeight: COURSE_TABLE_MIN_HEIGHT }}
-            >
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Code</TableHead>
-                    <TableHead>Course Name</TableHead>
-                    <TableHead className="text-center">Credits</TableHead>
-                    <TableHead>Term</TableHead>
-                    <TableHead className="text-center">Students</TableHead>
-                    <TableHead className="text-center">Exams</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {displayedCourses.map((course) => (
-                    <TableRow key={course.id}>
-                      <TableCell className="font-mono font-medium">
+
+            <div className="divide-y">
+              {displayedCourses.map((course, index) => (
+                <div
+                  key={course.id}
+                  role="link"
+                  tabIndex={0}
+                  className="group grid cursor-pointer gap-4 px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[minmax(260px,1.4fr)_80px_minmax(170px,.9fr)_90px_80px_110px_110px_24px] md:items-center"
+                  onClick={() => router.push(`/lecturer/course/${course.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      router.push(`/lecturer/course/${course.id}`);
+                    }
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow-sm ${getCourseGradientClass((page - 1) * ITEMS_PER_PAGE + index)}`}
+                    >
+                      {course.code.slice(0, 2).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold text-foreground">
                         {course.code}
-                      </TableCell>
-                      <TableCell className="font-medium">{course.name}</TableCell>
-                      <TableCell className="text-center">
-                        {course.credits ?? "-"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground">
-                        {formatCourseTerm(
-                          course.academicYear,
-                          course.term,
-                        )}
-                      </TableCell>
-                      <TableCell className="text-center">
+                      </p>
+                      <p className="truncate text-sm text-muted-foreground">
+                        {course.name}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 md:contents">
+                    <div>
+                      <span className="block text-xs text-muted-foreground md:hidden">
+                        Credits
+                      </span>
+                      <span className="font-semibold tabular-nums text-foreground">
+                        {course.credits ?? "—"}
+                      </span>
+                    </div>
+                    <div className="min-w-0">
+                      <span className="block text-xs text-muted-foreground md:hidden">
+                        Academic term
+                      </span>
+                      <span className="block truncate text-foreground">
+                        {formatCourseTerm(course.academicYear, course.term)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground md:hidden">
+                        Students
+                      </span>
+                      <span className="font-semibold tabular-nums text-foreground">
                         {course.students}
-                      </TableCell>
-                      <TableCell className="text-center">
+                      </span>
+                    </div>
+                    <div>
+                      <span className="block text-xs text-muted-foreground md:hidden">
+                        Exams
+                      </span>
+                      <span className="font-semibold tabular-nums text-foreground">
                         {course.exams}
-                      </TableCell>
-                      <TableCell>
-                        <StatusBadge status={course.status} domain="course">
-                          {course.status}
-                        </StatusBadge>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-1">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              router.push(`/lecturer/course/${course.id}`)
-                            }
-                            title="Manage Course & Students"
-                          >
-                            <Users className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => openEditDialog(course)}
-                          >
-                            <Edit2 className="h-4 w-4" />
-                          </Button>
-                          <ConfirmActionDialog
-                            title="Delete course"
-                            description="This action cannot be undone. The course will be deleted if no dependent data blocks deletion."
-                            confirmText="Delete"
-                            destructive
-                            onConfirm={() => handleDelete(course.id)}
-                          >
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="text-destructive hover:text-destructive"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </ConfirmActionDialog>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                  {filteredCourses.length === 0 && (
-                    <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-center py-8 text-muted-foreground"
+                      </span>
+                    </div>
+                    <div>
+                      <span className="mb-1 block text-xs text-muted-foreground md:hidden">
+                        Status
+                      </span>
+                      <StatusBadge status={course.status} domain="course">
+                        {course.status}
+                      </StatusBadge>
+                    </div>
+                    <div
+                      className="flex items-center justify-end gap-1"
+                      onClick={(event) => event.stopPropagation()}
+                      onKeyDown={(event) => event.stopPropagation()}
+                    >
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEditDialog(course)}
+                        title="Edit course"
                       >
-                        No courses found
-                      </TableCell>
-                    </TableRow>
-                  )}
-                </TableBody>
-              </Table>
+                        <Edit2 className="h-4 w-4" />
+                      </Button>
+                      <ConfirmActionDialog
+                        title="Delete course"
+                        description="This action cannot be undone. The course will be deleted if no dependent data blocks deletion."
+                        confirmText="Delete"
+                        destructive
+                        onConfirm={() => handleDelete(course.id)}
+                      >
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="text-destructive hover:text-destructive"
+                          title="Delete course"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </ConfirmActionDialog>
+                    </div>
+                    <ChevronRight className="hidden h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground md:block" />
+                  </div>
+                </div>
+              ))}
+
+              {filteredCourses.length === 0 && (
+                <div className="py-12 text-center text-muted-foreground">
+                  No courses found
+                </div>
+              )}
             </div>
-            <DataPagination
-              currentPage={page}
-              totalPages={totalPages}
-              totalItems={filteredCourses.length}
-              onPageChange={setPage}
-              itemLabel="courses"
-              syncUrl={false}
-            />
-          </CardContent>
-        </Card>
+          </div>
+
+          <DataPagination
+            currentPage={page}
+            totalPages={totalPages}
+            totalItems={filteredCourses.length}
+            onPageChange={setPage}
+            itemLabel="courses"
+            className="border-t-0 px-0"
+            syncUrl={false}
+          />
+        </section>
       </AdminPageShell>
     </DashboardLayout>
   );

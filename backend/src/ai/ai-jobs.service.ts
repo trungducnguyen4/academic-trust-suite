@@ -32,7 +32,7 @@ export class AiJobsService {
           ? googleModel
           : ollamaModel;
 
-    const record = await this.prisma.aiGenerationRecord.create({
+    const record = await this.prisma.aIGenerationRecord.create({
       data: {
         draftId: params.draftId ?? null,
         questionVersionId: params.questionVersionId ?? null,

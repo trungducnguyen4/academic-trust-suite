@@ -20,16 +20,42 @@ import {
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Loader2, ExternalLink, Sparkles, TrendingUp, AlertTriangle } from "lucide-react";
+import { Loader2, ExternalLink, Sparkles, TrendingUp, AlertTriangle, BarChart3 } from "lucide-react";
 import api from "@/lib/api";
 import { unwrapPaginatedData } from "@/lib/api";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
 import { AdminStatCard } from "@/components/admin/AdminStatCard";
 
+type CourseTerm = "TERM_1" | "TERM_2" | "TERM_3" | (string & {});
+
+type AnalyticsCourseInfo = {
+  id: string;
+  code: string;
+  name: string;
+  academicYear: string | null;
+  term: CourseTerm | null;
+};
+
 type ExamOption = {
   id: string;
   title: string;
-  course?: { code?: string; name?: string };
+  course?: AnalyticsCourseInfo;
+};
+
+const TERM_LABELS: Record<string, string> = {
+  TERM_1: "Term 1",
+  TERM_2: "Term 2",
+  TERM_3: "Term 3",
+};
+
+const formatTerm = (term: string | null | undefined): string => {
+  if (!term) return "Unspecified term";
+  return TERM_LABELS[term] || term;
+};
+
+const formatAcademicYear = (year: string | null | undefined): string => {
+  if (!year) return "Unspecified academic year";
+  return year;
 };
 
 type IntelligencePayload = {
@@ -118,9 +144,58 @@ export default function ExamAnalytics() {
   const router = useRouter();
   const [examOptions, setExamOptions] = useState<ExamOption[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>("");
+  const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
+  const [selectedTerm, setSelectedTerm] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [loadingIntelligence, setLoadingIntelligence] = useState(false);
   const [data, setData] = useState<IntelligencePayload | null>(null);
+
+  // Derived: unique academic years from all exams (via course)
+  const academicYears = useMemo(() => {
+    const years = new Set<string>();
+    examOptions.forEach((ex) => {
+      const year = ex.course?.academicYear;
+      if (year && year.trim()) years.add(year);
+    });
+    return Array.from(years).sort().reverse();
+  }, [examOptions]);
+
+  // Derived: terms filtered by selected academic year
+  const terms = useMemo(() => {
+    const termSet = new Set<string>();
+    const filtered = selectedAcademicYear && selectedAcademicYear !== "__all__"
+      ? examOptions.filter((ex) => ex.course?.academicYear === selectedAcademicYear)
+      : examOptions;
+    filtered.forEach((ex) => {
+      const t = ex.course?.term;
+      if (t && t.trim()) termSet.add(t);
+    });
+    return Array.from(termSet);
+  }, [examOptions, selectedAcademicYear]);
+
+  // Derived: exams filtered by academic year and term
+  const filteredExams = useMemo(() => {
+    let result = examOptions;
+    if (selectedAcademicYear && selectedAcademicYear !== "__all__") {
+      result = result.filter((ex) => ex.course?.academicYear === selectedAcademicYear);
+    }
+    if (selectedTerm && selectedTerm !== "__all__") {
+      result = result.filter((ex) => ex.course?.term === selectedTerm);
+    }
+    return result;
+  }, [examOptions, selectedAcademicYear, selectedTerm]);
+
+  // Sync selected exam when filters change
+  useEffect(() => {
+    if (!filteredExams.length) {
+      setSelectedExamId("");
+      return;
+    }
+    const stillValid = filteredExams.some((ex) => ex.id === selectedExamId);
+    if (!stillValid) {
+      setSelectedExamId(filteredExams[0].id);
+    }
+  }, [filteredExams, selectedExamId]);
 
   useEffect(() => {
     const loadExams = async () => {
@@ -237,6 +312,7 @@ export default function ExamAnalytics() {
   return (
     <DashboardLayout>
       <AdminPageShell backTo="/lecturer">
+        {/* Page Header */}
         <div className="flex items-start justify-between gap-3 flex-wrap">
           <div>
             {data?.analyticsScope ? (
@@ -249,30 +325,124 @@ export default function ExamAnalytics() {
               Analyze - Practice - Improve loop per exam.
             </p>
           </div>
-          <div className="w-full sm:w-80">
-            <Select value={selectedExamId} onValueChange={setSelectedExamId}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select an exam" />
-              </SelectTrigger>
-              <SelectContent>
-                {examOptions.map((e) => (
-                  <SelectItem key={e.id} value={e.id}>
-                    {e.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
-        {loadingIntelligence ? (
+        {/* Exam Analytics Filter Panel */}
+        <Card className="border-border/60 shadow-sm">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base font-bold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Exam Analytics Filter
+            </CardTitle>
+            <CardDescription>Select an exam to view its performance analytics</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-[220px_220px_minmax(320px,1fr)]">
+              {/* Academic Year */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Academic Year</label>
+                <Select value={selectedAcademicYear} onValueChange={(val) => { setSelectedAcademicYear(val); setSelectedTerm(""); }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All academic years" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All academic years</SelectItem>
+                    {academicYears.map((year) => (
+                      <SelectItem key={year} value={year}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Term */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Term</label>
+                <Select value={selectedTerm} onValueChange={setSelectedTerm}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="All terms" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__all__">All terms</SelectItem>
+                    {terms.map((term) => (
+                      <SelectItem key={term} value={term}>{formatTerm(term)}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Exam */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-medium text-muted-foreground">Exam</label>
+                <Select
+                  value={selectedExamId}
+                  onValueChange={setSelectedExamId}
+                  disabled={loadingIntelligence || filteredExams.length === 0}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={filteredExams.length === 0 ? "No exams found" : "Select an exam"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {filteredExams.map((e) => (
+                      <SelectItem key={e.id} value={e.id}>
+                        {e.course?.code ? `${e.course.code} — ` : ""}{e.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Currently analyzing badge row */}
+            {selectedExamId && (() => {
+              const current = examOptions.find((ex) => ex.id === selectedExamId);
+              if (!current) return null;
+              return (
+                <div className="flex flex-wrap items-center gap-2 pt-1">
+                  <span className="text-xs text-muted-foreground">Currently analyzing:</span>
+                  {current.course?.code && (
+                    <Badge variant="outline" className="text-xs">{current.course.code}</Badge>
+                  )}
+                  {current.course?.academicYear && (
+                    <Badge variant="outline" className="text-xs">{current.course.academicYear}</Badge>
+                  )}
+                  {current.course?.term && (
+                    <Badge variant="outline" className="text-xs">{formatTerm(current.course.term)}</Badge>
+                  )}
+                  <Badge variant="secondary" className="text-xs">{current.title}</Badge>
+                </div>
+              );
+            })()}
+          </CardContent>
+        </Card>
+
+        {!selectedExamId && !loadingIntelligence ? (
+          <Card className="border-slate-200/70 bg-gradient-to-br from-slate-50/80 to-background">
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
+                <BarChart3 className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-lg font-medium">No exams found</p>
+              <p className="text-sm mt-1">
+                {selectedAcademicYear || selectedTerm
+                  ? "No exams found for the selected academic year and term."
+                  : "No exams are available for analytics. Create an exam first."}
+              </p>
+            </CardContent>
+          </Card>
+        ) : loadingIntelligence ? (
           <div className="min-h-[35vh] flex items-center justify-center text-muted-foreground">
             <Loader2 className="h-5 w-5 animate-spin mr-2" /> Loading intelligence data...
           </div>
         ) : !data ? (
           <Card className="border-slate-200/70 bg-gradient-to-br from-slate-50/80 to-background">
-            <CardContent className="py-8 text-center text-muted-foreground">
-              No intelligence data available for this exam yet.
+            <CardContent className="py-12 text-center text-muted-foreground">
+              <div className="h-12 w-12 rounded-xl bg-muted flex items-center justify-center mx-auto mb-3">
+                <BarChart3 className="h-6 w-6 text-muted-foreground" />
+              </div>
+              <p className="text-lg font-medium">No performance data</p>
+              <p className="text-sm mt-1">
+                No performance data is available for this exam yet.
+              </p>
             </CardContent>
           </Card>
         ) : (
@@ -345,20 +515,20 @@ export default function ExamAnalytics() {
               </Card>
             </div>
 
-            <Card className="overflow-hidden border-sky-200/70 bg-gradient-to-br from-sky-50/40 to-background">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-slate-900">
-                  <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-sky-500/10">
-                    <Sparkles className="h-4 w-4 text-sky-600" />
-                  </span>
-                  AI Summary
-                </CardTitle>
-                <CardDescription>Short insight narrative generated from exam performance patterns.</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <p className="text-sm leading-relaxed">{data.aiSummary}</p>
-              </CardContent>
-            </Card>
+            <section className="rounded-xl border bg-gradient-to-br from-indigo-50/60 to-background dark:from-indigo-950/20 p-5">
+              <div className="flex items-start gap-3">
+                <span className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-500/10">
+                  <Sparkles className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <h2 className="text-base font-bold text-foreground">AI Summary</h2>
+                  <p className="text-xs text-muted-foreground mt-0.5">Short insight narrative generated from exam performance patterns.</p>
+                  <div className="mt-4 whitespace-pre-wrap leading-7 text-sm text-foreground/90">
+                    {data.aiSummary}
+                  </div>
+                </div>
+              </div>
+            </section>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               <Card className="overflow-hidden border-amber-200/70 bg-gradient-to-br from-amber-50/40 to-background">

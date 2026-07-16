@@ -59,8 +59,10 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function StudentCourseDetail() {
-  const { id: routeId } = useParams();
-  const id = Array.isArray(routeId) ? routeId[0] : routeId;
+  const params = useParams<{ id?: string | string[]; slug?: string[] }>();
+  const routeId = params.id;
+  const idFromRouteId = Array.isArray(routeId) ? routeId[0] : routeId;
+  const id = idFromRouteId ?? params.slug?.[1];
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
