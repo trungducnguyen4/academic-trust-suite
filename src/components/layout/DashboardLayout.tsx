@@ -28,6 +28,7 @@ import {
   Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ThemeToggle } from "@/components/common/ThemeToggle";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -58,27 +59,27 @@ interface NavItem {
 
 const studentNavItems: NavItem[] = [
   {
-    title: "Dashboard",
+    title: "Tổng quan",
     href: "/student",
     icon: <LayoutDashboard className="h-[18px] w-[18px]" />,
   },
   {
-    title: "My Courses",
+    title: "Khóa học",
     href: "/student/courses",
     icon: <GraduationCap className="h-[18px] w-[18px]" />,
   },
   {
-    title: "My Exams",
+    title: "Bài thi",
     href: "/student/exams",
     icon: <FileText className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Schedule",
+    title: "Lịch",
     href: "/student/schedule",
     icon: <CalendarDays className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Results",
+    title: "Kết quả",
     href: "/student/results",
     icon: <BarChart3 className="h-[18px] w-[18px]" />,
   },
@@ -86,27 +87,27 @@ const studentNavItems: NavItem[] = [
 
 const lecturerNavItems: NavItem[] = [
   {
-    title: "Dashboard",
+    title: "Tổng quan",
     href: "/lecturer",
     icon: <LayoutDashboard className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Courses",
+    title: "Khóa học",
     href: "/lecturer/courses",
     icon: <GraduationCap className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Exams",
+    title: "Bài thi",
     href: "/lecturer/exams",
     icon: <FileText className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Question Bank",
+    title: "Ngân hàng câu hỏi",
     href: "/lecturer/question-bank",
     icon: <BookOpen className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Analytics",
+    title: "Phân tích",
     href: "/lecturer/analytics",
     icon: <BarChart3 className="h-[18px] w-[18px]" />,
   },
@@ -114,37 +115,37 @@ const lecturerNavItems: NavItem[] = [
 
 const adminNavItems: NavItem[] = [
   {
-    title: "Dashboard",
+    title: "Tổng quan",
     href: "/admin",
     icon: <LayoutDashboard className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Courses",
+    title: "Khóa học",
     href: "/admin/courses",
     icon: <GraduationCap className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Exams",
+    title: "Bài thi",
     href: "/admin/exams",
     icon: <FileText className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Question Bank",
+    title: "Ngân hàng câu hỏi",
     href: "/admin/question-bank",
     icon: <BookOpen className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Users",
+    title: "Người dùng",
     href: "/admin/users",
     icon: <Users className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Integrity",
+    title: "Toàn vẹn học thuật",
     href: "/admin/integrity",
     icon: <Shield className="h-[18px] w-[18px]" />,
   },
   {
-    title: "Settings",
+    title: "Thiết lập",
     href: "/admin/settings",
     icon: <Settings className="h-[18px] w-[18px]" />,
   },
@@ -229,10 +230,10 @@ export function DashboardLayout({
 
   const roleLabel =
     user.role === "STUDENT"
-      ? "Student"
+      ? "Sinh viên"
       : user.role === "LECTURER"
-        ? "Lecturer"
-        : "Administrator";
+        ? "Giảng viên"
+        : "Quản trị viên";
 
   const sidebarWidth = collapsed ? "w-[72px]" : "w-[260px]";
 
@@ -255,6 +256,8 @@ export function DashboardLayout({
         )}
         {isMobile && (
           <button
+            type="button"
+            aria-label="Đóng thanh điều hướng"
             onClick={() => setMobileOpen(false)}
             className="ml-auto text-sidebar-foreground/60 hover:text-sidebar-foreground"
           >
@@ -267,11 +270,12 @@ export function DashboardLayout({
       <nav className="flex-1 space-y-1 p-3 mt-2 overflow-y-auto">
         {(isMobile || !collapsed) && (
           <p className="px-3 mb-3 text-[11px] font-semibold uppercase tracking-wider text-sidebar-foreground/40">
-            Navigation
+            Điều hướng
           </p>
         )}
         {navItems.map((item) => {
-          const isActive = pathname === item.href;
+          const isRootItem = item.href === "/student" || item.href === "/lecturer" || item.href === "/admin";
+          const isActive = pathname === item.href || (!isRootItem && pathname.startsWith(`${item.href}/`));
           const link = (
             <Link
               key={item.href}
@@ -312,6 +316,8 @@ export function DashboardLayout({
       {!isMobile && (
         <div className="px-3 mb-2">
           <button
+            type="button"
+            aria-label={collapsed ? "Mở rộng thanh điều hướng" : "Thu gọn thanh điều hướng"}
             onClick={() => setCollapsed(!collapsed)}
             className="flex w-full items-center justify-center rounded-lg p-2 text-sidebar-foreground/40 hover:bg-sidebar-accent hover:text-sidebar-foreground transition-colors"
           >
@@ -358,7 +364,7 @@ export function DashboardLayout({
               onClick={logout}
             >
               <LogOut className="mr-2 h-4 w-4" />
-              Sign out
+              Đăng xuất
             </Button>
           </>
         )}
@@ -366,13 +372,15 @@ export function DashboardLayout({
           <Tooltip>
             <TooltipTrigger asChild>
               <button
+                type="button"
+                aria-label="Đăng xuất"
                 onClick={logout}
                 className="flex w-full items-center justify-center rounded-md p-2 mt-2 text-sidebar-foreground/40 hover:text-destructive hover:bg-destructive/10 transition-colors"
               >
                 <LogOut className="h-[18px] w-[18px]" />
               </button>
             </TooltipTrigger>
-            <TooltipContent side="right">Sign out</TooltipContent>
+            <TooltipContent side="right">Đăng xuất</TooltipContent>
           </Tooltip>
         )}
       </div>
@@ -381,10 +389,12 @@ export function DashboardLayout({
 
   return (
     <TooltipProvider delayDuration={0}>
-      <div className="flex min-h-screen bg-background">
+      <div className="min-h-[100dvh] bg-background">
         {/* Mobile overlay backdrop */}
         {mobileOpen && (
-          <div
+          <button
+            type="button"
+            aria-label="Đóng thanh điều hướng"
             className="fixed inset-0 z-40 bg-foreground/20 lg:hidden"
             onClick={() => setMobileOpen(false)}
           />
@@ -393,7 +403,7 @@ export function DashboardLayout({
         {/* Mobile sidebar (overlay) */}
         <aside
           className={cn(
-            "fixed left-0 top-0 z-50 h-screen w-[280px] bg-sidebar border-r border-sidebar-border transition-transform duration-300 ease-in-out lg:hidden",
+            "fixed left-0 top-0 z-50 h-[100dvh] w-[280px] border-r border-sidebar-border bg-sidebar transition-transform duration-300 ease-in-out lg:hidden",
             mobileOpen ? "translate-x-0" : "-translate-x-full",
           )}
         >
@@ -403,7 +413,7 @@ export function DashboardLayout({
         {/* Desktop sidebar (fixed) */}
         <aside
           className={cn(
-            "fixed left-0 top-0 z-40 h-screen bg-sidebar border-r border-sidebar-border transition-all duration-300 ease-in-out hidden lg:block",
+            "fixed left-0 top-0 z-40 hidden h-[100dvh] border-r border-sidebar-border bg-sidebar transition-all duration-300 ease-in-out lg:block",
             sidebarWidth,
           )}
         >
@@ -412,15 +422,14 @@ export function DashboardLayout({
 
         {/* Main content */}
         <main
+          id="main-content"
           className={cn(
-            "flex-1 transition-all duration-300 ease-in-out w-full",
-            "lg:ml-[260px]",
-            collapsed && "lg:ml-[72px]",
-            !collapsed && "lg:ml-[260px]",
+            "min-w-0 transition-[padding] duration-300 ease-in-out",
+            collapsed ? "lg:pl-[72px]" : "lg:pl-[260px]",
           )}
         >
           {/* Top bar */}
-          <div className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-background px-4 lg:px-6">
+          <div className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border/80 bg-background/90 px-4 backdrop-blur-lg lg:px-6">
             <Button
               variant="ghost"
               size="icon"
@@ -430,7 +439,8 @@ export function DashboardLayout({
               <Menu className="h-5 w-5" />
             </Button>
             <div className="hidden lg:block" />
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1 sm:gap-2">
+              <ThemeToggle compact />
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
@@ -442,12 +452,12 @@ export function DashboardLayout({
                     {unreadCount > 0 && (
                       <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-destructive" />
                     )}
-                    <span className="sr-only">Notifications</span>
+                    <span className="sr-only">Thông báo</span>
                   </Button>
                 </PopoverTrigger>
                 <PopoverContent align="end" className="w-80 p-0">
                   <div className="flex items-center justify-between px-4 py-3 border-b border-border">
-                    <span className="font-semibold text-sm">Notifications</span>
+                    <span className="font-semibold text-sm">Thông báo</span>
                     {unreadCount > 0 && (
                       <Button
                         variant="ghost"
@@ -455,18 +465,18 @@ export function DashboardLayout({
                         className="h-7 px-2 text-xs"
                         onClick={() => void markAllAsRead()}
                       >
-                        Mark all read
+                        Đánh dấu đã đọc
                       </Button>
                     )}
                   </div>
                   {notificationsLoading ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
-                      <p className="text-sm">Loading notifications...</p>
+                      <p className="text-sm">Đang tải thông báo...</p>
                     </div>
                   ) : effectiveNotifications.length === 0 ? (
                     <div className="flex flex-col items-center justify-center py-10 text-center text-muted-foreground">
                       <Bell className="h-8 w-8 mb-2 opacity-30" />
-                      <p className="text-sm">No new notifications</p>
+                      <p className="text-sm">Chưa có thông báo mới</p>
                     </div>
                   ) : (
                     <div className="max-h-[360px] overflow-y-auto p-2">
@@ -538,7 +548,7 @@ export function DashboardLayout({
                           className="w-full h-8 text-xs"
                           onClick={() => router.push("/notifications")}
                         >
-                          Open full notifications
+                          Xem tất cả thông báo
                         </Button>
                       </div>
                     </div>
@@ -558,7 +568,7 @@ export function DashboardLayout({
                       </AvatarFallback>
                     </Avatar>
                     <span className="text-sm hidden sm:block">
-                      <span className="text-muted-foreground">Hello, </span>
+                      <span className="text-muted-foreground">Xin chào, </span>
                       <span className="font-semibold text-foreground">
                         {user.fullName.split(" ")[0]}
                       </span>
@@ -578,7 +588,7 @@ export function DashboardLayout({
                   <DropdownMenuItem asChild>
                     <Link href="/profile" className="flex items-center">
                       <User className="mr-2 h-4 w-4" />
-                      Profile
+                      Hồ sơ cá nhân
                     </Link>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
@@ -587,15 +597,15 @@ export function DashboardLayout({
                     className="text-destructive focus:text-destructive"
                   >
                     <LogOut className="mr-2 h-4 w-4" />
-                    Sign out
+                    Đăng xuất
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             </div>
           </div>
 
-          <div className="p-4 lg:p-6">
-            <div className="mx-auto w-full max-w-7xl">{children}</div>
+          <div className="page-surface min-h-[calc(100dvh-4rem)] p-4 sm:p-5 lg:p-7">
+            <div className="mx-auto min-w-0 max-w-7xl">{children}</div>
           </div>
         </main>
       </div>

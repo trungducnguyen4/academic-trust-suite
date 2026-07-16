@@ -13,13 +13,14 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { ThemeToggle } from '@/components/common/ThemeToggle';
 
 export function Header() {
   const { user, isAuthenticated, logout } = useAuth();
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background shadow-sm">
-      <div className="container flex h-14 items-center justify-between">
+    <header className="sticky top-0 z-50 w-full border-b border-border/80 bg-background/90 backdrop-blur-lg">
+      <div className="container flex h-16 items-center justify-between">
         <Link href="/" className="flex items-center gap-2 font-bold text-foreground">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
             <GraduationCap className="h-3.5 w-3.5" />
@@ -28,6 +29,7 @@ export function Header() {
         </Link>
 
         <nav className="flex items-center gap-3">
+          <ThemeToggle compact />
           {isAuthenticated && user ? (
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
@@ -50,19 +52,19 @@ export function Header() {
                 <DropdownMenuItem asChild>
                   <Link href="/profile" className="flex items-center">
                     <User className="mr-2 h-4 w-4" />
-                    Profile
+                  Hồ sơ cá nhân
                   </Link>
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={logout} className="text-destructive focus:text-destructive">
                   <LogOut className="mr-2 h-4 w-4" />
-                  Log out
+                  Đăng xuất
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
             <Button asChild variant="outline" size="sm" className="px-5 text-sm">
-              <Link href="/login">Sign in/up</Link>
+              <Link href="/login">Đăng nhập</Link>
             </Button>
           )}
         </nav>

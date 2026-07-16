@@ -28,8 +28,8 @@ interface SystemCheck {
 }
 
 const defaultExamInfo = {
-  title: "Data Structures Final Exam",
-  course: "CS201 — Faculty of Computer Science",
+  title: "Bài thi cuối kỳ Cấu trúc dữ liệu",
+  course: "CS201 - Khoa Công nghệ thông tin",
   duration: 120,
   totalQuestions: 45,
   sessionId: "EXM-2026-DS-001",
@@ -61,13 +61,13 @@ export default function ExamReadyCheck() {
   const [checks, setChecks] = useState<SystemCheck[]>([
     {
       id: "internet",
-      label: "Internet Connection",
+      label: "Kết nối Internet",
       icon: <Wifi className="h-4 w-4" />,
       status: "pending",
     },
     {
       id: "browser",
-      label: "Fullscreen Support",
+      label: "Hỗ trợ toàn màn hình",
       icon: <Monitor className="h-4 w-4" />,
       status: "pending",
     },
@@ -112,16 +112,16 @@ export default function ExamReadyCheck() {
     );
 
     if (navigator.onLine) {
-      updateCheck("internet", "passed", "Connection stable");
+      updateCheck("internet", "passed", "Kết nối ổn định");
     } else {
-      updateCheck("internet", "failed", "No internet connection detected");
+      updateCheck("internet", "failed", "Không phát hiện kết nối Internet");
     }
     await new Promise((r) => setTimeout(r, 300));
 
     if (document.documentElement.requestFullscreen) {
-      updateCheck("browser", "passed", "Fullscreen supported by this browser/environment");
+      updateCheck("browser", "passed", "Trình duyệt hỗ trợ chế độ toàn màn hình");
     } else {
-      updateCheck("browser", "failed", "Fullscreen is not available in this browser/environment");
+      updateCheck("browser", "failed", "Trình duyệt này không hỗ trợ chế độ toàn màn hình");
     }
 
     setIsRunningChecks(false);
@@ -146,14 +146,14 @@ export default function ExamReadyCheck() {
     }
 
     if (!examId) {
-      toast.error("Missing exam id. Please re-open the exam from your dashboard.");
+      toast.error("Thiếu mã bài thi. Vui lòng mở lại bài thi từ trang tổng quan.");
       return;
     }
 
     try {
       const res = await api.startExam(examId);
       if (!res?.id) {
-        toast.error("Could not start exam submission. Please try again.");
+        toast.error("Không thể bắt đầu lượt thi. Vui lòng thử lại.");
         return;
       }
       try {
@@ -162,7 +162,7 @@ export default function ExamReadyCheck() {
       } catch {}
     } catch (err: any) {
       console.error("Failed to start submission on server:", err);
-      toast.error(err?.message || "Failed to start exam. Please try again.");
+      toast.error(err?.message || "Không thể bắt đầu bài thi. Vui lòng thử lại.");
       return;
     }
 
@@ -187,7 +187,7 @@ export default function ExamReadyCheck() {
                 <CardTitle className="mb-1 text-xl">{examInfo.title}</CardTitle>
                 <CardDescription>{examInfo.course}</CardDescription>
               </div>
-              <StatusBadge tone="info">OFFICIAL SESSION</StatusBadge>
+              <StatusBadge tone="info">PHIÊN THI CHÍNH THỨC</StatusBadge>
             </div>
           </CardHeader>
           <CardContent>
@@ -195,22 +195,22 @@ export default function ExamReadyCheck() {
               <div>
                 <Clock className="mx-auto mb-1 h-5 w-5 text-primary" />
                 <p className="text-lg font-semibold">{examInfo.duration}</p>
-                <p className="text-xs text-muted-foreground">Minutes</p>
+                <p className="text-xs text-muted-foreground">Phút</p>
               </div>
               <div>
                 <FileText className="mx-auto mb-1 h-5 w-5 text-primary" />
                 <p className="text-lg font-semibold">{examInfo.totalQuestions}</p>
-                <p className="text-xs text-muted-foreground">Questions</p>
+                <p className="text-xs text-muted-foreground">Câu hỏi</p>
               </div>
               <div>
                 <Shield className="mx-auto mb-1 h-5 w-5 text-primary" />
-                <p className="text-lg font-semibold">Proctored</p>
-                <p className="text-xs text-muted-foreground">Mode</p>
+                <p className="text-lg font-semibold">Có giám sát</p>
+                <p className="text-xs text-muted-foreground">Chế độ</p>
               </div>
               <div>
                 <CheckCircle2 className="mx-auto mb-1 h-5 w-5 text-primary" />
-                <p className="text-lg font-semibold">Ready</p>
-                <p className="text-xs text-muted-foreground">System check</p>
+                <p className="text-lg font-semibold">Sẵn sàng</p>
+                <p className="text-xs text-muted-foreground">Kiểm tra hệ thống</p>
               </div>
             </div>
           </CardContent>
@@ -218,8 +218,8 @@ export default function ExamReadyCheck() {
 
         <div className="mb-6 flex items-center justify-between px-4">
           {[
-            { key: "system-check", label: "System Check", number: 1 },
-            { key: "ready", label: "Start", number: 2 },
+            { key: "system-check", label: "Kiểm tra", number: 1 },
+            { key: "ready", label: "Bắt đầu", number: 2 },
           ].map((step, i) => (
             <div key={step.key} className="flex items-center">
               <div className="flex flex-col items-center">
@@ -255,19 +255,19 @@ export default function ExamReadyCheck() {
               <CardHeader>
                 <div className="flex items-center justify-between gap-3">
                   <div>
-                    <CardTitle className="text-lg">System Readiness Check</CardTitle>
+                    <CardTitle className="text-lg">Kiểm tra điều kiện dự thi</CardTitle>
                     <CardDescription>
-                      We verify connection and fullscreen support before you can start the exam.
+                      Hệ thống kiểm tra kết nối và chế độ toàn màn hình trước khi bạn bắt đầu.
                     </CardDescription>
                   </div>
                   <Button variant="outline" size="sm" className="gap-2" onClick={runSystemChecks} disabled={isRunningChecks}>
                     <RefreshCw className={`h-4 w-4 ${isRunningChecks ? "animate-spin" : ""}`} />
-                    Recheck
+                    Kiểm tra lại
                   </Button>
                 </div>
                 <Progress value={(passedCount / checks.length) * 100} className="mt-3 h-2" />
                 <p className="mt-1 text-xs text-muted-foreground">
-                  {passedCount}/{checks.length} checks passed{failedCount > 0 && ` · ${failedCount} failed`}
+                  Đạt {passedCount}/{checks.length} mục{failedCount > 0 && `, ${failedCount} mục chưa đạt`}
                 </p>
               </CardHeader>
               <CardContent>
@@ -277,11 +277,11 @@ export default function ExamReadyCheck() {
                       key={check.id}
                       className={`flex items-center gap-3 rounded-lg border px-4 py-3 ${
                         check.status === "passed"
-                          ? "border-emerald-200 bg-emerald-50/60"
+                          ? "border-emerald-500/30 bg-emerald-500/10"
                           : check.status === "failed"
-                            ? "border-rose-200 bg-rose-50/60"
+                            ? "border-rose-500/30 bg-rose-500/10"
                             : check.status === "checking"
-                              ? "border-blue-200 bg-blue-50/60"
+                              ? "border-blue-500/30 bg-blue-500/10"
                               : "border-border bg-card"
                       }`}
                     >
@@ -306,24 +306,24 @@ export default function ExamReadyCheck() {
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <Shield className="h-5 w-5 text-primary" />
-                  Integrity & Fairness Notice
+                  Lưu ý về tính toàn vẹn và công bằng
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50/50 p-4 text-sm">
+                <div className="space-y-2 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-sm">
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <p>Fullscreen is recommended for proctored exams.</p>
+                    <p>Nên sử dụng chế độ toàn màn hình trong suốt phiên thi.</p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
                     <p>
-                      The platform records suspicious activity for instructor review, but does not automatically decide cheating.
+                      Nền tảng ghi nhận tín hiệu bất thường để giảng viên xem xét, không tự động kết luận gian lận.
                     </p>
                   </div>
                   <div className="flex items-start gap-2">
                     <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
-                    <p>Please keep a stable internet connection during the exam session.</p>
+                    <p>Vui lòng duy trì kết nối Internet ổn định trong phiên thi.</p>
                   </div>
                 </div>
 
@@ -337,7 +337,7 @@ export default function ExamReadyCheck() {
                     className="mt-0.5"
                   />
                   <label htmlFor="agree" className="cursor-pointer text-sm leading-relaxed">
-                    I understand and agree to the exam rules and proctoring conditions. I confirm that I will complete this exam independently.
+                    Tôi đã hiểu và đồng ý với quy định của phiên thi, đồng thời xác nhận sẽ tự mình hoàn thành bài thi.
                   </label>
                 </div>
               </CardContent>
@@ -348,22 +348,22 @@ export default function ExamReadyCheck() {
                 {!allChecksPassed ? (
                   <>
                     <AlertTriangle className="h-4 w-4" />
-                    System Checks Required
+                    Cần hoàn tất kiểm tra hệ thống
                   </>
                 ) : !agreed ? (
                   <>
                     <Shield className="h-4 w-4" />
-                    Accept Agreement to Continue
+                    Đồng ý quy định để tiếp tục
                   </>
                 ) : (
                   <>
                     <ArrowRight className="h-4 w-4" />
-                    Continue
+                    Tiếp tục
                   </>
                 )}
               </Button>
               <Button variant="outline" onClick={() => router.push("/student")} className="h-11">
-                Back
+                Quay lại
               </Button>
             </div>
           </>
@@ -378,9 +378,9 @@ export default function ExamReadyCheck() {
                     <CheckCircle2 className="h-8 w-8 text-emerald-600" />
                   </div>
                   <div>
-                    <h2 className="mb-1 text-xl font-semibold text-foreground">Ready to Start!</h2>
-                    <p className="text-muted-foreground">The exam is ready. You may begin now.</p>
-                    {checkingAttempt && <p className="mt-2 text-xs text-muted-foreground">Checking attempt status...</p>}
+                    <h2 className="mb-1 text-xl font-semibold text-foreground">Sẵn sàng bắt đầu</h2>
+                    <p className="text-muted-foreground">Phiên thi đã sẵn sàng. Bạn có thể bắt đầu ngay.</p>
+                    {checkingAttempt && <p className="mt-2 text-xs text-muted-foreground">Đang kiểm tra trạng thái lượt thi...</p>}
                   </div>
                 </div>
               </CardContent>
@@ -394,15 +394,15 @@ export default function ExamReadyCheck() {
                 disabled={checkingAttempt}
               >
                 <ArrowRight className="h-5 w-5" />
-                Start Exam Now
+                Bắt đầu làm bài
               </Button>
-              <BackToDashboardButton to="/student" label="Return to Dashboard" variant="outline" size="default" className="h-12" />
+              <BackToDashboardButton to="/student" label="Về trang tổng quan" variant="outline" size="default" className="h-12" />
             </div>
           </>
         )}
 
         <p className="mt-4 text-center text-xs text-muted-foreground">
-          Session ID: {examInfo.sessionId} · SSL Encrypted · Proctoring Active
+          Mã phiên: {examInfo.sessionId} • Mã hóa SSL • Đang ghi nhận tín hiệu phiên thi
         </p>
       </div>
     </DashboardLayout>

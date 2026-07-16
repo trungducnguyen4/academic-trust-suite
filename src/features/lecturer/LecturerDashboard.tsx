@@ -89,8 +89,8 @@ export default function LecturerDashboard() {
     {
       id: "1",
       type: "info",
-      title: "Dashboard Ready",
-      message: `You have ${courses.length} courses, ${exams.length} exams, and ${questionCount} questions in your bank`,
+      title: "Trang tổng quan đã sẵn sàng",
+      message: `Bạn có ${courses.length} khóa học, ${exams.length} bài thi và ${questionCount} câu hỏi trong ngân hàng`,
       time: addHours(new Date(), -2),
     },
   ];
@@ -102,7 +102,7 @@ export default function LecturerDashboard() {
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">
-              Loading dashboard...
+              Đang tải trang tổng quan...
             </p>
           </div>
         </div>
@@ -117,10 +117,10 @@ export default function LecturerDashboard() {
         <div className="flex items-start justify-between">
           <div className="animate-fade-in opacity-0">
             <h1 className="text-2xl font-bold text-foreground">
-              Welcome back, {user?.fullName.split(" ")[0]}
+              Chào mừng trở lại, {user?.fullName.split(" ")[0]}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Here's an overview of your courses, exams, and question bank.
+              Tổng quan khóa học, bài thi và ngân hàng câu hỏi của bạn.
             </p>
           </div>
           <Button
@@ -130,7 +130,7 @@ export default function LecturerDashboard() {
           >
             <Link href="/lecturer/exams/create">
               <Plus className="h-4 w-4" />
-              Create Exam
+              Tạo bài thi
             </Link>
           </Button>
         </div>
@@ -148,9 +148,9 @@ export default function LecturerDashboard() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-bold">
-                    Recent Exams
+                    Bài thi gần đây
                   </CardTitle>
-                  <CardDescription>Your latest examinations</CardDescription>
+                  <CardDescription>Các bài thi được cập nhật gần nhất</CardDescription>
                 </div>
                 <Button
                   variant="ghost"
@@ -159,7 +159,7 @@ export default function LecturerDashboard() {
                   asChild
                 >
                   <Link href="/lecturer/exams">
-                    View all
+                    Xem tất cả
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -172,15 +172,15 @@ export default function LecturerDashboard() {
                         <FileText className="h-6 w-6 text-muted-foreground" />
                       </div>
                       <p className="text-muted-foreground font-medium">
-                        No exams created yet
+                        Chưa có bài thi
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Create your first exam to get started
+                        Tạo bài thi đầu tiên để bắt đầu
                       </p>
                       <Button asChild className="mt-4 rounded-xl" size="sm">
                         <Link href="/lecturer/exams/create">
                           <Plus className="mr-2 h-4 w-4" />
-                          Create Exam
+                          Tạo bài thi
                         </Link>
                       </Button>
                     </div>
@@ -210,8 +210,8 @@ export default function LecturerDashboard() {
                       const actionLabel = shouldMonitor
                         ? "Monitor"
                         : shouldShowResults
-                          ? "View Results"
-                          : "Preview & Edit";
+                          ? "Xem kết quả"
+                          : "Xem trước và chỉnh sửa";
                       const actionHref = shouldMonitor
                         ? `/lecturer/exam/${exam.id}/monitor`
                         : shouldShowResults
@@ -241,11 +241,11 @@ export default function LecturerDashboard() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <BookOpen className="h-3 w-3" />
-                                {questionCount} questions
+                                {questionCount} câu hỏi
                               </span>
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {exam.duration} min
+                                {exam.duration} phút
                               </span>
                             </div>
                           </div>
@@ -290,14 +290,14 @@ export default function LecturerDashboard() {
             <Card className="card-elevated">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-bold">
-                  Course Snapshot
+                  Tổng quan khóa học
                 </CardTitle>
-                <CardDescription>Your recently managed courses</CardDescription>
+                <CardDescription>Các khóa học được quản lý gần đây</CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
                 {courses.length === 0 ? (
                   <div className="text-sm text-muted-foreground">
-                    No courses yet.
+                    Chưa có khóa học.
                   </div>
                 ) : (
                   courses.slice(0, 4).map((course) => (
@@ -316,9 +316,9 @@ export default function LecturerDashboard() {
                           {course.enrolledStudents ??
                             course._count?.enrollments ??
                             0}{" "}
-                          students
+                          sinh viên
                         </span>
-                        <span>{course._count?.exams ?? 0} exams</span>
+                        <span>{course._count?.exams ?? 0} bài thi</span>
                       </div>
                     </div>
                   ))
@@ -329,7 +329,7 @@ export default function LecturerDashboard() {
                   size="sm"
                   className="w-full rounded-xl"
                 >
-                  <Link href="/lecturer/courses">Manage Courses</Link>
+                  <Link href="/lecturer/courses">Quản lý khóa học</Link>
                 </Button>
               </CardContent>
             </Card>
@@ -345,12 +345,12 @@ export default function LecturerDashboard() {
                   <div>
                     <h3 className="font-bold text-foreground">AI Assistant</h3>
                     <p className="text-xs text-muted-foreground">
-                      Generate questions with AI
+                      Tạo câu hỏi với AI
                     </p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Use AI to auto-generate exam questions from your course
+                  Dùng AI để đề xuất câu hỏi từ tài liệu khóa học, sau đó giảng viên xem xét trước khi sử dụng.
                   content.
                 </p>
                 <Button
@@ -361,7 +361,7 @@ export default function LecturerDashboard() {
                 >
                   <Link href="/lecturer/question-bank">
                     <Zap className="h-4 w-4" />
-                    Open Question Bank
+                    Mở ngân hàng câu hỏi
                   </Link>
                 </Button>
               </CardContent>

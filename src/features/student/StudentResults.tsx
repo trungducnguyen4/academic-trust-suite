@@ -35,24 +35,24 @@ import { getStatusBadgeLabel } from "@/components/ui/status-badge";
 const scoreBadgeClass = (score: unknown) => {
   const numericScore = typeof score === "number" ? score : null;
 
-  if (numericScore === null) return "border-slate-200 bg-slate-50 text-slate-600";
-  if (numericScore >= 8) return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (numericScore >= 5) return "border-amber-200 bg-amber-50 text-amber-700";
-  return "border-red-200 bg-red-50 text-red-700";
+  if (numericScore === null) return "border-border bg-muted text-muted-foreground";
+  if (numericScore >= 8) return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
+  if (numericScore >= 5) return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
+  return "border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-300";
 };
 
 const statusBadgeClass = (status?: string) => {
   const normalized = String(status || "").toUpperCase();
 
   if (["GRADED", "FINALIZED"].includes(normalized)) {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   }
 
   if (normalized === "FLAGGED") {
-    return "border-amber-200 bg-amber-50 text-amber-700";
+    return "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300";
   }
 
-  return "border-sky-200 bg-sky-50 text-sky-700";
+  return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
 };
 
 export default function StudentResults() {
@@ -97,21 +97,21 @@ export default function StudentResults() {
     () => [
       {
         key: "status",
-        label: "Status",
+        label: "Trạng thái",
         type: "select",
-        allLabel: "All Status",
+        allLabel: "Tất cả trạng thái",
         options: [
-          { label: "Submitted", value: "SUBMITTED" },
-          { label: "Graded", value: "GRADED" },
-          { label: "Flagged", value: "FLAGGED" },
-          { label: "Finalized", value: "FINALIZED" },
+          { label: "Đã nộp", value: "SUBMITTED" },
+          { label: "Đã chấm", value: "GRADED" },
+          { label: "Cần xem xét", value: "FLAGGED" },
+          { label: "Đã hoàn tất", value: "FINALIZED" },
         ],
       },
       {
         key: "courseCode",
-        label: "Course",
+        label: "Khóa học",
         type: "select",
-        allLabel: "All Courses",
+        allLabel: "Tất cả khóa học",
         options: Array.from(
           new Set(
             submissions
@@ -122,7 +122,7 @@ export default function StudentResults() {
       },
       {
         key: "score",
-        label: "Score",
+        label: "Điểm",
         type: "number-range",
         min: 0,
         max: 100,
@@ -232,9 +232,9 @@ export default function StudentResults() {
   const activeFilterChips = getFilterChips(appliedFilters, resultFilterDefinitions);
 
   const resultSortOptions = [
-    { field: "score", label: "Score" },
-    { field: "status", label: "Status" },
-    { field: "exam.title", label: "Exam Title" },
+    { field: "score", label: "Điểm" },
+    { field: "status", label: "Trạng thái" },
+    { field: "exam.title", label: "Tên bài thi" },
   ];
 
   return (
@@ -243,13 +243,13 @@ export default function StudentResults() {
         <BackToDashboardButton to="/student" className="-ml-2" />
 
         <div className="space-y-3">
-          <ListPageHeader title="Results" />
+          <ListPageHeader title="Kết quả" />
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <SearchBar
               value={searchInput}
               onChange={setSearchInput}
               onSearch={runSearch}
-              placeholder="Search by exam title or course"
+              placeholder="Tìm theo tên bài thi hoặc khóa học"
               className="flex-1"
             />
             <SortButton
@@ -262,8 +262,8 @@ export default function StudentResults() {
               }}
             />
             <FilterPanel
-              title="Result filters"
-              description="Filter by status, course, and score range."
+              title="Bộ lọc kết quả"
+              description="Lọc theo trạng thái, khóa học và khoảng điểm."
               filters={resultFilterDefinitions}
               value={draftFilters}
               onValueChange={(key, nextValue) =>
@@ -283,8 +283,8 @@ export default function StudentResults() {
 
         <Card>
           <CardHeader>
-            <CardTitle>My Results</CardTitle>
-            <CardDescription>Graded and submitted exams</CardDescription>
+            <CardTitle>Kết quả của tôi</CardTitle>
+            <CardDescription>Các bài thi đã nộp và đã chấm</CardDescription>
           </CardHeader>
           <CardContent>
             {loading ? (
@@ -300,22 +300,22 @@ export default function StudentResults() {
                   <div className="text-center py-12">
                     <Award className="h-6 w-6 mx-auto text-muted-foreground" />
                     <p className="text-muted-foreground mt-2">
-                      No results match current search/filter
+                      Không có kết quả phù hợp với tìm kiếm hoặc bộ lọc
                     </p>
                   </div>
                 ) : (
                   paginatedSubmissions.map((s: any) => (
                     <div
                       key={s.id}
-                      className="flex flex-col gap-4 rounded-xl border border-slate-200 bg-slate-50/50 p-4 transition-colors hover:border-primary/30 hover:bg-white md:flex-row md:items-center md:justify-between"
+                      className="flex flex-col gap-4 rounded-xl border border-border bg-card/70 p-4 transition-colors hover:border-primary/30 hover:bg-muted/30 md:flex-row md:items-center md:justify-between"
                     >
                       <div className="min-w-0 space-y-3">
                         <div>
-                          <h4 className="font-semibold text-slate-900">
+                          <h4 className="font-semibold text-foreground">
                             {s.exam?.title ?? s.title}
                           </h4>
                         <p className="mt-1 text-sm text-muted-foreground">
-                          {s.exam?.course?.code || "Course unavailable"}
+                          {s.exam?.course?.code || "Chưa có thông tin khóa học"}
                         </p>
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                           <Badge
@@ -333,34 +333,34 @@ export default function StudentResults() {
                           >
                             <Trophy className="mr-1 h-3.5 w-3.5" />
                             {String(s.status).toUpperCase() === "SUBMITTED"
-                              ? "Waiting for grading"
-                              : `Score: ${s.score !== null ? s.score : "N/A"}`}
+                              ? "Đang chờ chấm"
+                              : `Điểm: ${s.score !== null ? s.score : "N/A"}`}
                           </Badge>
                           <Badge
                             variant="outline"
-                            className="border-blue-200 bg-blue-50 text-blue-700"
+                            className="border-blue-500/30 bg-blue-500/10 text-blue-700 dark:text-blue-300"
                           >
                             <RotateCcw className="mr-1 h-3.5 w-3.5" />
-                            Attempt {s.attemptNo ?? "N/A"}
+                            Lượt {s.attemptNo ?? "N/A"}
                           </Badge>
                         </div>
                         <p className="sr-only">
                           {getStatusBadgeLabel(s.status)} • {s.score !== null ? s.score : "—"}
                         </p>
                         <p className="sr-only">
-                          Attempt {s.attemptNo ?? "N/A"}
+                          Lượt {s.attemptNo ?? "N/A"}
                         </p>
                       </div>
                       </div>
                       <div className="flex items-center gap-2 md:justify-end">
                         {String(s.status).toUpperCase() === "SUBMITTED" ? (
                           <Button size="sm" variant="outline" disabled>
-                            Waiting for grading
+                            Đang chờ chấm
                           </Button>
                         ) : (
                           <Button asChild size="sm">
                             <Link href={`/student/grading?examId=${s.examId ?? s.exam?.id}&submissionId=${s.id}`}>
-                              View Result
+                              Xem kết quả
                             </Link>
                           </Button>
                         )}
@@ -375,7 +375,7 @@ export default function StudentResults() {
               totalPages={totalPages}
               totalItems={filteredSubmissions.length}
               onPageChange={setPage}
-              itemLabel="results"
+              itemLabel="kết quả"
               syncUrl={false}
             />
           </CardContent>

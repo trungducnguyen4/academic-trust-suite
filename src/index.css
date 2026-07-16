@@ -2,191 +2,188 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ExamTrust Design System
-  Clean, neutral, professional academic aesthetic
-*/
-
+/* ExamTrust design foundation: calm academic surfaces with one teal-blue brand accent. */
 @layer base {
   :root {
-    /* Core palette – Neutral white */
-    --background: 0 0% 100%;
-    --foreground: 222 16% 18%;
+    --background: 210 25% 98%;
+    --foreground: 215 32% 17%;
+    --card: 210 30% 99%;
+    --card-foreground: 215 32% 17%;
+    --popover: 210 30% 99%;
+    --popover-foreground: 215 32% 17%;
 
-    --card: 0 0% 100%;
-    --card-foreground: 222 16% 18%;
+    --primary: 195 72% 32%;
+    --primary-foreground: 195 20% 98%;
+    --secondary: 205 22% 93%;
+    --secondary-foreground: 215 28% 24%;
+    --muted: 207 20% 94%;
+    --muted-foreground: 215 13% 43%;
+    --accent: 195 48% 91%;
+    --accent-foreground: 195 72% 24%;
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 222 16% 18%;
+    --destructive: 2 67% 44%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 153 52% 34%;
+    --success-foreground: 0 0% 98%;
+    --warning: 37 84% 42%;
+    --warning-foreground: 28 75% 16%;
+    --info: 202 68% 38%;
+    --info-foreground: 0 0% 98%;
 
-    /* Primary – Muted steel blue */
-    --primary: 200 30% 50%;
-    --primary-foreground: 0 0% 100%;
+    --border: 210 18% 86%;
+    --input: 210 18% 82%;
+    --ring: 195 72% 32%;
+    --radius: 0.875rem;
 
-    /* Secondary – Neutral light */
-    --secondary: 220 14% 96%;
-    --secondary-foreground: 220 10% 35%;
+    --chart-1: 195 72% 32%;
+    --chart-2: 153 52% 34%;
+    --chart-3: 37 84% 42%;
+    --chart-4: 217 52% 48%;
+    --chart-5: 2 67% 44%;
 
-    /* Muted surfaces */
-    --muted: 220 14% 96%;
-    --muted-foreground: 220 8% 50%;
-
-    /* Accent – Same steel blue, slightly different */
-    --accent: 200 25% 45%;
-    --accent-foreground: 0 0% 100%;
-
-    /* Semantic colors */
-    --destructive: 0 60% 50%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 45% 40%;
-    --success-foreground: 0 0% 100%;
-
-    --warning: 38 70% 50%;
-    --warning-foreground: 0 0% 10%;
-
-    --info: 200 30% 50%;
-    --info-foreground: 0 0% 100%;
-
-    /* UI elements */
-    --border: 220 12% 88%;
-    --input: 220 12% 88%;
-    --ring: 200 30% 50%;
-
-    --radius: 0.75rem;
-
-    /* Chart colors */
-    --chart-1: 200 30% 50%;
-    --chart-2: 200 25% 40%;
-    --chart-3: 142 45% 40%;
-    --chart-4: 38 70% 50%;
-    --chart-5: 0 60% 50%;
-
-    /* Sidebar – Dark warm slate */
-    --sidebar-background: 220 15% 13%;
-    --sidebar-foreground: 36 20% 90%;
-    --sidebar-primary: 200 30% 50%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 12% 18%;
-    --sidebar-accent-foreground: 36 20% 90%;
-    --sidebar-border: 220 12% 20%;
-    --sidebar-ring: 200 30% 50%;
+    --sidebar-background: 215 33% 14%;
+    --sidebar-foreground: 205 20% 91%;
+    --sidebar-primary: 193 66% 43%;
+    --sidebar-primary-foreground: 195 20% 98%;
+    --sidebar-accent: 214 26% 20%;
+    --sidebar-accent-foreground: 205 25% 96%;
+    --sidebar-border: 214 22% 24%;
+    --sidebar-ring: 193 66% 43%;
   }
 
   .dark {
-    --background: 220 15% 10%;
-    --foreground: 36 20% 92%;
+    --background: 216 30% 9%;
+    --foreground: 205 24% 91%;
+    --card: 215 27% 12%;
+    --card-foreground: 205 24% 91%;
+    --popover: 215 27% 12%;
+    --popover-foreground: 205 24% 91%;
 
-    --card: 220 14% 14%;
-    --card-foreground: 36 20% 92%;
+    --primary: 192 62% 50%;
+    --primary-foreground: 216 34% 10%;
+    --secondary: 214 23% 17%;
+    --secondary-foreground: 205 22% 88%;
+    --muted: 214 23% 17%;
+    --muted-foreground: 210 14% 65%;
+    --accent: 193 38% 20%;
+    --accent-foreground: 190 48% 82%;
 
-    --popover: 220 14% 14%;
-    --popover-foreground: 36 20% 92%;
+    --destructive: 2 62% 54%;
+    --destructive-foreground: 0 0% 98%;
+    --success: 153 49% 48%;
+    --success-foreground: 216 34% 9%;
+    --warning: 39 82% 55%;
+    --warning-foreground: 28 75% 13%;
+    --info: 199 67% 56%;
+    --info-foreground: 216 34% 9%;
 
-    --primary: 200 30% 55%;
-    --primary-foreground: 0 0% 100%;
+    --border: 214 22% 22%;
+    --input: 214 22% 28%;
+    --ring: 192 62% 50%;
 
-    --secondary: 220 12% 18%;
-    --secondary-foreground: 36 20% 80%;
-
-    --muted: 220 12% 18%;
-    --muted-foreground: 36 10% 55%;
-
-    --accent: 200 25% 50%;
-    --accent-foreground: 0 0% 100%;
-
-    --destructive: 0 55% 48%;
-    --destructive-foreground: 0 0% 100%;
-
-    --success: 142 45% 40%;
-    --success-foreground: 0 0% 100%;
-
-    --warning: 38 70% 50%;
-    --warning-foreground: 0 0% 10%;
-
-    --info: 200 30% 55%;
-    --info-foreground: 0 0% 100%;
-
-    --border: 220 12% 20%;
-    --input: 220 12% 20%;
-    --ring: 200 30% 55%;
-
-    --sidebar-background: 220 15% 8%;
-    --sidebar-foreground: 36 20% 85%;
-    --sidebar-primary: 200 30% 55%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 220 12% 14%;
-    --sidebar-accent-foreground: 36 20% 85%;
-    --sidebar-border: 220 12% 15%;
-    --sidebar-ring: 200 30% 55%;
+    --sidebar-background: 216 32% 8%;
+    --sidebar-foreground: 205 22% 88%;
+    --sidebar-primary: 192 62% 50%;
+    --sidebar-primary-foreground: 216 34% 9%;
+    --sidebar-accent: 214 24% 15%;
+    --sidebar-accent-foreground: 205 24% 94%;
+    --sidebar-border: 214 22% 18%;
+    --sidebar-ring: 192 62% 50%;
   }
-}
 
-@layer base {
   * {
     @apply border-border;
   }
 
+  html {
+    scroll-behavior: smooth;
+  }
+
   body {
-    @apply bg-background text-foreground antialiased text-base;
+    @apply bg-background text-foreground antialiased;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    font-variant-numeric: proportional-nums;
     line-height: 1.6;
+    text-rendering: optimizeLegibility;
   }
 
-  h1, h2, h3, h4, h5, h6 {
-    @apply font-bold tracking-tight;
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-semibold tracking-[-0.025em] text-foreground;
+    text-wrap: balance;
   }
 
-  h1 {
-    @apply text-3xl md:text-4xl;
+  p {
+    text-wrap: pretty;
   }
 
-  h2 {
-    @apply text-2xl md:text-3xl;
+  button,
+  a,
+  input,
+  textarea,
+  select {
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 
-  h3 {
-    @apply text-xl md:text-2xl;
+  ::selection {
+    background: hsl(var(--primary) / 0.18);
+    color: hsl(var(--foreground));
   }
 }
 
 @layer components {
-  /* Status badge variants */
+  .skip-link {
+    @apply fixed left-4 top-3 z-[100] -translate-y-20 rounded-md bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground shadow-medium transition-transform;
+  }
+
+  .skip-link:focus {
+    @apply translate-y-0;
+  }
+
+  .page-surface {
+    background:
+      radial-gradient(circle at 100% 0%, hsl(var(--primary) / 0.055), transparent 28rem),
+      hsl(var(--background));
+  }
+
   .status-success {
-    @apply bg-success/10 text-success border-success/20;
+    @apply border-success/25 bg-success/10 text-success;
   }
 
   .status-warning {
-    @apply bg-warning/10 text-warning border-warning/20;
+    @apply border-warning/30 bg-warning/10 text-warning;
   }
 
   .status-destructive {
-    @apply bg-destructive/10 text-destructive border-destructive/20;
+    @apply border-destructive/25 bg-destructive/10 text-destructive;
   }
 
   .status-info {
-    @apply bg-info/10 text-info border-info/20;
+    @apply border-info/25 bg-info/10 text-info;
   }
 
-  /* Clean card with subtle border */
   .card-elevated {
-    @apply bg-card shadow-sm border border-border rounded-lg;
+    @apply rounded-xl border border-border/80 bg-card shadow-soft;
   }
 
-  /* Interactive card with hover */
   .card-interactive {
-    @apply bg-card border border-border rounded-lg shadow-sm
-           hover:shadow-md hover:border-primary/20
-           transition-all duration-200 ease-out;
+    @apply rounded-xl border border-border/80 bg-card shadow-soft transition-[transform,box-shadow,border-color] duration-200 hover:-translate-y-0.5 hover:border-primary/30 hover:shadow-medium active:translate-y-0;
   }
 
-  /* Focus ring */
   .focus-ring {
-    @apply focus:outline-none focus:ring-2 focus:ring-ring/40 focus:ring-offset-2 focus:ring-offset-background;
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background;
   }
 
-  /* Sidebar gradient – warm dark */
   .sidebar-gradient {
-    background: hsl(220 15% 13%);
+    background: hsl(var(--sidebar-background));
+  }
+
+  .data-number {
+    @apply tabular-nums tracking-[-0.025em];
   }
 }
 
@@ -195,7 +192,10 @@
     text-wrap: balance;
   }
 
-  /* Stagger animation delays */
+  .text-pretty {
+    text-wrap: pretty;
+  }
+
   .stagger-1 { animation-delay: 0.05s; }
   .stagger-2 { animation-delay: 0.1s; }
   .stagger-3 { animation-delay: 0.15s; }
@@ -203,21 +203,36 @@
   .stagger-5 { animation-delay: 0.25s; }
   .stagger-6 { animation-delay: 0.3s; }
 
-  /* Fade-in animations */
   .animate-fade-in {
-    animation: fade-in 0.4s ease-out forwards;
+    animation: fade-in 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
+
   .animate-fade-in-up {
-    animation: fade-in-up 0.4s ease-out forwards;
+    animation: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
   }
 }
 
 @keyframes fade-in {
   from { opacity: 0; }
-  to   { opacity: 1; }
+  to { opacity: 1; }
 }
 
 @keyframes fade-in-up {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; transform: translateY(0.5rem); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
 }

@@ -1,255 +1,222 @@
 "use client";
 
-import { useState } from 'react';
+import { AlertCircle, ArrowRight, Eye, EyeOff, GraduationCap, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useAuth } from '@/contexts/AuthContext';
-import { useNotificationPopup } from '@/contexts/NotificationPopupContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { GraduationCap, Loader2, AlertCircle, ArrowRight } from 'lucide-react';
-import { Alert, AlertDescription } from '@/components/ui/alert';
-import api from '@/lib/api';
+import { useState } from "react";
+
+import { ThemeToggle } from "@/components/common/ThemeToggle";
+import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { useAuth } from "@/contexts/AuthContext";
+import { useNotificationPopup } from "@/contexts/NotificationPopupContext";
+import api from "@/lib/api";
+
+const demoAccounts = [
+  { role: "Quản trị viên", email: "admin@tdhuhu.edu.vn" },
+  { role: "Giảng viên", email: "lecturer01@tdhuhu.edu.vn" },
+  { role: "Sinh viên", email: "522h0001@tdhuhu.edu.vn" },
+] as const;
+
+const demoPassword = "123123123Az!";
 
 export default function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [error, setError] = useState("");
   const { login, isLoading } = useAuth();
   const { addNotification } = useNotificationPopup();
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError("");
 
     try {
       await login(email, password);
-      
-      // Show welcome notification
       addNotification({
-        title: 'Welcome back!',
-        message: 'You have successfully logged in.',
-        type: 'success',
+        title: "Đăng nhập thành công",
+        message: "Phiên làm việc của bạn đã sẵn sàng.",
+        type: "success",
       });
 
-      // Try to fetch and show recent notifications
       try {
-        const notificationsRes = await api.getMyNotifications({ limit: 3, unreadOnly: true });
-        const recentNotifications = notificationsRes.data || [];
-        
-        if (Array.isArray(recentNotifications) && recentNotifications.length > 0) {
-          // Show recent notifications
-          recentNotifications.forEach((notif: any) => {
+        const response = await api.getMyNotifications({ limit: 3, unreadOnly: true });
+        const recentNotifications = response.data || [];
+        if (Array.isArray(recentNotifications)) {
+          recentNotifications.forEach((notification: any) => {
             addNotification({
-              title: notif.title || 'Notification',
-              message: notif.message || notif.content || 'You have a new notification',
-              type: notif.type || 'info',
-              timestamp: notif.createdAt ? new Date(notif.createdAt) : new Date(),
+              title: notification.title || "Thông báo",
+              message: notification.message || notification.content || "Bạn có thông báo mới.",
+              type: notification.type || "info",
+              timestamp: notification.createdAt ? new Date(notification.createdAt) : new Date(),
             });
           });
         }
-      } catch (error) {
-        // Silently fail notification fetch
-        console.debug('Could not fetch recent notifications:', error);
+      } catch (notificationError) {
+        console.debug("Could not fetch recent notifications:", notificationError);
       }
 
-      const user = email.toLowerCase();
-      if (user.includes('student')) {
-        router.push('/student');
-      } else if (user.includes('lecturer')) {
-        router.push('/lecturer');
-      } else if (user.includes('admin')) {
-        router.push('/admin');
-      } else {
-        router.push('/student');
-      }
-    } catch (err: any) {
-      const message = String(err?.message || '');
-      if (message.toLowerCase().includes('failed to fetch')) {
-        setError('Cannot connect to server. Please ensure backend is running on port 3001.');
-      } else {
-        setError('Invalid email or password. Please try again.');
-      }
+      const normalizedEmail = email.toLowerCase();
+      if (normalizedEmail.includes("lecturer")) router.push("/lecturer");
+      else if (normalizedEmail.includes("admin")) router.push("/admin");
+      else router.push("/student");
+    } catch (loginError: any) {
+      const message = String(loginError?.message || "").toLowerCase();
+      setError(
+        message.includes("failed to fetch")
+          ? "Không thể kết nối máy chủ. Hãy kiểm tra backend tại cổng 3001."
+          : "Email hoặc mật khẩu không đúng. Vui lòng kiểm tra lại.",
+      );
     }
   };
 
+  const applyDemoAccount = (accountEmail: string) => {
+    setEmail(accountEmail);
+    setPassword(demoPassword);
+    setError("");
+  };
+
   return (
-    <div className="min-h-screen flex flex-col bg-background">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <Link href="/" className="flex items-center gap-2 font-bold text-foreground">
-          <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-            <GraduationCap className="h-3.5 w-3.5" />
+    <div className="page-surface min-h-[100dvh]">
+      <header className="border-b border-border/80 bg-background/90 backdrop-blur-lg">
+        <div className="container flex h-16 items-center justify-between">
+          <Link href="/" className="flex items-center gap-2 font-semibold">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
+              <GraduationCap className="h-4 w-4" aria-hidden="true" />
+            </span>
+            ExamTrust
+          </Link>
+          <div className="flex items-center gap-1">
+            <ThemeToggle compact />
+            <Button asChild variant="ghost" size="sm">
+              <Link href="/">Trang chủ</Link>
+            </Button>
           </div>
-          <span className="text-base">ExamTrust</span>
-        </Link>
-        <Link href="/" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-          Back to home
-        </Link>
+        </div>
       </header>
 
-      {/* Content */}
-      <div className="flex-1 flex items-center justify-center p-6">
-          <div className="w-full max-w-[420px]">
-          <div className="bg-card border border-border rounded-lg p-8 shadow-soft">
-            {/* Logo */}
-              <div className="flex items-center justify-center gap-2 mb-2">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
-                <GraduationCap className="h-4 w-4" />
+      <main id="main-content" className="container grid min-h-[calc(100dvh-4rem)] items-center gap-10 py-10 lg:grid-cols-[minmax(0,0.8fr)_minmax(420px,0.55fr)] lg:py-16">
+        <section className="hidden max-w-xl lg:block">
+          <p className="text-sm font-semibold text-primary">Không gian làm việc an toàn</p>
+          <h1 className="mt-4 text-4xl font-semibold leading-[1.12] tracking-[-0.05em] xl:text-5xl">
+            Tiếp tục công việc theo đúng vai trò của bạn
+          </h1>
+          <p className="mt-5 max-w-[54ch] text-base leading-7 text-muted-foreground">
+            Sinh viên làm bài tập trung. Giảng viên quản lý đề thi. Quản trị viên theo dõi vận hành và toàn vẹn học thuật.
+          </p>
+          <div className="mt-10 grid grid-cols-3 gap-3" aria-label="Các vai trò được hỗ trợ">
+            {demoAccounts.map((account) => (
+              <div key={account.role} className="rounded-xl border border-border/70 bg-card/80 px-4 py-5 shadow-soft">
+                <p className="text-sm font-semibold">{account.role}</p>
+                <p className="mt-1 text-xs text-muted-foreground">Không gian riêng</p>
               </div>
-              <span className="text-lg font-bold text-foreground">ExamTrust</span>
+            ))}
+          </div>
+        </section>
+
+        <section className="mx-auto w-full max-w-md">
+          <div className="rounded-2xl border border-border/80 bg-card p-6 shadow-medium sm:p-8">
+            <div>
+              <p className="text-sm font-semibold text-primary">Chào mừng trở lại</p>
+              <h2 className="mt-2 text-2xl font-semibold tracking-[-0.035em]">Đăng nhập ExamTrust</h2>
+              <p className="mt-2 text-sm leading-6 text-muted-foreground">Sử dụng tài khoản được nhà trường cấp.</p>
             </div>
-            <p className="text-center text-sm text-muted-foreground mb-6">
-              Sign in to your account
-            </p>
 
             {error && (
-              <Alert variant="destructive" className="mb-6">
+              <Alert variant="destructive" className="mt-6" role="alert">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
               </Alert>
             )}
 
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-1.5">
-                <Label htmlFor="email" className="text-sm font-medium">Email</Label>
+            <form onSubmit={handleSubmit} className="mt-7 space-y-5">
+              <div className="space-y-2">
+                <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
+                  name="email"
                   type="email"
-                  placeholder="you@example.com"
+                  autoComplete="username"
+                  placeholder="tenban@truong.edu.vn"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(event) => setEmail(event.target.value)}
                   required
-                  className="h-10"
                 />
               </div>
-              <div className="space-y-1.5">
-                <Label htmlFor="password" className="text-sm font-medium">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="••••••••"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                  className="h-10"
-                />
+              <div className="space-y-2">
+                <div className="flex items-center justify-between gap-4">
+                  <Label htmlFor="password">Mật khẩu</Label>
+                  <Link href="/reset-password" className="text-xs font-medium text-primary hover:underline">
+                    Quên mật khẩu?
+                  </Link>
+                </div>
+                <div className="relative">
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    placeholder="Nhập mật khẩu"
+                    value={password}
+                    onChange={(event) => setPassword(event.target.value)}
+                    required
+                    className="pr-11"
+                  />
+                  <button
+                    type="button"
+                    className="absolute inset-y-0 right-0 flex w-11 items-center justify-center text-muted-foreground hover:text-foreground"
+                    onClick={() => setShowPassword((visible) => !visible)}
+                    aria-label={showPassword ? "Ẩn mật khẩu" : "Hiện mật khẩu"}
+                  >
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
               </div>
 
-              <p className="text-xs text-muted-foreground">
-                By signing in, you agree to our{' '}
-                <a href="#" className="text-primary hover:underline">Terms of Service</a>
+              <p className="text-xs leading-5 text-muted-foreground">
+                Khi đăng nhập, bạn đồng ý với chính sách sử dụng và bảo vệ dữ liệu của nhà trường.
               </p>
 
-              <Button type="submit" className="w-full h-10 text-sm font-medium" disabled={isLoading}>
+              <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                 {isLoading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <>
+                    <Loader2 className="animate-spin" />
+                    Đang xác thực
+                  </>
                 ) : (
-                  'Sign in'
+                  <>
+                    Đăng nhập
+                    <ArrowRight />
+                  </>
                 )}
               </Button>
             </form>
-
-            <div className="mt-6 text-center space-y-2">
-              <p className="text-sm text-muted-foreground">
-                Need an account?{' '}
-                <a href="#" className="text-primary hover:underline font-medium">Sign up</a>
-              </p>
-              <Link href="/reset-password" className="text-sm text-muted-foreground hover:text-foreground transition-colors">
-                Forgot password?
-              </Link>
-            </div>
           </div>
 
-          {/* Demo credentials */}
-          <div className="mt-6 bg-card border border-border rounded-lg p-5">
-            <p className="text-xs text-muted-foreground font-medium text-center mb-3 uppercase tracking-wider">
-              Demo Accounts
-            </p>
-            <ul className="text-sm space-y-2">
-              <li>
-                <button
+          <div className="mt-4 rounded-xl border border-border/70 bg-card/70 p-4">
+            <p className="text-sm font-semibold">Tài khoản demo</p>
+            <p className="mt-1 text-xs text-muted-foreground">Chọn một vai trò để điền thông tin đăng nhập.</p>
+            <div className="mt-3 grid gap-2 sm:grid-cols-3">
+              {demoAccounts.map((account) => (
+                <Button
+                  key={account.email}
                   type="button"
-                  onClick={() => {
-                    setEmail('admin@tdhuhu.edu.vn');
-                    setPassword('123123123Az!');
-                  }}
-                  className="text-primary hover:underline"
+                  variant="outline"
+                  size="sm"
+                  className="h-auto min-h-11 whitespace-normal px-2 py-2 text-xs"
+                  onClick={() => applyDemoAccount(account.email)}
                 >
-                  <strong>Admin:</strong> admin@tdhuhu.edu.vn / 123123123Az!
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('lecturer01@tdhuhu.edu.vn');
-                    setPassword('123123123Az!');
-                  }}
-                  className="text-primary hover:underline"
-                >
-                  <strong>Lecturer:</strong> lecturer01@tdhuhu.edu.vn / 123123123Az!
-                </button>
-              </li>
-              <li>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setEmail('522h0001@tdhuhu.edu.vn');
-                    setPassword('123123123Az!');
-                  }}
-                  className="text-primary hover:underline"
-                >
-                  <strong>Student:</strong> 522h0001@tdhuhu.edu.vn / 123123123Az!
-                </button>
-              </li>
-            </ul>
-          </div>
-        </div>
-      </div>
-
-      {/* Footer */}
-      <footer className="border-t border-border py-6">
-        <div className="container">
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 text-sm">
-            <div>
-              <h4 className="font-semibold text-foreground mb-2">Product</h4>
-              <ul className="space-y-1 text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">Pricing</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Sign Up</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-2">Legal</h4>
-              <ul className="space-y-1 text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">Privacy Policy</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">Terms of Service</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-2">Support</h4>
-              <ul className="space-y-1 text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">Contact</a></li>
-              </ul>
-            </div>
-            <div>
-              <h4 className="font-semibold text-foreground mb-2">Connect</h4>
-              <ul className="space-y-1 text-muted-foreground">
-                <li><a href="#" className="hover:text-foreground transition-colors">Twitter</a></li>
-                <li><a href="#" className="hover:text-foreground transition-colors">LinkedIn</a></li>
-              </ul>
+                  {account.role}
+                </Button>
+              ))}
             </div>
           </div>
-          <p className="text-center text-xs text-muted-foreground mt-6">
-            © 2024 ExamTrust. All rights reserved.
-          </p>
-        </div>
-      </footer>
+        </section>
+      </main>
     </div>
   );
 }
-
-
-

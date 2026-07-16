@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { format, isToday, isTomorrow, startOfDay } from "date-fns";
+import { vi } from "date-fns/locale";
 import { CalendarClock, Clock3, Loader2 } from "lucide-react";
 
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
@@ -29,6 +30,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import api from "@/lib/api";
+import { getUiStatus } from "@/lib/presentation";
 
 type ScheduleExamItem = {
   id: string;
@@ -46,19 +48,19 @@ type ScheduleExamItem = {
 };
 
 const dayLabel = (date: Date) => {
-  if (isToday(date)) return "Today";
-  if (isTomorrow(date)) return "Tomorrow";
-  return format(date, "EEEE");
+  if (isToday(date)) return "Hôm nay";
+  if (isTomorrow(date)) return "Ngày mai";
+  return format(date, "EEEE", { locale: vi });
 };
 
 const statusBadgeClass = (status?: string) => {
   const normalized = String(status || "PUBLISHED").toUpperCase();
 
   if (normalized === "ONGOING") {
-    return "border-emerald-200 bg-emerald-50 text-emerald-700";
+    return "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300";
   }
 
-  return "border-sky-200 bg-sky-50 text-sky-700";
+  return "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300";
 };
 
 export default function StudentSchedule() {
@@ -130,26 +132,26 @@ export default function StudentSchedule() {
     () => [
       {
         key: "status",
-        label: "Status",
+        label: "Trạng thái",
         type: "select",
-        allLabel: "All Status",
+        allLabel: "Tất cả trạng thái",
         options: [
-          { label: "Published", value: "PUBLISHED" },
-          { label: "Ongoing", value: "ONGOING" },
+          { label: "Đã công bố", value: "PUBLISHED" },
+          { label: "Đang diễn ra", value: "ONGOING" },
         ],
       },
       {
         key: "courseCode",
-        label: "Course",
+        label: "Khóa học",
         type: "select",
-        allLabel: "All Courses",
+        allLabel: "Tất cả khóa học",
         options: Array.from(
           new Set(items.map((item) => item.course?.code).filter(Boolean)),
         ).map((code) => ({ label: String(code), value: String(code) })),
       },
       {
         key: "startTime",
-        label: "Exam Date",
+        label: "Ngày thi",
         type: "date-range",
       },
     ],
@@ -259,22 +261,22 @@ export default function StudentSchedule() {
 
   return (
     <DashboardLayout>
-      <div className="space-y-6 rounded-2xl bg-[linear-gradient(180deg,hsl(200_40%_97%)_0%,hsl(0_0%_100%)_42%)] p-4 sm:p-5 lg:p-6">
+      <div className="space-y-6">
         <BackToDashboardButton to="/student" className="-ml-2" />
 
-        <div className="space-y-4 rounded-xl border border-slate-200/80 bg-white/80 p-4 shadow-sm">
-          <ListPageHeader title="Exam Schedule" />
+        <div className="space-y-4 rounded-xl border border-border bg-card/80 p-4 shadow-sm">
+          <ListPageHeader title="Lịch thi" />
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <SearchBar
               value={searchInput}
               onChange={setSearchInput}
               onSearch={runSearch}
-              placeholder="Search exam title or course"
+              placeholder="Tìm tên bài thi hoặc khóa học"
               className="flex-1"
             />
             <FilterPanel
-              title="Schedule filters"
-              description="Filter by status, course and date range."
+              title="Bộ lọc lịch thi"
+              description="Lọc theo trạng thái, khóa học và khoảng ngày."
               filters={filterDefinitions}
               value={draftFilters}
               onValueChange={(key, nextValue) =>
@@ -292,16 +294,16 @@ export default function StudentSchedule() {
           />
         </div>
 
-        <Card className="overflow-hidden border-slate-200 bg-white/95 shadow-medium">
-          <CardHeader className="border-b border-slate-100 bg-slate-50/70">
+        <Card className="overflow-hidden shadow-medium">
+          <CardHeader className="border-b border-border bg-muted/30">
             <CardTitle className="flex items-center gap-2 text-xl">
               <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                 <CalendarClock className="h-5 w-5" />
               </span>
-              Calendar View
+              Dòng thời gian bài thi
             </CardTitle>
             <CardDescription>
-              Lightweight calendar-like timeline for your exam windows.
+              Theo dõi thời gian bắt đầu và kết thúc của từng bài thi.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -312,7 +314,7 @@ export default function StudentSchedule() {
             ) : groupedByDate.length === 0 ? (
               <div className="rounded-xl border border-dashed border-border p-10 text-center text-muted-foreground">
                 <CalendarClock className="mx-auto h-6 w-6" />
-                <p className="mt-2">No upcoming or ongoing exams match current filters.</p>
+                <p className="mt-2">Không có bài thi phù hợp với bộ lọc hiện tại.</p>
               </div>
             ) : (
               <div className="space-y-4">
@@ -322,18 +324,18 @@ export default function StudentSchedule() {
                   return (
                     <div
                       key={dateKey}
-                      className="relative overflow-hidden rounded-xl border border-slate-200 bg-white p-4 shadow-sm"
+                      className="relative overflow-hidden rounded-xl border border-border bg-card p-4 shadow-sm"
                     >
                       <div className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-emerald-500 to-amber-400" />
                       <div className="mb-3 flex items-center justify-between">
                         <div>
-                          <h3 className="text-lg font-semibold text-slate-900">
+                          <h3 className="text-lg font-semibold text-foreground">
                             {representativeDate
-                              ? `${dayLabel(representativeDate)} - ${format(representativeDate, "MMM d, yyyy")}`
-                              : "Unscheduled"}
+                              ? `${dayLabel(representativeDate)} - ${format(representativeDate, "dd/MM/yyyy", { locale: vi })}`
+                              : "Chưa xếp lịch"}
                           </h3>
                           <p className="text-xs text-muted-foreground">
-                            {dateItems.length} exam(s)
+                            {dateItems.length} bài thi
                           </p>
                         </div>
                       </div>
@@ -342,12 +344,12 @@ export default function StudentSchedule() {
                         {dateItems.map((item) => (
                           <div
                             key={item.id}
-                            className="flex flex-col gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-3 transition-colors hover:border-primary/30 hover:bg-white md:flex-row md:items-center md:justify-between"
+                            className="flex flex-col gap-3 rounded-lg border border-border bg-muted/30 p-3 transition-colors hover:border-primary/30 hover:bg-muted/50 md:flex-row md:items-center md:justify-between"
                           >
                             <div className="border-l-2 border-primary/50 pl-3">
-                              <p className="font-semibold text-slate-900">{item.title}</p>
+                              <p className="font-semibold text-foreground">{item.title}</p>
                               <p className="text-sm text-muted-foreground">
-                                {item.course?.code || "-"} - {item.course?.name || "Course unavailable"}
+                                {item.course?.code || "-"} - {item.course?.name || "Chưa có thông tin khóa học"}
                               </p>
                               <p className="mt-1 text-xs text-slate-500">
                                 <span className="inline-flex items-center gap-1">
@@ -355,30 +357,30 @@ export default function StudentSchedule() {
                                   {item.startTime
                                     ? format(new Date(item.startTime), "HH:mm")
                                     : "N/A"}
-                                  {" to "}
+                                  {" đến "}
                                   {item.endTime ? format(new Date(item.endTime), "HH:mm") : "N/A"}
                                 </span>
                               </p>
                             </div>
                             <div className="flex flex-wrap items-center gap-2">
                               <Badge variant="outline" className={statusBadgeClass(item.status)}>
-                                {item.status || "PUBLISHED"}
+                                {getUiStatus(item.status || "PUBLISHED").label}
                               </Badge>
                               {item.submitted ? (
                                 <Badge
                                   variant="secondary"
                                   className="border-emerald-200 bg-emerald-50 text-emerald-700"
                                 >
-                                  Submitted
+                                  Đã nộp
                                 </Badge>
                               ) : null}
                               <Button
                                 asChild
                                 size="sm"
                                 variant="outline"
-                                className="border-slate-200 bg-white hover:border-primary/30 hover:bg-primary/5"
+                                className="hover:border-primary/30 hover:bg-primary/5"
                               >
-                                <Link href={`/student/exams/${item.id}`}>Detail</Link>
+                                <Link href={`/student/exams/${item.id}`}>Chi tiết</Link>
                               </Button>
                             </div>
                           </div>

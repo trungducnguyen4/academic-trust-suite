@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { formatDistanceToNow } from "date-fns";
+import { vi } from "date-fns/locale";
 import { Bell, CheckCheck, Trash2 } from "lucide-react";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { useAuth } from "@/contexts/AuthContext";
@@ -71,11 +72,11 @@ export default function NotificationsPage() {
         <BackToDashboardButton to={dashboardPath} className="-ml-2" />
 
         <ListPageHeader
-          title="All Notifications"
+          title="Tất cả thông báo"
           actions={
             <Button onClick={markAllRead} variant="outline" className="gap-2">
               <CheckCheck className="h-4 w-4" />
-              Mark all read
+              Đánh dấu đã đọc
             </Button>
           }
         />
@@ -83,21 +84,20 @@ export default function NotificationsPage() {
         <Card className="card-elevated">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Bell className="h-5 w-5" /> Inbox
+              <Bell className="h-5 w-5" /> Hộp thông báo
             </CardTitle>
           </CardHeader>
           <CardContent>
             {loading ? (
               <p className="text-sm text-muted-foreground">
-                Loading notifications...
+                Đang tải thông báo...
               </p>
             ) : notifications.length === 0 ? (
               <div className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground">
                 <Bell className="h-10 w-10 mb-3 opacity-30" />
-                <p className="font-medium">No notifications yet</p>
+                <p className="font-medium">Chưa có thông báo</p>
                 <p className="text-sm">
-                  New exam, course, submission, and account events will appear
-                  here.
+                  Sự kiện về bài thi, khóa học, bài nộp và tài khoản sẽ xuất hiện tại đây.
                 </p>
               </div>
             ) : (
@@ -114,10 +114,10 @@ export default function NotificationsPage() {
                             {item.title}
                           </h3>
                           {!item.isRead && (
-                            <Badge variant="secondary">New</Badge>
+                            <Badge variant="secondary">Mới</Badge>
                           )}
                           {item.priority === "high" && (
-                            <Badge variant="destructive">High</Badge>
+                            <Badge variant="destructive">Ưu tiên cao</Badge>
                           )}
                         </div>
                         <p className="text-sm text-muted-foreground">
@@ -126,13 +126,14 @@ export default function NotificationsPage() {
                         <p className="text-xs text-muted-foreground">
                           {formatDistanceToNow(new Date(item.createdAt), {
                             addSuffix: true,
+                            locale: vi,
                           })}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">
                         {item.link && (
                           <Button asChild variant="outline" size="sm">
-                            <Link href={item.link}>Open</Link>
+                            <Link href={item.link}>Mở</Link>
                           </Button>
                         )}
                         {!item.isRead && (

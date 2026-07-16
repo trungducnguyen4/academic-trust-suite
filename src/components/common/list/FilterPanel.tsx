@@ -61,14 +61,14 @@ const getNumberFieldKey = (filterKey: string, bound: "min" | "max") =>
   `${filterKey}::${bound}`;
 
 export function FilterPanel({
-  title = "Filters",
-  description = "Refine results before applying.",
+  title = "Bộ lọc",
+  description = "Thu hẹp kết quả trước khi áp dụng.",
   filters,
   value,
   onValueChange,
   onApply,
   onClear,
-  triggerLabel = "Filter",
+  triggerLabel = "Lọc",
   activeCount = 0,
   className,
 }: FilterPanelProps) {
@@ -192,7 +192,7 @@ export function FilterPanel({
       type="button"
       variant="outline"
       className={cn(
-        "h-8 rounded-lg border-border bg-white px-2.5 text-xs hover:bg-muted",
+        "h-9 rounded-lg border-border bg-card px-2.5 text-xs hover:bg-muted",
         className,
       )}
     >
@@ -221,7 +221,7 @@ export function FilterPanel({
           onClick={handleClearWithReset}
           className="h-8 rounded-full px-2.5 text-xs"
         >
-          Clear
+          Xóa
         </Button>
       </div>
 
@@ -254,7 +254,7 @@ export function FilterPanel({
                         })
                       }
                     >
-                      <SelectTrigger className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0 data-[state=open]:border-primary data-[state=open]:ring-0">
+                      <SelectTrigger className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0 data-[state=open]:border-primary data-[state=open]:ring-0">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -267,10 +267,10 @@ export function FilterPanel({
                         ).map((operator) => (
                           <SelectItem key={operator} value={operator}>
                             {operator === "startsWith"
-                              ? "Starts with"
+                              ? "Bắt đầu bằng"
                               : operator === "equals"
-                                ? "Equals"
-                                : "Contains"}
+                                ? "Bằng"
+                                : "Chứa"}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -287,9 +287,9 @@ export function FilterPanel({
                         }
                         placeholder={
                           filter.placeholder ||
-                          `Search ${filter.label.toLowerCase()}`
+                          `Tìm ${filter.label.toLowerCase()}`
                         }
-                        className="h-9 rounded-lg border-border bg-white pl-8 text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                        className="h-9 rounded-lg border-border bg-card pl-8 text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
                       />
                     </div>
                   </div>
@@ -310,18 +310,18 @@ export function FilterPanel({
                       onValueChange(filter.key, nextValue)
                     }
                   >
-                    <SelectTrigger className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0 data-[state=open]:border-primary data-[state=open]:ring-0">
+                    <SelectTrigger className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0 data-[state=open]:border-primary data-[state=open]:ring-0">
                       <SelectValue
                         placeholder={
                           filter.placeholder ||
-                          `Select ${filter.label.toLowerCase()}`
+                          `Chọn ${filter.label.toLowerCase()}`
                         }
                       />
                     </SelectTrigger>
                     <SelectContent>
                       {filter.allowAll !== false && (
                         <SelectItem value="all">
-                          {filter.allLabel || `All ${filter.label}`}
+                          {filter.allLabel || `Tất cả ${filter.label}`}
                         </SelectItem>
                       )}
                       {filter.options.map((option) => (
@@ -398,16 +398,16 @@ export function FilterPanel({
                       <p className="text-xs font-medium text-foreground">
                         {typeof current === "boolean"
                           ? current
-                            ? filter.trueLabel || "Enabled"
-                            : filter.falseLabel || "Disabled"
-                          : `Toggle ${filter.label.toLowerCase()}`}
+                            ? filter.trueLabel || "Đã bật"
+                            : filter.falseLabel || "Đã tắt"
+                          : `Bật hoặc tắt ${filter.label.toLowerCase()}`}
                       </p>
                       <p className="text-xs text-muted-foreground">
                         {typeof current === "boolean"
                           ? current
-                            ? filter.trueLabel || "Yes"
-                            : filter.falseLabel || "No"
-                          : "Optional boolean filter"}
+                            ? filter.trueLabel || "Có"
+                            : filter.falseLabel || "Không"
+                          : "Bộ lọc tùy chọn"}
                       </p>
                     </div>
                     <Switch
@@ -484,7 +484,7 @@ export function FilterPanel({
                               )
                             }
                             placeholder="Min"
-                            className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                            className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
                           />
                           {minError ? (
                             <p className="text-[11px] text-destructive">{minError}</p>
@@ -518,8 +518,8 @@ export function FilterPanel({
                                 },
                               )
                             }
-                            placeholder="Max"
-                            className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                            placeholder="Tối đa"
+                            className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
                           />
                           {maxError ? (
                             <p className="text-[11px] text-destructive">{maxError}</p>
@@ -550,8 +550,8 @@ export function FilterPanel({
                               range,
                             )
                           }
-                          placeholder="Min"
-                          className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                          placeholder="Tối thiểu"
+                          className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
                         />
                         {minError ? (
                           <p className="text-[11px] text-destructive">{minError}</p>
@@ -585,8 +585,8 @@ export function FilterPanel({
                               },
                             )
                           }
-                          placeholder="Max"
-                          className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                          placeholder="Tối đa"
+                          className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
                         />
                         {maxError ? (
                           <p className="text-[11px] text-destructive">{maxError}</p>
@@ -613,7 +613,7 @@ export function FilterPanel({
                   <div className="grid gap-2 rounded-lg border border-border/80 p-2.5 md:grid-cols-2">
                     <div className="space-y-1.5">
                       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        From
+                        Từ ngày
                       </span>
                       <Input
                         type={filter.showTime ? "datetime-local" : "date"}
@@ -624,12 +624,12 @@ export function FilterPanel({
                             to: range.to,
                           })
                         }
-                        className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                        className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
                       />
                     </div>
                     <div className="space-y-1.5">
                       <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                        To
+                        Đến ngày
                       </span>
                       <Input
                         type={filter.showTime ? "datetime-local" : "date"}
@@ -640,7 +640,7 @@ export function FilterPanel({
                             to: event.target.value || undefined,
                           })
                         }
-                        className="h-9 rounded-lg border-border bg-white text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
+                        className="h-9 rounded-lg border-border bg-card text-xs ring-0 outline-none focus:border-primary focus:ring-0 focus-visible:border-primary focus-visible:ring-0"
                       />
                     </div>
                   </div>
@@ -660,14 +660,14 @@ export function FilterPanel({
           onClick={handleClearWithReset}
           className="h-8 rounded-lg px-3 text-xs"
         >
-          Clear filters
+          Xóa bộ lọc
         </Button>
         <Button
           type="button"
           onClick={handleApplyWithValidation}
           className="h-8 rounded-lg px-2.5 text-xs"
         >
-          Apply Filter
+          Áp dụng
         </Button>
       </div>
     </div>

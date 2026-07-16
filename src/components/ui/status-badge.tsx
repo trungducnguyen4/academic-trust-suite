@@ -6,7 +6,7 @@ import { cva, type VariantProps } from "class-variance-authority";
 import { cn } from "@/lib/utils";
 
 const statusBadgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold leading-none transition-colors",
+  "inline-flex items-center rounded-md border px-2.5 py-1 text-xs font-semibold leading-none transition-colors",
   {
     variants: {
       tone: {
@@ -57,17 +57,17 @@ const STATUS_BADGE_MAP: Record<
   Record<string, StatusBadgeMapEntry>
 > = {
   exam: {
-    draft: { tone: "neutral" },
-    published: { tone: "info" },
-    ongoing: { tone: "warning" },
-    completed: { tone: "success" },
-    archived: { tone: "neutral" },
+    draft: { tone: "neutral", label: "Bản nháp" },
+    published: { tone: "info", label: "Đã công bố" },
+    ongoing: { tone: "warning", label: "Đang diễn ra" },
+    completed: { tone: "success", label: "Đã hoàn thành" },
+    archived: { tone: "neutral", label: "Đã lưu trữ" },
   },
   integrity: {
-    pending: { tone: "warning", label: "Pending" },
-    reviewed: { tone: "info", label: "Reviewed" },
-    dismissed: { tone: "neutral", label: "Dismissed" },
-    confirmed: { tone: "danger", label: "Confirmed" },
+    pending: { tone: "warning", label: "Chờ xem xét" },
+    reviewed: { tone: "info", label: "Đã xem xét" },
+    dismissed: { tone: "neutral", label: "Đã bỏ qua" },
+    confirmed: { tone: "danger", label: "Đã xác nhận" },
   },
   user: {
     active: { tone: "success" },
@@ -75,13 +75,13 @@ const STATUS_BADGE_MAP: Record<
     inactive: { tone: "neutral" },
   },
   severity: {
-    none: { tone: "success", label: "No issues" },
+    none: { tone: "success", label: "Không có tín hiệu" },
     info: { tone: "info" },
-    low: { tone: "neutral", label: "Low" },
-    medium: { tone: "warning", label: "Medium" },
-    warning: { tone: "warning", label: "Warning" },
-    high: { tone: "danger", label: "High" },
-    critical: { tone: "danger", label: "Critical" },
+    low: { tone: "neutral", label: "Thấp" },
+    medium: { tone: "warning", label: "Trung bình" },
+    warning: { tone: "warning", label: "Cảnh báo" },
+    high: { tone: "danger", label: "Cao" },
+    critical: { tone: "danger", label: "Nghiêm trọng" },
   },
   confidence: {
     low: { tone: "neutral" },

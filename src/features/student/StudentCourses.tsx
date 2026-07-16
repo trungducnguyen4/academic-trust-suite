@@ -108,14 +108,14 @@ export default function StudentCourses() {
     return [
       {
         key: "term",
-        label: "Term",
+        label: "Học kỳ",
         type: "select",
-        allLabel: "All Terms",
+        allLabel: "Tất cả học kỳ",
         options: termOptions,
       },
       {
         key: "credits",
-        label: "Credits",
+        label: "Tín chỉ",
         type: "number-range",
         min: 0,
         max: 10,
@@ -123,7 +123,7 @@ export default function StudentCourses() {
       },
       {
         key: "progress",
-        label: "Progress",
+        label: "Tiến độ",
         type: "number-range",
         min: 0,
         max: 100,
@@ -241,9 +241,9 @@ export default function StudentCourses() {
   const activeFilterChips = getFilterChips(appliedFilters, filterDefinitions);
 
   const sortOptions = [
-    { field: "name", label: "Course Name" },
-    { field: "code", label: "Course Code" },
-    { field: "progress", label: "Progress" },
+    { field: "name", label: "Tên khóa học" },
+    { field: "code", label: "Mã khóa học" },
+    { field: "progress", label: "Tiến độ" },
   ];
 
   return (
@@ -252,13 +252,13 @@ export default function StudentCourses() {
         <BackToDashboardButton to="/student" className="-ml-2" />
 
         <div className="space-y-3">
-          <ListPageHeader title="My Courses" />
+          <ListPageHeader title="Khóa học của tôi" />
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
             <SearchBar
               value={searchInput}
               onChange={setSearchInput}
               onSearch={runSearch}
-              placeholder="Search by course code, name, lecturer"
+              placeholder="Tìm theo mã, tên khóa học hoặc giảng viên"
               className="flex-1"
             />
             <SortButton
@@ -271,8 +271,8 @@ export default function StudentCourses() {
               }}
             />
             <FilterPanel
-              title="Course filters"
-              description="Filter by term, credits and progress."
+              title="Bộ lọc khóa học"
+              description="Lọc theo học kỳ, số tín chỉ và tiến độ."
               filters={filterDefinitions}
               value={draftFilters}
               onValueChange={(key, nextValue) =>
@@ -292,9 +292,9 @@ export default function StudentCourses() {
 
         <Card>
           <CardHeader>
-            <CardTitle>Enrolled Courses</CardTitle>
+            <CardTitle>Khóa học đã tham gia</CardTitle>
             <CardDescription>
-              View all courses you are enrolled in and jump to each course exam list.
+              Xem các khóa học đã tham gia và truy cập danh sách bài thi của từng khóa học.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -308,7 +308,7 @@ export default function StudentCourses() {
                   <div className="rounded-xl border border-dashed border-border p-10 text-center">
                     <BookOpen className="mx-auto h-6 w-6 text-muted-foreground" />
                     <p className="mt-2 text-muted-foreground">
-                      No enrolled courses match current search/filter.
+                      Không có khóa học phù hợp với tìm kiếm hoặc bộ lọc.
                     </p>
                   </div>
                 ) : (
@@ -336,7 +336,7 @@ export default function StudentCourses() {
                               <Badge variant="secondary">{safeLabel(course.code)}</Badge>
                             </div>
                             <p className="text-sm text-muted-foreground">
-                              {course.description || "No description provided for this course."}
+                              {course.description || "Khóa học chưa có mô tả."}
                             </p>
                             <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                               <span className="inline-flex items-center gap-1">
@@ -345,23 +345,23 @@ export default function StudentCourses() {
                               </span>
                               <span className="inline-flex items-center gap-1">
                                 <UserRound className="h-3.5 w-3.5" />
-                                Lecturer: {safeLabel(course.lecturer?.fullName)}
+                                Giảng viên: {safeLabel(course.lecturer?.fullName)}
                               </span>
-                              <span>Credits: {course.credits ?? "N/A"}</span>
+                              <span>Tín chỉ: {course.credits ?? "N/A"}</span>
                             </div>
                           </div>
 
                           <div className="min-w-[220px] space-y-2">
                             <div className="flex items-center justify-between text-xs">
-                              <span className="text-muted-foreground">Progress</span>
+                              <span className="text-muted-foreground">Tiến độ</span>
                               <span className="font-medium text-foreground">{progressValue}%</span>
                             </div>
                             <Progress value={progressValue} className="h-2" />
                             <p className="text-xs text-muted-foreground">
-                              Last activity: {safeLabel(course.lastAccessed)}
+                              Hoạt động gần nhất: {safeLabel(course.lastAccessed)}
                             </p>
                             <Button asChild className="w-full" size="sm">
-                              <Link href={`/student/courses/${course.id}`}>View Course Detail</Link>
+                              <Link href={`/student/courses/${course.id}`}>Xem chi tiết khóa học</Link>
                             </Button>
                           </div>
                         </div>
@@ -377,7 +377,7 @@ export default function StudentCourses() {
               totalPages={totalPages}
               totalItems={filteredCourses.length}
               onPageChange={setPage}
-              itemLabel="courses"
+              itemLabel="khóa học"
               syncUrl={false}
             />
           </CardContent>

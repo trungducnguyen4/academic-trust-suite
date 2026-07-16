@@ -22,7 +22,7 @@ interface BackToDashboardButtonProps {
 
 export function BackToDashboardButton({
   to = "/admin",
-  label = "Back to Dashboard",
+  label = "Quay lại tổng quan",
   className,
   variant = "ghost",
   size = "sm",

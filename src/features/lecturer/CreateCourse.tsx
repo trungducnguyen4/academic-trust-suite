@@ -689,14 +689,14 @@ export default function CreateCourse() {
             return isNaN(d.getTime())
               ? typeof created.createdAt === "string"
                 ? created.createdAt
-                : "â€”"
+                : "Chưa có"
               : d.toISOString().split("T")[0];
           })(),
         };
         setCourses((prev) => [mapped, ...prev]);
         setCreatedCourseId(created.id);
         setCreatedCourseCode(created.code);
-        toast.success("Course created successfully");
+        toast.success("Tạo khóa học thành công");
       }
 
       setStep(2);

@@ -1,44 +1,55 @@
 "use client";
 
-import { Header } from '@/components/layout/Header';
 import Link from "next/link";
+
+import { Header } from "@/components/layout/Header";
+
 export default function Privacy() {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-[100dvh] bg-background">
       <Header />
-      <div className="container py-20">
-        <div className="mx-auto max-w-3xl">
-          <h1 className="text-3xl font-bold mb-4">Privacy & Data Retention</h1>
-          <p className="text-muted-foreground mb-6">
-            ExamTrust collects limited proctoring data (IP address, user agent, proctoring events) to
-            support exam integrity and auditing. This data is retained for a limited period and
-            pseudonymized or removed according to institutional policy.
+      <main id="main-content" className="container py-14 sm:py-20">
+        <article className="mx-auto max-w-3xl rounded-2xl border border-border/80 bg-card p-6 shadow-soft sm:p-10">
+          <h1 className="text-3xl font-semibold tracking-[-0.04em]">Quyền riêng tư và thời hạn lưu dữ liệu</h1>
+          <p className="mt-5 leading-7 text-muted-foreground">
+            ExamTrust chỉ ghi nhận dữ liệu giám sát cần thiết để hỗ trợ toàn vẹn kỳ thi và audit. Dữ liệu được lưu có thời hạn, sau đó được ẩn danh hoặc xóa theo chính sách của đơn vị.
           </p>
 
-          <h2 className="text-xl font-semibold mt-6 mb-2">What we collect</h2>
-          <ul className="list-disc ml-6 text-muted-foreground">
-            <li>Client IP address and derived location metadata (for audit & whitelist)</li>
-            <li>User agent string</li>
-            <li>Proctoring logs (tab switches, mouse anomalies, integrity events)</li>
-          </ul>
+          <div className="mt-9 space-y-8">
+            <section>
+              <h2 className="text-xl font-semibold">Dữ liệu được ghi nhận</h2>
+              <ul className="mt-3 list-disc space-y-2 pl-6 text-muted-foreground">
+                <li>Địa chỉ IP và metadata vị trí suy ra để audit hoặc kiểm tra whitelist.</li>
+                <li>Thông tin trình duyệt và thiết bị.</li>
+                <li>Sự kiện chuyển tab, tiêu điểm và các tín hiệu toàn vẹn trong phiên thi.</li>
+              </ul>
+            </section>
 
-          <h2 className="text-xl font-semibold mt-6 mb-2">Retention</h2>
-          <p className="text-muted-foreground">Default retention: 90 days. After that, IPs are pseudonymized or deleted.</p>
+            <section>
+              <h2 className="text-xl font-semibold">Thời hạn lưu</h2>
+              <p className="mt-3 text-muted-foreground">Mặc định lưu trong 90 ngày. Sau thời hạn này, địa chỉ IP được ẩn danh hoặc xóa.</p>
+            </section>
 
-          <h2 className="text-xl font-semibold mt-6 mb-2">Your rights</h2>
-          <p className="text-muted-foreground">Students may request data deletion or raise concerns via privacy@example.com.</p>
+            <section>
+              <h2 className="text-xl font-semibold">Quyền của bạn</h2>
+              <p className="mt-3 text-muted-foreground">Sinh viên có thể yêu cầu xóa dữ liệu hoặc gửi thắc mắc qua privacy@example.com.</p>
+            </section>
 
-          <h2 className="text-xl font-semibold mt-6 mb-2">Operational details</h2>
-          <p className="text-muted-foreground">Admins can view more details in the admin console. For operators, see <Link href="/admin/system-policy">System Policy</Link> and the repo <Link href="/docs/ops/retention">retention runbook</Link> (internal).</p>
-
-          <div className="mt-10">
-            <Link href="/" className="text-primary">Back to home</Link>
+            <section>
+              <h2 className="text-xl font-semibold">Thông tin vận hành</h2>
+              <p className="mt-3 text-muted-foreground">
+                Quản trị viên có thể xem chi tiết trong bảng điều khiển. Nhân sự vận hành xem{" "}
+                <Link href="/admin/system-policy" className="font-medium text-primary hover:underline">chính sách hệ thống</Link>
+                {" "}và tài liệu lưu trữ nội bộ của dự án.
+              </p>
+            </section>
           </div>
-        </div>
-      </div>
+
+          <div className="mt-10 border-t border-border pt-6">
+            <Link href="/" className="font-medium text-primary hover:underline">Quay lại trang chủ</Link>
+          </div>
+        </article>
+      </main>
     </div>
   );
 }
-
-
-

@@ -20,7 +20,7 @@ export function SearchBar({
   value,
   onChange,
   onSearch,
-  placeholder = "Search...",
+  placeholder = "Tìm kiếm...",
   className,
   disabled,
   clearable = true,
@@ -40,7 +40,7 @@ export function SearchBar({
           }}
           placeholder={placeholder}
           disabled={disabled}
-          className="h-10 rounded-lg border-border bg-white pl-9 pr-20 shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring"
+          className="h-11 rounded-lg border-border bg-card pl-9 pr-12 shadow-sm transition-colors focus-visible:ring-2 focus-visible:ring-ring"
         />
         {clearable && value ? (
           <Button
@@ -52,6 +52,7 @@ export function SearchBar({
             className="absolute right-1 top-1/2 h-8 w-8 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="h-4 w-4" />
+            <span className="sr-only">Xóa nội dung tìm kiếm</span>
           </Button>
         ) : null}
       </div>
@@ -60,9 +61,9 @@ export function SearchBar({
         variant="outline"
         onClick={onSearch}
         disabled={disabled}
-        className="h-10 shrink-0 rounded-lg border-border bg-white px-3 text-foreground hover:bg-muted"
+        className="h-11 shrink-0 rounded-lg border-border bg-card px-3 text-foreground hover:bg-muted"
       >
-        Search
+        Tìm
       </Button>
     </div>
   );

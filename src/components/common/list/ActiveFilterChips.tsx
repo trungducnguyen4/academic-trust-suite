@@ -29,7 +29,7 @@ export function ActiveFilterChips({
         <Badge
           key={`${chip.key}-${chip.valueLabel}`}
           variant="secondary"
-          className="gap-2 rounded-full px-3 py-1.5 text-xs font-medium"
+          className="gap-2 rounded-md px-3 py-1.5 text-xs font-medium"
         >
           <span className="text-muted-foreground">{chip.label}:</span>
           <span className="max-w-[220px] truncate">{chip.valueLabel}</span>
@@ -41,6 +41,7 @@ export function ActiveFilterChips({
             className="h-5 w-5 rounded-full text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />
+            <span className="sr-only">Xóa bộ lọc {chip.label}</span>
           </Button>
         </Badge>
       ))}
@@ -52,7 +53,7 @@ export function ActiveFilterChips({
         onClick={onClearAll}
         className="h-8 rounded-full px-3 text-xs"
       >
-        Clear filters
+        Xóa bộ lọc
       </Button>
     </div>
   );

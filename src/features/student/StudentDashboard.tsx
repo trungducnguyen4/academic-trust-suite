@@ -30,6 +30,7 @@ import {
   UserRound,
 } from "lucide-react";
 import { format, formatDistanceToNow, addHours } from "date-fns";
+import { vi } from "date-fns/locale";
 import Link from "next/link";
 import api from "@/lib/api";
 import { formatCourseTerm, type CourseTerm } from "@/lib/course-term";
@@ -201,8 +202,8 @@ export default function StudentDashboard() {
       type: "info" as const,
       message:
         examHistory.length > 0
-          ? `Results for "${examHistory[0]?.exam?.title}" are available`
-          : "No new notifications",
+          ? `Đã có kết quả cho "${examHistory[0]?.exam?.title}"`
+          : "Không có thông báo mới",
       time: addHours(new Date(), -2),
     },
     {
@@ -210,8 +211,8 @@ export default function StudentDashboard() {
       type: "warning" as const,
       message:
         upcomingExams.length > 0
-          ? `Reminder: "${upcomingExams[0]?.title}" is coming up`
-          : "No upcoming exams",
+          ? `Nhắc lịch: "${upcomingExams[0]?.title}" sắp diễn ra`
+          : "Không có bài thi sắp tới",
       time: addHours(new Date(), -5),
     },
   ];
@@ -231,7 +232,7 @@ export default function StudentDashboard() {
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">
-              Loading dashboard...
+              Đang tải trang tổng quan...
             </p>
           </div>
         </div>
@@ -245,12 +246,12 @@ export default function StudentDashboard() {
         {/* Welcome Section */}
         <div className="animate-fade-in opacity-0">
           <h1 className="text-2xl font-bold text-foreground">
-            Welcome back, {user?.fullName.split(" ")[0]}
+            Chào mừng trở lại, {user?.fullName.split(" ")[0]}
           </h1>
           <p className="text-muted-foreground mt-1">
             {upcomingExams.length > 0
-              ? `You have ${upcomingExams.length} upcoming exam${upcomingExams.length > 1 ? "s" : ""}`
-              : "You're all caught up. No upcoming exams."}
+              ? `Bạn có ${upcomingExams.length} bài thi sắp diễn ra`
+              : "Bạn đã hoàn tất lịch hiện tại. Không có bài thi sắp tới."}
           </p>
         </div>
 
@@ -258,22 +259,22 @@ export default function StudentDashboard() {
         <div className="grid gap-4 md:grid-cols-2">
           {[
             {
-              label: "Upcoming Exams",
+              label: "Bài thi sắp tới",
               value: upcomingExams.length,
               icon: FileText,
               color: "text-blue-600",
               bg: "bg-blue-500/10",
               gradient: "card-gradient-blue",
-              sub: "Scheduled",
+              sub: "Đã lên lịch",
             },
             {
-              label: "Average Score",
+              label: "Điểm trung bình",
               value: `${avgScore}%`,
               icon: Target,
               color: "text-violet-600",
               bg: "bg-violet-500/10",
               gradient: "card-gradient-violet",
-              sub: "Overall performance",
+              sub: "Kết quả tổng quan",
             },
           ].map((stat, i) => (
             <Card
@@ -310,9 +311,9 @@ export default function StudentDashboard() {
           <div className="lg:col-span-3">
             <Card>
               <CardHeader>
-                <CardTitle>Recent Courses</CardTitle>
+                <CardTitle>Khóa học gần đây</CardTitle>
                 <CardDescription>
-                  Courses you accessed recently.
+                  Các khóa học bạn vừa truy cập.
                 </CardDescription>
               </CardHeader>
               <CardContent>
@@ -321,7 +322,7 @@ export default function StudentDashboard() {
                     <div className="rounded-xl border border-dashed border-border p-10 text-center">
                       <BookOpen className="mx-auto h-6 w-6 text-muted-foreground" />
                       <p className="mt-2 text-muted-foreground">
-                        No recent courses yet.
+                        Chưa có khóa học được truy cập gần đây.
                       </p>
                     </div>
                   ) : (
@@ -352,7 +353,7 @@ export default function StudentDashboard() {
                               </div>
                               <p className="text-sm text-muted-foreground">
                                 {course.description ||
-                                  "No description provided for this course."}
+                                  "Khóa học chưa có mô tả."}
                               </p>
                               <div className="flex flex-wrap items-center gap-4 text-xs text-muted-foreground">
                                 <span className="inline-flex items-center gap-1">
@@ -361,16 +362,16 @@ export default function StudentDashboard() {
                                 </span>
                                 <span className="inline-flex items-center gap-1">
                                   <UserRound className="h-3.5 w-3.5" />
-                                  Lecturer: {safeLabel(course.lecturer?.fullName)}
+                                  Giảng viên: {safeLabel(course.lecturer?.fullName)}
                                 </span>
-                                <span>Credits: {course.credits ?? "N/A"}</span>
+                                <span>Tín chỉ: {course.credits ?? "N/A"}</span>
                               </div>
                             </div>
 
                             <div className="min-w-[220px] space-y-2">
                               <div className="flex items-center justify-between text-xs">
                                 <span className="text-muted-foreground">
-                                  Progress
+                                  Tiến độ
                                 </span>
                                 <span className="font-medium text-foreground">
                                   {progressValue}%
@@ -378,11 +379,11 @@ export default function StudentDashboard() {
                               </div>
                               <Progress value={progressValue} className="h-2" />
                               <p className="text-xs text-muted-foreground">
-                                Last activity: {safeLabel(course.lastAccessed)}
+                                Hoạt động gần nhất: {safeLabel(course.lastAccessed)}
                               </p>
                               <Button asChild className="w-full" size="sm">
                                 <Link href={`/student/courses/${course.id}`}>
-                                  View Course Detail
+                                  Xem chi tiết khóa học
                                 </Link>
                               </Button>
                             </div>
@@ -402,9 +403,9 @@ export default function StudentDashboard() {
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-bold">
-                    Upcoming Exams
+                    Bài thi sắp tới
                   </CardTitle>
-                  <CardDescription>Your scheduled examinations</CardDescription>
+                  <CardDescription>Các bài thi đã được lên lịch</CardDescription>
                 </div>
                 <Button
                   variant="ghost"
@@ -413,7 +414,7 @@ export default function StudentDashboard() {
                   asChild
                 >
                   <Link href="/student/exams">
-                    View all
+                    Xem tất cả
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -426,10 +427,10 @@ export default function StudentDashboard() {
                         <Calendar className="h-6 w-6 text-muted-foreground" />
                       </div>
                       <p className="text-muted-foreground font-medium">
-                        No upcoming exams
+                        Không có bài thi sắp tới
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        You're all caught up!
+                        Lịch hiện tại đã hoàn tất.
                       </p>
                     </div>
                   ) : (
@@ -463,7 +464,7 @@ export default function StudentDashboard() {
                           {isCompletedAttempt ? (
                             <Button size="sm" variant="outline" asChild>
                               <Link href={`/student/grading?examId=${exam.id}${latestSubmissionId ? `&submissionId=${latestSubmissionId}` : ""}`}>
-                                View Result
+                                Xem kết quả
                               </Link>
                             </Button>
                           ) : null}
@@ -473,11 +474,11 @@ export default function StudentDashboard() {
                               className="rounded-xl shadow-sm"
                               asChild
                             >
-                              <Link href={startUrl}>Start Now</Link>
+                              <Link href={startUrl}>Bắt đầu</Link>
                             </Button>
                           ) : !isCompletedAttempt ? (
                             <Button size="sm" variant="outline" disabled>
-                              Attempt Limit Reached
+                              Đã hết lượt làm bài
                             </Button>
                           ) : null}
                         </div>
@@ -495,7 +496,7 @@ export default function StudentDashboard() {
                               </h4>
                               {isToday && (
                                 <span className="px-2 py-0.5 text-xs bg-blue-500/10 text-blue-700 rounded-md font-semibold">
-                                  Today
+                                  Hôm nay
                                 </span>
                               )}
                             </div>
@@ -506,7 +507,7 @@ export default function StudentDashboard() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Calendar className="h-3 w-3" />
-                                {format(scheduledAt, "MMM d, yyyy")}
+                                {format(scheduledAt, "dd/MM/yyyy", { locale: vi })}
                               </span>
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
@@ -520,6 +521,7 @@ export default function StudentDashboard() {
                             <StatusBadge variant="info">
                               {formatDistanceToNow(scheduledAt, {
                                 addSuffix: true,
+                                locale: vi,
                               })}
                             </StatusBadge>
                           )}
@@ -540,9 +542,9 @@ export default function StudentDashboard() {
           <CardHeader className="flex flex-row items-center justify-between">
             <div>
               <CardTitle className="text-lg font-bold">
-                Recent Results
+                Kết quả gần đây
               </CardTitle>
-              <CardDescription>Your exam history and scores</CardDescription>
+              <CardDescription>Lịch sử làm bài và điểm số của bạn</CardDescription>
             </div>
             <Button
               variant="ghost"
@@ -551,7 +553,7 @@ export default function StudentDashboard() {
               asChild
             >
               <Link href="/student/results">
-                View all
+                Xem tất cả
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
@@ -564,10 +566,10 @@ export default function StudentDashboard() {
                     <Award className="h-6 w-6 text-muted-foreground" />
                   </div>
                   <p className="text-muted-foreground font-medium">
-                    No exam results yet
+                    Chưa có kết quả bài thi
                   </p>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Complete exams to see your results here
+                    Hoàn thành bài thi để xem kết quả tại đây
                   </p>
                 </div>
               ) : (
@@ -606,10 +608,10 @@ export default function StudentDashboard() {
                           </h4>
                           <p className="text-sm text-muted-foreground">
                             {submission.exam?.course?.code} ·{" "}
-                            {format(completedAt, "MMM d, yyyy")}
+                            {format(completedAt, "dd/MM/yyyy", { locale: vi })}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            Attempt {submissionAttempt}
+                            Lượt {submissionAttempt}
                           </p>
                         </div>
                       </div>

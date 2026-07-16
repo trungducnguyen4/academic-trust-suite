@@ -25,15 +25,15 @@ export default function ResetPassword() {
       await resetPassword(email);
       setIsSubmitted(true);
     } catch (err) {
-      setError('Email address not found. Please check and try again.');
+      setError('Không tìm thấy địa chỉ email. Vui lòng kiểm tra và thử lại.');
     } finally {
       setIsLoading(false);
     }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-8 bg-background">
-      <div className="w-full max-w-sm">
+    <main id="main-content" className="page-surface flex min-h-[100dvh] items-center justify-center p-6 sm:p-8">
+      <div className="w-full max-w-md rounded-2xl border border-border/80 bg-card p-6 shadow-medium sm:p-8">
         <div className="mb-8">
           <Link href="/" className="inline-flex items-center gap-2 text-foreground">
             <GraduationCap className="h-6 w-6 text-primary" />
@@ -46,22 +46,22 @@ export default function ResetPassword() {
             <div className="mx-auto w-12 h-12 rounded-full bg-success/10 flex items-center justify-center mb-4">
               <CheckCircle2 className="h-6 w-6 text-success" />
             </div>
-            <h1 className="text-2xl font-semibold text-foreground">Check your email</h1>
+            <h1 className="text-2xl font-semibold text-foreground">Kiểm tra email của bạn</h1>
             <p className="text-muted-foreground mt-2 mb-6">
-              We've sent a password reset link to <strong>{email}</strong>
+              Liên kết đặt lại mật khẩu đã được gửi đến <strong>{email}</strong>.
             </p>
             <Button asChild variant="outline" className="w-full">
               <Link href="/login">
                 <ArrowLeft className="mr-2 h-4 w-4" />
-                Back to sign in
+                Quay lại đăng nhập
               </Link>
             </Button>
           </div>
         ) : (
           <>
-            <h1 className="text-2xl font-semibold text-foreground mt-8">Reset password</h1>
+            <h1 className="text-2xl font-semibold text-foreground mt-8">Đặt lại mật khẩu</h1>
             <p className="text-muted-foreground mt-2 mb-6">
-              Enter your email address and we'll send you a link to reset your password.
+              Nhập địa chỉ email để nhận liên kết đặt lại mật khẩu.
             </p>
 
             {error && (
@@ -72,20 +72,20 @@ export default function ResetPassword() {
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email address</Label>
+                <Label htmlFor="email">Địa chỉ email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="you@university.edu"
+                  placeholder="tenban@truong.edu.vn"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   required
-                  className="h-10"
+                  autoComplete="email"
                 />
               </div>
-              <Button type="submit" className="w-full h-10" disabled={isLoading}>
+              <Button type="submit" className="w-full" size="lg" disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Send reset link
+                Gửi liên kết đặt lại
               </Button>
             </form>
 
@@ -95,13 +95,13 @@ export default function ResetPassword() {
                 className="text-sm text-muted-foreground hover:text-primary transition-colors inline-flex items-center gap-1"
               >
                 <ArrowLeft className="h-3 w-3" />
-                Back to sign in
+                Quay lại đăng nhập
               </Link>
             </div>
           </>
         )}
       </div>
-    </div>
+    </main>
   );
 }
 
