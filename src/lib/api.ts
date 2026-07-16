@@ -66,12 +66,14 @@ class ApiClient {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  private async waitForAiJob<T>(jobId: string, timeoutMs = 60000, intervalMs = 1200): Promise<T> {
+  private async waitForAiJob<T>(jobId: string, timeoutMs = 180000, intervalMs = 1200): Promise<T> {
     const startedAt = Date.now();
+    let lastStatus = 'UNKNOWN';
 
     while (Date.now() - startedAt < timeoutMs) {
       const job = await this.getQuestionAIGenerationJob(jobId);
       const status = String(job?.status || '').toUpperCase();
+      lastStatus = status || lastStatus;
 
       if (status === 'SUCCEEDED') {
         const output = job?.output || {};
@@ -85,7 +87,7 @@ class ApiClient {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
-    throw new Error('AI job timed out');
+    throw new Error(`AI job timed out after ${Math.round(timeoutMs / 1000)}s (jobId: ${jobId}, last status: ${lastStatus})`);
   }
 
   // Auth endpoints
@@ -686,6 +688,65 @@ class ApiClient {
 
   async getExamStats(examId: string) {
     return this.request<any>(`/exams/${examId}/stats`);
+  }
+
+  // AI exam quality review endpoints
+  async requestExamQualityReview(examId: string) {
+    return this.request<{ jobId: string; status: string }>(`/exams/${examId}/quality-review`, {
+      method: 'POST',
+    });
+  }
+
+  async getExamQualityReviewJob(examId: string, jobId: string) {
+    return this.request<any>(`/exams/${examId}/quality-review/jobs/${jobId}`);
+  }
+
+  private async waitForExamQualityReviewJob(
+    examId: string,
+    jobId: string,
+    timeoutMs = 180000,
+    intervalMs = 1500,
+  ): Promise<any> {
+    const startedAt = Date.now();
+    let lastStatus = 'UNKNOWN';
+
+    while (Date.now() - startedAt < timeoutMs) {
+      const job = await this.getExamQualityReviewJob(examId, jobId);
+      const status = String(job?.status || '').toUpperCase();
+      lastStatus = status || lastStatus;
+
+      if (status === 'SUCCEEDED') {
+        return job;
+      }
+      if (status === 'FAILED' || status === 'REJECTED') {
+        throw new Error(job?.errorMessage || `AI quality review failed with status ${status}`);
+      }
+
+      await new Promise((resolve) => setTimeout(resolve, intervalMs));
+    }
+
+    throw new Error(`AI quality review timed out after ${Math.round(timeoutMs / 1000)}s (jobId: ${jobId}, last status: ${lastStatus})`);
+  }
+
+  async generateExamQualityReview(examId: string) {
+    const { jobId } = await this.requestExamQualityReview(examId);
+    return this.waitForExamQualityReviewJob(examId, jobId);
+  }
+
+  async listExamQualityReviewSuggestions(examId: string, params?: { status?: string }) {
+    const query = params?.status ? `?status=${encodeURIComponent(params.status)}` : '';
+    return this.request<any[]>(`/exams/${examId}/quality-review/suggestions${query}`);
+  }
+
+  async reviewExamQualitySuggestion(
+    examId: string,
+    itemId: string,
+    data: { decision: 'APPROVED' | 'REJECTED' | 'NEEDS_CHANGES'; notes?: string },
+  ) {
+    return this.request<any>(`/exams/${examId}/quality-review/suggestions/${itemId}/review`, {
+      method: 'PATCH',
+      body: data,
+    });
   }
 
   async deleteExam(id: string) {

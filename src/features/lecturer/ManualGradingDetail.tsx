@@ -36,11 +36,10 @@ type DraftGrade = {
 };
 
 export default function ManualGradingDetail() {
-  const { id: routeExamId, submissionId: routeSubmissionId } = useParams();
-  const examId = Array.isArray(routeExamId) ? routeExamId[0] : routeExamId;
-  const submissionId = Array.isArray(routeSubmissionId)
-    ? routeSubmissionId[0]
-    : routeSubmissionId;
+  const params = useParams();
+  const slug = Array.isArray(params?.slug) ? params.slug : [];
+  const examId = slug[1];
+  const submissionId = slug[3];
   const router = useRouter();
   const pathname = usePathname();
   const basePath = pathname.startsWith("/admin") ? "/admin" : "/lecturer";

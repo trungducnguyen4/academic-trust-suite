@@ -14,12 +14,14 @@ export class AiService {
   private readonly logger = new Logger(AiService.name);
   private genAI: GoogleGenerativeAI;
   private nvidiaAI: OpenAI;
+  private openRouterAI: OpenAI;
   private model: any;
   private provider: string;
   private localUrl: string | undefined;
   private ollamaUrl: string;
   private ollamaModel: string;
   private nvidiaModel: string;
+  private openRouterModel: string;
   private appName: string;
   private defaultLanguage: string;
   private ollamaTemperature: number;
@@ -34,6 +36,7 @@ export class AiService {
     this.ollamaUrl = this.configService.get<string>('AI_OLLAMA_URL') || 'http://localhost:11434';
     this.ollamaModel = this.configService.get<string>('AI_OLLAMA_MODEL') || 'gemma3:4b';
     this.nvidiaModel = this.configService.get<string>('AI_NVIDIA_MODEL') || 'z-ai/glm-5.2';
+    this.openRouterModel = this.configService.get<string>('AI_OPENROUTER_MODEL') || 'nvidia/nemotron-3-ultra-550b-a55b:free';
     this.appName = this.configService.get<string>('AI_APP_NAME') || 'Academic Trust Suite';
     this.defaultLanguage = this.configService.get<string>('AI_DEFAULT_LANGUAGE') || 'vi';
     this.ollamaTemperature = Number(this.configService.get<string>('AI_OLLAMA_TEMPERATURE') || 0.2);
@@ -60,6 +63,25 @@ export class AiService {
         baseURL: nvidiaBaseUrl,
       });
       this.logger.log(`AI provider: NVIDIA @ ${nvidiaBaseUrl} (model: ${this.nvidiaModel})`);
+    } else if (this.provider === 'openrouter') {
+      const openRouterApiKey = this.configService.get<string>('OPENROUTER_API_KEY');
+      const openRouterBaseUrl = this.configService.get<string>('AI_OPENROUTER_BASE_URL') || 'https://openrouter.ai/api/v1';
+      const referer = this.configService.get<string>('AI_OPENROUTER_HTTP_REFERER')
+        || this.configService.get<string>('APP_BASE_URL')
+        || this.configService.get<string>('FRONTEND_URL');
+      const title = this.configService.get<string>('AI_OPENROUTER_X_TITLE') || this.appName;
+      if (!openRouterApiKey) {
+        this.logger.warn('OPENROUTER_API_KEY not set. OpenRouter AI features will not work.');
+      }
+      this.openRouterAI = new OpenAI({
+        apiKey: openRouterApiKey || '',
+        baseURL: openRouterBaseUrl,
+        defaultHeaders: {
+          ...(referer ? { 'HTTP-Referer': referer } : {}),
+          ...(title ? { 'X-Title': title } : {}),
+        },
+      });
+      this.logger.log(`AI provider: OpenRouter @ ${openRouterBaseUrl} (model: ${this.openRouterModel})`);
     } else {
       this.logger.log(`AI provider set to '${this.provider}'. Using local/mock mode.`);
     }
@@ -148,6 +170,8 @@ Rules:
         );
       } else if (this.provider === 'nvidia') {
         responseText = await this._callNvidia(systemPrompt);
+      } else if (this.provider === 'openrouter') {
+        responseText = await this._callOpenRouter(systemPrompt);
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -302,6 +326,8 @@ ${typeInstruction}
         );
       } else if (this.provider === 'nvidia') {
         responseText = await this._callNvidia(systemPrompt);
+      } else if (this.provider === 'openrouter') {
+        responseText = await this._callOpenRouter(systemPrompt);
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -357,6 +383,169 @@ ${typeInstruction}
       }));
     } catch (error: any) {
       this.logger.error('Failed to generate exam questions:', error);
+      throw new Error(`AI generation failed: ${error.message}`);
+    }
+  }
+
+  async generateExamQualityReview(params: {
+    examTitle?: string;
+    courseName?: string;
+    language?: string;
+    examSummary: {
+      totalSubmissions: number;
+      avgScorePct?: number | null;
+      passRate?: number | null;
+      completionRate?: number | null;
+    };
+    questionStats: Array<{
+      questionId: string;
+      questionVersionId?: string | null;
+      questionText: string;
+      totalAttempts: number;
+      correctRate: number;
+      incorrectRate: number;
+      skipRate: number;
+      avgTimeSeconds: number | null;
+      difficultyIndex: number | null;
+      discriminationIndex: number | null;
+    }>;
+    context?: ExamTrustAiContext;
+  }) {
+    const { examTitle, courseName, language, examSummary, questionStats, context } = params;
+    const targetLanguage = language || this.defaultLanguage;
+    const langInstruction = targetLanguage === 'vi'
+      ? 'Write the overallSummary, reasonSummary and recommendation fields in Vietnamese.'
+      : 'Write the overallSummary, reasonSummary and recommendation fields in English.';
+
+    const profilePrompt = buildExamTrustPromptHeader({
+      appName: this.appName,
+      useCase: 'exam_quality_review',
+      language: targetLanguage,
+      context: {
+        examTitle,
+        courseName,
+        analytics: {
+          totalAttempts: examSummary.totalSubmissions,
+          passRate: examSummary.passRate ?? undefined,
+          averageScore: examSummary.avgScorePct ?? undefined,
+        },
+        ...(context || {}),
+      },
+    });
+
+    const statsTable = questionStats.map((q) => ({
+      questionId: q.questionId,
+      questionText: q.questionText.slice(0, 200),
+      totalAttempts: q.totalAttempts,
+      correctRatePct: Number(q.correctRate.toFixed(1)),
+      incorrectRatePct: Number(q.incorrectRate.toFixed(1)),
+      skipRatePct: Number(q.skipRate.toFixed(1)),
+      avgTimeSeconds: q.avgTimeSeconds,
+      difficultyIndex: q.difficultyIndex,
+      discriminationIndex: q.discriminationIndex,
+    }));
+
+    const systemPrompt = `${profilePrompt}
+${langInstruction}
+
+You are reviewing the real statistical performance of an exam ("${examTitle || 'Untitled exam'}") to help the lecturer improve question quality.
+
+Exam-level summary:
+${JSON.stringify({
+  totalSubmissions: examSummary.totalSubmissions,
+  avgScorePct: examSummary.avgScorePct ?? null,
+  passRate: examSummary.passRate ?? null,
+  completionRate: examSummary.completionRate ?? null,
+}, null, 2)}
+
+Per-question statistics (real attempt data, one entry per question):
+${JSON.stringify(statsTable, null, 2)}
+
+You MUST respond with a valid JSON object (no markdown, no code fences, just pure JSON) with this exact structure:
+{
+  "overallSummary": "2-4 sentence overview of the exam's quality based only on the numbers above",
+  "suggestions": [
+    {
+      "questionId": "must be one of the questionId values above",
+      "severity": "high" | "medium" | "low",
+      "reasonSummary": "explain WHY this question needs review, citing the specific numbers (difficulty index, discrimination index, incorrect/skip rate, avg time)",
+      "recommendation": "concrete suggestion to improve the question's content, difficulty calibration, or distractor/answer options"
+    }
+  ]
+}
+
+Rules:
+- Base every judgment strictly on the numbers provided. Do not invent statistics.
+- Only include a question in "suggestions" if its numbers indicate a real quality concern (e.g. discrimination index near 0 or negative, difficulty index extremely high/low, incorrect rate or skip rate unusually high, abnormal avg time).
+- If none of the questions show a concern, return an empty suggestions array.
+- Never suggest editing, deleting, or publishing anything yourself — only describe what the lecturer should review.
+- Return ONLY the JSON object, no additional text.`;
+
+    try {
+      let responseText: string;
+
+      if (this.provider === 'ollama') {
+        responseText = await this._callOllama(
+          systemPrompt,
+          this.buildOllamaOptions('grading_support'),
+        );
+      } else if (this.provider === 'nvidia') {
+        responseText = await this._callNvidia(systemPrompt);
+      } else if (this.provider === 'openrouter') {
+        responseText = await this._callOpenRouter(systemPrompt);
+      } else if (this.provider === 'local' && this.localUrl) {
+        const resp = await fetch(this.localUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prompt: systemPrompt }),
+        });
+        if (!resp.ok) throw new Error(`Local model server returned ${resp.status}`);
+        responseText = await resp.text();
+      } else if (this.provider === 'mock') {
+        responseText = JSON.stringify({
+          overallSummary: `Mocked quality review summary for ${examTitle || 'this exam'}.`,
+          suggestions: questionStats.slice(0, 1).map((q) => ({
+            questionId: q.questionId,
+            severity: 'medium',
+            reasonSummary: 'Mocked reason based on provided stats.',
+            recommendation: 'Mocked recommendation for development.',
+          })),
+        });
+      } else {
+        const result = await this.model.generateContent(systemPrompt);
+        responseText = result.response.text();
+      }
+
+      const cleaned = responseText
+        .replace(/```json\s*/gi, '')
+        .replace(/```\s*/gi, '')
+        .trim();
+
+      const parsed = JSON.parse(cleaned);
+
+      if (typeof parsed.overallSummary !== 'string' || !Array.isArray(parsed.suggestions)) {
+        throw new Error('Invalid response format: missing overallSummary or suggestions array');
+      }
+
+      const validQuestionIds = new Set(questionStats.map((q) => q.questionId));
+      const validSeverities = new Set(['high', 'medium', 'low']);
+
+      const suggestions = parsed.suggestions
+        .filter((s: any) => s && validQuestionIds.has(String(s.questionId)))
+        .map((s: any) => ({
+          questionId: String(s.questionId),
+          severity: validSeverities.has(String(s.severity)) ? String(s.severity) : 'medium',
+          reasonSummary: String(s.reasonSummary || '').trim(),
+          recommendation: String(s.recommendation || '').trim(),
+        }))
+        .filter((s: any) => s.reasonSummary && s.recommendation);
+
+      return {
+        overallSummary: String(parsed.overallSummary).trim(),
+        suggestions,
+      };
+    } catch (error: any) {
+      this.logger.error('Failed to generate exam quality review:', error);
       throw new Error(`AI generation failed: ${error.message}`);
     }
   }
@@ -472,6 +661,8 @@ Rules:
         );
       } else if (this.provider === 'nvidia') {
         responseText = await this._callNvidia(prompt);
+      } else if (this.provider === 'openrouter') {
+        responseText = await this._callOpenRouter(prompt);
       } else if (this.provider === 'local' && this.localUrl) {
         const resp = await fetch(this.localUrl, {
           method: 'POST',
@@ -555,6 +746,40 @@ Rules:
     let text = '';
     for await (const chunk of completion as any) {
       text += chunk.choices?.[0]?.delta?.content || '';
+    }
+    return text;
+  }
+
+  private async _callOpenRouter(prompt: string): Promise<string> {
+    const reasoningEnabled = String(this.configService.get<string>('AI_OPENROUTER_REASONING_ENABLED') || '')
+      .toLowerCase() === 'true';
+    const request: any = {
+      model: this.openRouterModel,
+      messages: [{ role: 'user', content: prompt }],
+      temperature: 1,
+      top_p: 0.95,
+      max_tokens: 16384,
+      seed: 42,
+      stream: true,
+    };
+
+    if (reasoningEnabled) {
+      request.reasoning = {
+        enabled: true,
+        exclude: true,
+      };
+    }
+
+    const completion = await this.openRouterAI.chat.completions.create(request);
+
+    let text = '';
+    for await (const chunk of completion as any) {
+      text += chunk.choices?.[0]?.delta?.content || '';
+      const reasoningTokens = chunk.usage?.completionTokensDetails?.reasoningTokens
+        ?? chunk.usage?.completion_tokens_details?.reasoning_tokens;
+      if (typeof reasoningTokens !== 'undefined') {
+        this.logger.debug(`OpenRouter reasoning tokens: ${reasoningTokens}`);
+      }
     }
     return text;
   }

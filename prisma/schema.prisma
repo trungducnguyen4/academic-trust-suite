@@ -53,6 +53,7 @@ enum AISection {
   ANSWERS
   EXPLANATION
   CLASSIFICATION
+  QUALITY_REVIEW
 }
 
 enum AIJobStatus {
@@ -150,6 +151,7 @@ model User {
   notifications   Notification[]   @relation("UserNotifications")
   aiReviewedRecords AIGenerationRecord[] @relation("AIReviewUser")
   examSubmissionRegradeLogs ExamSubmissionRegradeLog[] @relation("RegradeReviewer")
+  qualityReviewItemsReviewed ExamQualityReviewItem[] @relation("ExamQualityReviewItemReviewer")
 
   @@map("users")
 }
@@ -234,6 +236,7 @@ model Exam {
   ipWhitelist    ExamIpWhitelist[]
   accessDeniedLogs ExamAccessDeniedLog[]
   snapshots      ExamSnapshot[]
+  qualityReviewJobs AIGenerationRecord[] @relation("ExamQualityReviewJobs")
 
   @@index([courseId])
   @@index([creatorId])
@@ -346,6 +349,7 @@ model Question {
   courseScopes      QuestionCourseScope[]
   drafts            QuestionDraft[]
   usages            QuestionUsage[]
+  qualityReviewItems ExamQualityReviewItem[]
 
   @@index([courseId])
   @@index([creatorId])
@@ -457,6 +461,8 @@ model AIGenerationRecord {
   draft             QuestionDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
   questionVersionId String?
   questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: SetNull)
+  examId            String?
+  exam              Exam?    @relation("ExamQualityReviewJobs", fields: [examId], references: [id], onDelete: Cascade)
   section           AISection
   status            AIJobStatus @default(QUEUED)
   reviewStatus      AIReviewStatus @default(PENDING)
@@ -473,12 +479,39 @@ model AIGenerationRecord {
   createdAt         DateTime @default(now())
   completedAt       DateTime?
 
+  qualityReviewItems ExamQualityReviewItem[]
+
   @@index([draftId, createdAt])
   @@index([questionVersionId])
+  @@index([examId, createdAt])
   @@index([status])
   @@index([reviewStatus])
   @@index([reviewedBy])
   @@map("ai_generation_records")
+}
+
+model ExamQualityReviewItem {
+  id                String   @id @default(uuid())
+  jobId             String
+  job               AIGenerationRecord @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionVersionId String?
+  severity          String?
+  reasonSummary     String   @db.Text
+  statsSnapshot     Json?
+  recommendation    String   @db.Text
+  reviewStatus      AIReviewStatus @default(PENDING)
+  reviewedBy        String?
+  reviewer          User?    @relation("ExamQualityReviewItemReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  reviewNotes       String?  @db.Text
+  createdAt         DateTime @default(now())
+
+  @@index([jobId])
+  @@index([questionId])
+  @@index([reviewStatus])
+  @@map("exam_quality_review_items")
 }
 
 model QuestionUsage {

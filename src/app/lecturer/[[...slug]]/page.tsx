@@ -9,6 +9,7 @@ import ExamManagement from "@/features/lecturer/ExamManagement";
 import ExamMonitor from "@/features/lecturer/ExamMonitor";
 import ExamPreview from "@/features/lecturer/ExamPreview";
 import ExamQR from "@/features/lecturer/ExamQR";
+import ExamQualityReview from "@/features/lecturer/ExamQualityReview";
 import ExamResultsList from "@/features/lecturer/ExamResultsList";
 import GenerateExamLink from "@/features/lecturer/GenerateExamLink";
 import LecturerDashboard from "@/features/lecturer/LecturerDashboard";
@@ -38,6 +39,7 @@ export default async function LecturerRoute({ params }: PageProps) {
   if (section === "exam" && slug.length === 3 && slug[2] === "preview") return <ExamPreview />;
   if (section === "exam" && slug.length === 3 && slug[2] === "qr") return <ExamQR />;
   if (section === "exam" && slug.length === 3 && slug[2] === "results") return <ExamResultsList />;
+  if (section === "exam" && slug.length === 3 && slug[2] === "quality-review") return <ExamQualityReview />;
   if (section === "exam" && slug.length === 5 && slug[2] === "submissions" && slug[4] === "manual-grading") {
     return <ManualGradingDetail />;
   }

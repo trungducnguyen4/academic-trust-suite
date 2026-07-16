@@ -464,9 +464,23 @@ export default function ExamAnalytics() {
               </Card>
 
               <Card className="overflow-hidden border-emerald-200/70 bg-gradient-to-br from-emerald-50/40 to-background">
-                <CardHeader>
-                  <CardTitle className="text-slate-900">Question Quality Alerts</CardTitle>
-                  <CardDescription>Support for content creators/admins.</CardDescription>
+                <CardHeader className="flex flex-row items-start justify-between gap-3">
+                  <div>
+                    <CardTitle className="text-slate-900">Question Quality Alerts</CardTitle>
+                    <CardDescription>Support for content creators/admins.</CardDescription>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="gap-1 border-emerald-200/70 hover:bg-emerald-50 whitespace-nowrap"
+                    disabled={!selectedExamId}
+                    onClick={() => {
+                      trackAction("open_ai_quality_review");
+                      router.push(`/lecturer/exam/${selectedExamId}/quality-review`);
+                    }}
+                  >
+                    <Sparkles className="h-3.5 w-3.5" /> AI Quality Review
+                  </Button>
                 </CardHeader>
                 <CardContent className="space-y-3">
                   {data.creatorQualityAlerts.length === 0 ? (

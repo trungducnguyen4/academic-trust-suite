@@ -2205,21 +2205,27 @@ export class SubmissionsService {
       throw new NotFoundException('Exam not found');
     }
 
-    const [examQuestions, submissions, integrityLogs] = await Promise.all([
-      this.prisma.$queryRaw<Array<{
-        questionId: string;
-        questionVersionId: string | null;
-        orderIndex: number;
-        questionType: string;
-        questionContent: string;
-      }>>`
-        SELECT eq.questionId, eq.questionVersionId, eq.orderIndex, q.type AS questionType, COALESCE(qv.stem, q.content) AS questionContent
-        FROM exam_questions eq
-        INNER JOIN questions q ON q.id = eq.questionId
-        LEFT JOIN question_versions qv ON qv.id = eq.questionVersionId
-        WHERE eq.examId = ${examId}
-        ORDER BY eq.orderIndex ASC
-      `,
+    const [examQuestionRows, submissions, integrityLogs] = await Promise.all([
+      this.prisma.examQuestion.findMany({
+        where: { examId },
+        orderBy: { orderIndex: 'asc' },
+        select: {
+          questionId: true,
+          questionVersionId: true,
+          orderIndex: true,
+          question: {
+            select: {
+              type: true,
+              content: true,
+            },
+          },
+          questionVersion: {
+            select: {
+              stem: true,
+            },
+          },
+        },
+      }),
       this.prisma.examSubmission.findMany({
         where: { examId },
         select: {
@@ -2245,6 +2251,14 @@ export class SubmissionsService {
         },
       }),
     ]);
+
+    const examQuestions = examQuestionRows.map((item) => ({
+      questionId: item.questionId,
+      questionVersionId: item.questionVersionId,
+      orderIndex: item.orderIndex,
+      questionType: item.question?.type || 'UNKNOWN',
+      questionContent: item.questionVersion?.stem || item.question?.content || '',
+    }));
 
     const topicByQuestionId = new Map<string, { topicId: string; topicName: string }>();
     try {
@@ -2305,23 +2319,29 @@ export class SubmissionsService {
       skippedAttempts: number;
     };
 
-    const statsRows: QuestionStatsRow[] = await this.prisma.questionStatistics.findMany({
-      where: {
-        questionVersionId: {
-          in: examQuestions.map((eq) => eq.questionVersionId).filter((id): id is string => Boolean(id)),
-        },
-      },
-      select: {
-        questionVersionId: true,
-        pValue: true,
-        difficultyIndex: true,
-        discriminationIndex: true,
-        totalAttempts: true,
-        correctAttempts: true,
-        incorrectAttempts: true,
-        skippedAttempts: true,
-      },
-    });
+    const questionVersionIds = examQuestions
+      .map((eq) => eq.questionVersionId)
+      .filter((id): id is string => Boolean(id));
+
+    const statsRows: QuestionStatsRow[] = questionVersionIds.length
+      ? await this.prisma.questionStatistics.findMany({
+          where: {
+            questionVersionId: {
+              in: questionVersionIds,
+            },
+          },
+          select: {
+            questionVersionId: true,
+            pValue: true,
+            difficultyIndex: true,
+            discriminationIndex: true,
+            totalAttempts: true,
+            correctAttempts: true,
+            incorrectAttempts: true,
+            skippedAttempts: true,
+          },
+        })
+      : [];
     const statsByVersionId = new Map(statsRows.map((row) => [row.questionVersionId, row]));
 
     const attemptsPerQuestion = Math.max(1, scopedCompletedSubmissions.length);
@@ -2550,6 +2570,7 @@ export class SubmissionsService {
         },
         trendSeries,
       },
+      questionMetrics,
       mostIncorrectQuestions,
       weakestTopics,
       slowestQuestionTypes,

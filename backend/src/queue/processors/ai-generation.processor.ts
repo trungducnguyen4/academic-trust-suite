@@ -6,7 +6,7 @@ import { AiService } from '../../ai/ai.service';
 import { AISection } from '../../questions-v2/dto/question-draft.dto';
 import { ExamTrustAiContext } from '../../ai/ai-profile';
 
-type AiTaskType = 'single-question' | 'exam-questions' | 'draft-section';
+type AiTaskType = 'single-question' | 'exam-questions' | 'draft-section' | 'exam-quality-review';
 
 @Processor('ai-generation')
 export class AIGenerationProcessor {
@@ -235,7 +235,7 @@ export class AIGenerationProcessor {
       payload: Record<string, any>;
     };
 
-    const record = await this.prisma.aiGenerationRecord.findUnique({
+    const record = await this.prisma.aIGenerationRecord.findUnique({
       where: { id: jobId },
       select: { id: true, status: true },
     });
@@ -245,7 +245,7 @@ export class AIGenerationProcessor {
       return;
     }
 
-    await this.prisma.aiGenerationRecord.update({
+    await this.prisma.aIGenerationRecord.update({
       where: { id: jobId },
       data: {
         status: 'RUNNING',
@@ -267,7 +267,7 @@ export class AIGenerationProcessor {
           context,
         });
 
-        await this.prisma.aiGenerationRecord.update({
+        await this.prisma.aIGenerationRecord.update({
           where: { id: jobId },
           data: {
             status: 'SUCCEEDED',
@@ -290,7 +290,7 @@ export class AIGenerationProcessor {
           context,
         });
 
-        await this.prisma.aiGenerationRecord.update({
+        await this.prisma.aIGenerationRecord.update({
           where: { id: jobId },
           data: {
             status: 'SUCCEEDED',
@@ -298,6 +298,45 @@ export class AIGenerationProcessor {
             completedAt: new Date(),
           },
         });
+        return;
+      }
+
+      if (task === 'exam-quality-review') {
+        const result = await this.aiService.generateExamQualityReview({
+          examTitle: context.examTitle,
+          courseName: context.courseName,
+          language: payload.language,
+          examSummary: payload.examSummary || { totalSubmissions: 0 },
+          questionStats: payload.questionStats || [],
+          context,
+        });
+
+        await this.prisma.$transaction([
+          this.prisma.aIGenerationRecord.update({
+            where: { id: jobId },
+            data: {
+              status: 'SUCCEEDED',
+              output: result,
+              completedAt: new Date(),
+            },
+          }),
+          ...result.suggestions.map((s) => {
+            const stat = (payload.questionStats || []).find(
+              (q: any) => q.questionId === s.questionId,
+            );
+            return this.prisma.examQualityReviewItem.create({
+              data: {
+                jobId,
+                questionId: s.questionId,
+                questionVersionId: stat?.questionVersionId ?? null,
+                severity: s.severity,
+                reasonSummary: s.reasonSummary,
+                recommendation: s.recommendation,
+                statsSnapshot: stat ?? {},
+              },
+            });
+          }),
+        ]);
         return;
       }
 
@@ -328,7 +367,7 @@ export class AIGenerationProcessor {
         });
       }
 
-      await this.prisma.aiGenerationRecord.update({
+      await this.prisma.aIGenerationRecord.update({
         where: { id: jobId },
         data: {
           status: 'SUCCEEDED',
@@ -338,7 +377,7 @@ export class AIGenerationProcessor {
       });
     } catch (error: any) {
       this.logger.error(`AI job failed: ${jobId}`, error?.stack || String(error));
-      await this.prisma.aiGenerationRecord.update({
+      await this.prisma.aIGenerationRecord.update({
         where: { id: jobId },
         data: {
           status: 'FAILED',

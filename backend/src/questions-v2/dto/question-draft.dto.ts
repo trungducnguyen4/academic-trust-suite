@@ -30,6 +30,7 @@ export enum AISection {
   ANSWERS = 'ANSWERS',
   EXPLANATION = 'EXPLANATION',
   CLASSIFICATION = 'CLASSIFICATION',
+  QUALITY_REVIEW = 'QUALITY_REVIEW',
 }
 
 export enum DraftValidationLevel {

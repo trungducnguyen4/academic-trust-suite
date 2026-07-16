@@ -2,6 +2,22 @@
 
 This project uses a separate AI worker and a Redis queue, so exam flow is not blocked by AI generation.
 
+## OpenRouter provider
+
+Use these settings to call the OpenRouter API:
+
+- `AI_PROVIDER=openrouter`
+- `OPENROUTER_API_KEY=<your OpenRouter API key>`
+- `AI_OPENROUTER_BASE_URL=https://openrouter.ai/api/v1`
+- `AI_OPENROUTER_MODEL=nvidia/nemotron-3-ultra-550b-a55b:free`
+- `AI_OPENROUTER_REASONING_ENABLED=false`
+- `AI_OPENROUTER_HTTP_REFERER=<your public app URL>`
+- `AI_OPENROUTER_X_TITLE=ExamTrust`
+- `AI_APP_NAME=ExamTrust`
+- `AI_DEFAULT_LANGUAGE=vi`
+
+The backend uses OpenRouter's OpenAI-compatible chat completions endpoint, streams the response, collects the final text, and parses it as the existing JSON contract used by question generation. If you enable reasoning, the request sends OpenRouter's `reasoning` parameter and excludes reasoning text from the final response so JSON parsing remains stable.
+
 ## NVIDIA provider
 
 Use these settings to call the NVIDIA OpenAI-compatible API:

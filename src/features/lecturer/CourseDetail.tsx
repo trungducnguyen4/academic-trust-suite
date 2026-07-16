@@ -100,8 +100,9 @@ interface Course {
 }
 
 export default function CourseDetail() {
-  const { id: routeId } = useParams();
-  const id = Array.isArray(routeId) ? routeId[0] : routeId;
+  const params = useParams();
+  const slug = Array.isArray(params?.slug) ? params.slug : [];
+  const id = slug[1];
   const router = useRouter();
   const pathname = usePathname();
   const basePath = pathname.startsWith("/admin")
