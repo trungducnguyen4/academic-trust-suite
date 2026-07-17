@@ -9,8 +9,9 @@ import api from "@/lib/api";
 import { BackToDashboardButton } from "@/components/common/BackToDashboardButton";
 
 export default function ExamQR() {
-  const { id: routeId } = useParams();
-  const id = Array.isArray(routeId) ? routeId[0] : routeId;
+  const params = useParams();
+  const slug = Array.isArray(params?.slug) ? params.slug : [];
+  const id = slug[1];
   const [exam, setExam] = useState<any | null>(null);
   const [loading, setLoading] = useState(true);
 

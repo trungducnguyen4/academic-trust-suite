@@ -11,11 +11,13 @@ import {
   Request,
 } from '@nestjs/common';
 import { ExamsService } from './exams.service';
+import { ExamQualityReviewService } from './exam-quality-review.service';
 import { AccessPolicyService } from '../common/services/access-policy.service';
 import { MailerService } from '../mailer/mailer.service';
 import { EnrollmentsService } from '../enrollments/enrollments.service';
 import { IsArray, IsEmail, IsOptional } from 'class-validator';
 import { CreateExamDto, UpdateExamDto, AddQuestionsToExamDto, UpdateExamQuestionDto, ShareExamDto, RescheduleExamDto } from './dto/exam.dto';
+import { ReviewQualitySuggestionDto } from './dto/exam-quality-review.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -29,6 +31,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 export class ExamsController {
   constructor(
     private readonly examsService: ExamsService,
+    private readonly qualityReviewService: ExamQualityReviewService,
     private readonly mailerService: MailerService,
     private readonly enrollmentsService: EnrollmentsService,
     private readonly accessPolicy: AccessPolicyService,
@@ -150,6 +153,42 @@ export class ExamsController {
   @Roles('LECTURER', 'ADMIN')
   getStats(@Param('id') id: string) {
     return this.examsService.getExamStats(id);
+  }
+
+  @Post(':id/quality-review')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  requestQualityReview(@Param('id') id: string, @Request() req) {
+    return this.qualityReviewService.requestReview(id, req.user);
+  }
+
+  @Get(':id/quality-review/jobs/:jobId')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  getQualityReviewJob(@Param('id') id: string, @Param('jobId') jobId: string, @Request() req) {
+    return this.qualityReviewService.getJob(id, jobId, req.user);
+  }
+
+  @Get(':id/quality-review/suggestions')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  listQualityReviewSuggestions(
+    @Param('id') id: string,
+    @Query('status') status: string,
+    @Request() req,
+  ) {
+    return this.qualityReviewService.listSuggestions(id, req.user, status);
+  }
+
+  @Patch(':id/quality-review/suggestions/:itemId/review')
+  @UseGuards(RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  reviewQualitySuggestion(
+    @Param('itemId') itemId: string,
+    @Body() dto: ReviewQualitySuggestionDto,
+    @Request() req,
+  ) {
+    return this.qualityReviewService.reviewSuggestion(itemId, dto, req.user);
   }
 
   @Patch(':id')

@@ -1407,7 +1407,6 @@ export class QuestionsService {
         explanation: true,
         difficulty: true,
         points: true,
-        defaultPoints: true,
         courseId: true,
         creatorId: true,
         createdAt: true,

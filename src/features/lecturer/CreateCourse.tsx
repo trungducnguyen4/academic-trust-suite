@@ -823,7 +823,7 @@ export default function CreateCourse() {
     }
   };
 
-  const openEditDialog = (course: Course) => {
+  const openEditDialog = async (course: Course) => {
     setEditingCourseId(course.id);
     setEditCourse({
       code: course.code,
@@ -831,10 +831,41 @@ export default function CreateCourse() {
       academicYear: course.academicYear || defaultAcademicYear,
       term: course.term || defaultTerm,
       description: course.description || "",
-      credits: course.credits ? String(course.credits) : "",
+      credits: course.credits != null ? String(course.credits) : "",
     });
     setEditCreditsError("");
     setShowEditDialog(true);
+
+    try {
+      const fullCourse = await api.getCourse(course.id);
+      setEditCourse((prev) => ({
+        ...prev,
+        code: fullCourse.code || prev.code,
+        name: fullCourse.name || prev.name,
+        academicYear: fullCourse.academicYear || prev.academicYear,
+        term: fullCourse.term || prev.term,
+        description: fullCourse.description || "",
+        credits: fullCourse.credits != null ? String(fullCourse.credits) : "",
+      }));
+      setCourses((prev) =>
+        prev.map((item) =>
+          item.id === course.id
+            ? {
+                ...item,
+                code: fullCourse.code || item.code,
+                name: fullCourse.name || item.name,
+                academicYear: fullCourse.academicYear || item.academicYear,
+                term: fullCourse.term || item.term,
+                description: fullCourse.description,
+                credits: fullCourse.credits,
+              }
+            : item,
+        ),
+      );
+    } catch (err) {
+      console.error("Failed to load course details for edit:", err);
+      toast.error("Failed to load full course details");
+    }
   };
 
   const handleUpdate = async () => {

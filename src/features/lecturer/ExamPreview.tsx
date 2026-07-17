@@ -72,8 +72,9 @@ function normalizeType(rawType?: string) {
 }
 
 export default function ExamPreview() {
-  const { id: routeExamId } = useParams();
-  const examId = Array.isArray(routeExamId) ? routeExamId[0] : routeExamId;
+  const params = useParams();
+  const slug = Array.isArray(params?.slug) ? params.slug : [];
+  const examId = slug[1];
   const pathname = usePathname();
   const router = useRouter();
   const basePath = pathname.startsWith("/admin")

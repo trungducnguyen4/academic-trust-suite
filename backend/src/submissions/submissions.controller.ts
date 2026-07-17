@@ -17,7 +17,9 @@ import {
 } from '@nestjs/common';
 import { Response } from 'express';
 import { SubmissionsService } from './submissions.service';
+import { ExamRiskAssessmentService } from './exam-risk-assessment.service';
 import { StartExamDto, SubmitExamDto, GradeAnswerDto, UpdateSubmissionStatusDto, AddLogsDto, AutosaveExamDto } from './dto/submission.dto';
+import { ReviewAnomalyFlagDto } from './dto/risk-assessment.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { RateLimit } from '../common/rate-limit.decorator';
@@ -36,6 +38,7 @@ export class SubmissionsController {
   constructor(
     private readonly submissionsService: SubmissionsService,
     private readonly submissionsEvents: SubmissionsEventsService,
+    private readonly riskAssessmentService: ExamRiskAssessmentService,
   ) {}
 
   @Sse('exam/:examId/events')
@@ -187,6 +190,46 @@ export class SubmissionsController {
   @Roles('LECTURER', 'ADMIN')
   getExamIntelligence(@Param('examId') examId: string) {
     return this.submissionsService.getExamIntelligence(examId);
+  }
+
+  @Post(':id/risk-assessment')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  requestRiskAssessment(@Param('id') id: string, @Request() req) {
+    return this.riskAssessmentService.requestAssessment(id, req.user);
+  }
+
+  @Get(':id/risk-assessment/jobs/:jobId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  getRiskAssessmentJob(
+    @Param('id') id: string,
+    @Param('jobId') jobId: string,
+    @Request() req,
+  ) {
+    return this.riskAssessmentService.getJob(id, jobId, req.user);
+  }
+
+  @Get('exam/:examId/risk-flags')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  listRiskFlags(
+    @Param('examId') examId: string,
+    @Query('status') status: string,
+    @Request() req,
+  ) {
+    return this.riskAssessmentService.listFlags(examId, req.user, status);
+  }
+
+  @Patch('risk-flags/:flagId/review')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('LECTURER', 'ADMIN')
+  reviewRiskFlag(
+    @Param('flagId') flagId: string,
+    @Body() dto: ReviewAnomalyFlagDto,
+    @Request() req,
+  ) {
+    return this.riskAssessmentService.reviewFlag(flagId, dto, req.user);
   }
 
   @Get('exam/:examId/manual-grading-status')

@@ -53,6 +53,8 @@ enum AISection {
   ANSWERS
   EXPLANATION
   CLASSIFICATION
+  QUALITY_REVIEW
+  RISK_ASSESSMENT
 }
 
 enum AIJobStatus {
@@ -150,6 +152,8 @@ model User {
   notifications   Notification[]   @relation("UserNotifications")
   aiReviewedRecords AIGenerationRecord[] @relation("AIReviewUser")
   examSubmissionRegradeLogs ExamSubmissionRegradeLog[] @relation("RegradeReviewer")
+  qualityReviewItemsReviewed ExamQualityReviewItem[] @relation("ExamQualityReviewItemReviewer")
+  anomalyFlagsReviewed AnomalyFlag[] @relation("AnomalyFlagReviewer")
 
   @@map("users")
 }
@@ -234,6 +238,7 @@ model Exam {
   ipWhitelist    ExamIpWhitelist[]
   accessDeniedLogs ExamAccessDeniedLog[]
   snapshots      ExamSnapshot[]
+  qualityReviewJobs AIGenerationRecord[] @relation("ExamQualityReviewJobs")
 
   @@index([courseId])
   @@index([creatorId])
@@ -346,6 +351,7 @@ model Question {
   courseScopes      QuestionCourseScope[]
   drafts            QuestionDraft[]
   usages            QuestionUsage[]
+  qualityReviewItems ExamQualityReviewItem[]
 
   @@index([courseId])
   @@index([creatorId])
@@ -457,6 +463,10 @@ model AIGenerationRecord {
   draft             QuestionDraft? @relation(fields: [draftId], references: [id], onDelete: SetNull)
   questionVersionId String?
   questionVersion   QuestionVersion? @relation(fields: [questionVersionId], references: [id], onDelete: SetNull)
+  examId            String?
+  exam              Exam?    @relation("ExamQualityReviewJobs", fields: [examId], references: [id], onDelete: Cascade)
+  submissionId      String?
+  submission        ExamSubmission? @relation("ExamRiskAssessmentJobs", fields: [submissionId], references: [id], onDelete: Cascade)
   section           AISection
   status            AIJobStatus @default(QUEUED)
   reviewStatus      AIReviewStatus @default(PENDING)
@@ -473,12 +483,41 @@ model AIGenerationRecord {
   createdAt         DateTime @default(now())
   completedAt       DateTime?
 
+  qualityReviewItems ExamQualityReviewItem[]
+  riskAssessmentFlags AnomalyFlag[]
+
   @@index([draftId, createdAt])
   @@index([questionVersionId])
+  @@index([examId, createdAt])
+  @@index([submissionId, createdAt])
   @@index([status])
   @@index([reviewStatus])
   @@index([reviewedBy])
   @@map("ai_generation_records")
+}
+
+model ExamQualityReviewItem {
+  id                String   @id @default(uuid())
+  jobId             String
+  job               AIGenerationRecord @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  questionId        String
+  question          Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
+  questionVersionId String?
+  severity          String?
+  reasonSummary     String   @db.Text
+  statsSnapshot     Json?
+  recommendation    String   @db.Text
+  reviewStatus      AIReviewStatus @default(PENDING)
+  reviewedBy        String?
+  reviewer          User?    @relation("ExamQualityReviewItemReviewer", fields: [reviewedBy], references: [id], onDelete: SetNull)
+  reviewedAt        DateTime?
+  reviewNotes       String?  @db.Text
+  createdAt         DateTime @default(now())
+
+  @@index([jobId])
+  @@index([questionId])
+  @@index([reviewStatus])
+  @@map("exam_quality_review_items")
 }
 
 model QuestionUsage {
@@ -564,6 +603,7 @@ model ExamSubmission {
   answers      SubmissionAnswer[]
   regradeLogs  ExamSubmissionRegradeLog[]
   proctoring   ProctoringSession?
+  riskAssessmentJobs AIGenerationRecord[] @relation("ExamRiskAssessmentJobs")
 
   @@unique([examId, studentId, attemptNo])
   @@index([examId])
@@ -677,15 +717,19 @@ model AnomalyFlag {
   id             String   @id @default(uuid())
   examInstanceId String
   examInstance   ExamInstance @relation(fields: [examInstanceId], references: [id], onDelete: Cascade)
+  jobId          String?
+  job            AIGenerationRecord? @relation(fields: [jobId], references: [id], onDelete: SetNull)
   kind           String
   score          Decimal? @db.Decimal(5, 2)
   status         AnomalyFlagStatus @default(OPEN)
   reviewerId     String?
+  reviewer       User?    @relation("AnomalyFlagReviewer", fields: [reviewerId], references: [id], onDelete: SetNull)
   notes          String?  @db.Text
   createdAt      DateTime @default(now())
   reviewedAt     DateTime?
 
   @@index([examInstanceId])
+  @@index([jobId])
   @@index([status])
   @@map("anomaly_flags")
 }

@@ -70,8 +70,9 @@ function formatTimeSpent(start?: string | null, end?: string | null) {
 }
 
 export default function ExamResultsList() {
-  const { id: routeExamId } = useParams();
-  const examId = Array.isArray(routeExamId) ? routeExamId[0] : routeExamId;
+  const params = useParams();
+  const slug = Array.isArray(params?.slug) ? params.slug : [];
+  const examId = slug[1];
   const router = useRouter();
   const pathname = usePathname();
   const basePath = pathname.startsWith("/admin") ? "/admin" : "/lecturer";
