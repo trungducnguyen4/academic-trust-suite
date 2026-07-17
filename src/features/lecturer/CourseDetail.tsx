@@ -63,6 +63,9 @@ import {
   FileText,
   Loader2,
   CheckCircle2,
+  BarChart3,
+  Activity,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import api, { unwrapPaginatedData } from "@/lib/api";
@@ -99,6 +102,113 @@ interface Course {
   term?: CourseTerm;
 }
 
+interface CourseExamSummary {
+  id: string;
+  title: string;
+  status: string;
+  duration: number;
+  startTime: string | null;
+  endTime: string | null;
+  submissionCount: number;
+  avgScorePct: number | null;
+  totalPoints?: number | null;
+}
+
+interface StudentCoursePerformance {
+  studentId: string;
+  studentCode: string;
+  name: string;
+  email: string;
+  submittedExamCount: number;
+  avgScorePct: number | null;
+  latestSubmissionAt: string | null;
+  reviewSignalCount: number;
+}
+
+interface CourseExam {
+  id: string;
+  title: string;
+  status?: string;
+  duration?: number;
+  startTime?: string | null;
+  endTime?: string | null;
+  totalPoints?: number | null;
+}
+
+interface ExamSubmission {
+  id: string;
+  status?: string;
+  score?: number | null;
+  submittedAt?: string | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+  student?: {
+    id?: string;
+    fullName?: string;
+    email?: string;
+    studentId?: string | null;
+  } | null;
+  integrityFlags?: unknown[];
+  anomalyFlags?: unknown[];
+  securityEvents?: unknown[];
+  _count?: {
+    integrityEvents?: number;
+    securityEvents?: number;
+  };
+}
+
+const completedSubmissionStatuses = new Set([
+  "SUBMITTED",
+  "GRADED",
+  "FLAGGED",
+  "FINALIZED",
+]);
+
+const formatPercent = (value: number | null) => {
+  if (value === null || !Number.isFinite(value)) return "Chưa có dữ liệu";
+  return `${Math.round(value)}%`;
+};
+
+const formatDateTime = (value: string | null) => {
+  if (!value) return "Chưa có";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa có";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+};
+
+const getSubmissionReviewSignalCount = (submission: ExamSubmission) => {
+  const explicitSignals =
+    (Array.isArray(submission.integrityFlags)
+      ? submission.integrityFlags.length
+      : 0) +
+    (Array.isArray(submission.anomalyFlags) ? submission.anomalyFlags.length : 0) +
+    (Array.isArray(submission.securityEvents)
+      ? submission.securityEvents.length
+      : 0);
+  const countedSignals =
+    (submission._count?.integrityEvents || 0) +
+    (submission._count?.securityEvents || 0);
+  const statusSignal = String(submission.status || "").toUpperCase() === "FLAGGED" ? 1 : 0;
+  return explicitSignals + countedSignals + statusSignal;
+};
+
+const getSubmissionScorePct = (
+  submission: ExamSubmission,
+  totalPoints?: number | null,
+) => {
+  if (typeof submission.score !== "number") return null;
+  if (typeof totalPoints === "number" && totalPoints > 0) {
+    return (submission.score / totalPoints) * 100;
+  }
+  return submission.score;
+};
+
 export default function CourseDetail() {
   const { id: routeId } = useParams();
   const id = Array.isArray(routeId) ? routeId[0] : routeId;
@@ -128,11 +238,140 @@ export default function CourseDetail() {
   const [page, setPage] = useState(1);
   const [addDialogOpen, setAddDialogOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
+  const [courseExams, setCourseExams] = useState<CourseExamSummary[]>([]);
+  const [studentPerformance, setStudentPerformance] = useState<
+    StudentCoursePerformance[]
+  >([]);
+  const [courseExamLoading, setCourseExamLoading] = useState(false);
 
   // Manual Add Form
   const [newStudent, setNewStudent] = useState({ name: "", id: "", email: "" });
 
 
+
+  const loadCourseExamData = async (
+    courseId: string,
+    enrolledStudents: Student[],
+  ) => {
+    setCourseExamLoading(true);
+    try {
+      const exams = unwrapPaginatedData<CourseExam>(
+        await api.getExams({ courseId, limit: 100 }),
+      );
+      const examRows = await Promise.all(
+        exams.map(async (exam) => {
+          const [overview, submissionsRes] = await Promise.all([
+            api.getExamOverview(exam.id).catch(() => null),
+            api.getExamSubmissions(exam.id, 1, 500).catch(() => null),
+          ]);
+          const submissions = unwrapPaginatedData<ExamSubmission>(submissionsRes);
+          const totalPoints =
+            overview?.exam?.totalPoints ?? exam.totalPoints ?? null;
+          const completedSubmissions = submissions.filter((submission) =>
+            completedSubmissionStatuses.has(
+              String(submission.status || "").toUpperCase(),
+            ),
+          );
+          const avgScorePct =
+            typeof overview?.summary?.avgScorePct === "number"
+              ? overview.summary.avgScorePct
+              : null;
+
+          return {
+            summary: {
+              id: exam.id,
+              title: exam.title,
+              status: exam.status || "DRAFT",
+              duration: exam.duration || 0,
+              startTime: exam.startTime || null,
+              endTime: exam.endTime || null,
+              submissionCount:
+                overview?.summary?.totalSubmissions ??
+                submissions.length ??
+                0,
+              avgScorePct,
+              totalPoints,
+            } satisfies CourseExamSummary,
+            submissions: completedSubmissions,
+            totalPoints,
+          };
+        }),
+      );
+
+      setCourseExams(examRows.map((row) => row.summary));
+
+      const submissionsByStudent = new Map<string, ExamSubmission[]>();
+      examRows.forEach((row) => {
+        row.submissions.forEach((submission) => {
+          const studentId = submission.student?.id;
+          if (!studentId) return;
+          const current = submissionsByStudent.get(studentId) || [];
+          current.push({
+            ...submission,
+            score: getSubmissionScorePct(submission, row.totalPoints),
+          });
+          submissionsByStudent.set(studentId, current);
+        });
+      });
+
+      setStudentPerformance(
+        enrolledStudents.map((student) => {
+          const submissions = submissionsByStudent.get(student.userId) || [];
+          const scored = submissions
+            .map((submission) =>
+              typeof submission.score === "number" ? submission.score : null,
+            )
+            .filter((score): score is number => score !== null);
+          const latestSubmissionAt = submissions
+            .map(
+              (submission) =>
+                submission.submittedAt ||
+                submission.updatedAt ||
+                submission.createdAt ||
+                null,
+            )
+            .filter((value): value is string => Boolean(value))
+            .sort(
+              (a, b) => new Date(b).getTime() - new Date(a).getTime(),
+            )[0] || null;
+
+          return {
+            studentId: student.userId,
+            studentCode: student.studentCode,
+            name: student.name,
+            email: student.email,
+            submittedExamCount: submissions.length,
+            avgScorePct:
+              scored.length > 0
+                ? scored.reduce((sum, score) => sum + score, 0) / scored.length
+                : null,
+            latestSubmissionAt,
+            reviewSignalCount: submissions.reduce(
+              (sum, submission) => sum + getSubmissionReviewSignalCount(submission),
+              0,
+            ),
+          };
+        }),
+      );
+    } catch (error) {
+      console.error("Failed to load course exams:", error);
+      setCourseExams([]);
+      setStudentPerformance(
+        enrolledStudents.map((student) => ({
+          studentId: student.userId,
+          studentCode: student.studentCode,
+          name: student.name,
+          email: student.email,
+          submittedExamCount: 0,
+          avgScorePct: null,
+          latestSubmissionAt: null,
+          reviewSignalCount: 0,
+        })),
+      );
+    } finally {
+      setCourseExamLoading(false);
+    }
+  };
 
   const reloadEnrollments = async (courseId: string) => {
     const enrollments: Enrollment[] = await api.getCourseEnrollments(courseId);
@@ -146,6 +385,7 @@ export default function CourseDetail() {
       joinedAt: new Date(e.joinedAt).toISOString().split("T")[0],
     }));
     setStudents(mapped);
+    await loadCourseExamData(courseId, mapped);
   };
 
   useEffect(() => {
@@ -155,6 +395,7 @@ export default function CourseDetail() {
         // Try fetching by id first (DB id). If not found, fallback to searching by course code.
         let courseRes: any | null = null;
         let enrollments: Enrollment[] = [];
+        let nextResolvedCourseId: string | null = null;
 
         try {
           courseRes = await api.getCourse(id);
@@ -189,14 +430,17 @@ export default function CourseDetail() {
             academicYear: courseRes.academicYear,
             term: courseRes.term,
           });
+          nextResolvedCourseId = courseRes.id;
           setResolvedCourseId(courseRes.id);
         } else {
           // no course found — keep course as null and try to fetch enrollments by id param anyway
           try {
             enrollments = await api.getCourseEnrollments(id);
+            nextResolvedCourseId = id;
             setResolvedCourseId(id);
           } catch (err) {
             enrollments = [];
+            nextResolvedCourseId = null;
             setResolvedCourseId(null);
           }
         }
@@ -211,6 +455,12 @@ export default function CourseDetail() {
           joinedAt: new Date(e.joinedAt).toISOString().split("T")[0],
         }));
         setStudents(mapped);
+        if (nextResolvedCourseId) {
+          await loadCourseExamData(nextResolvedCourseId, mapped);
+        } else {
+          setCourseExams([]);
+          setStudentPerformance([]);
+        }
       } catch (err) {
         console.error("Failed to fetch course or enrollments:", err);
       } finally {
@@ -511,6 +761,13 @@ export default function CourseDetail() {
           </p>
         </div>
 
+        <Tabs defaultValue="students" className="space-y-4">
+          <TabsList className="grid w-full grid-cols-2 sm:w-auto">
+            <TabsTrigger value="students">Sinh viên</TabsTrigger>
+            <TabsTrigger value="exams">Bài kiểm tra & thống kê</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="students" className="space-y-4">
         {/* Filters */}
         <div className="space-y-3">
           <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
@@ -630,6 +887,260 @@ export default function CourseDetail() {
             />
           </CardContent>
         </Card>
+          </TabsContent>
+
+          <TabsContent value="exams" className="space-y-5">
+            {courseExamLoading ? (
+              <Card>
+                <CardContent className="flex min-h-[260px] items-center justify-center">
+                  <div className="flex flex-col items-center gap-3 text-muted-foreground">
+                    <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                    <p className="text-sm">Đang tải thống kê bài kiểm tra...</p>
+                  </div>
+                </CardContent>
+              </Card>
+            ) : (
+              <>
+                <div className="grid gap-3 md:grid-cols-3">
+                  <Card>
+                    <CardContent className="flex items-center gap-3 pt-6">
+                      <div className="rounded-xl bg-primary/10 p-2 text-primary">
+                        <FileText className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Bài kiểm tra
+                        </p>
+                        <p className="text-2xl font-semibold tabular-nums">
+                          {courseExams.length}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="flex items-center gap-3 pt-6">
+                      <div className="rounded-xl bg-emerald-500/10 p-2 text-emerald-600">
+                        <CheckCircle2 className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Lượt nộp
+                        </p>
+                        <p className="text-2xl font-semibold tabular-nums">
+                          {courseExams.reduce(
+                            (sum, exam) => sum + exam.submissionCount,
+                            0,
+                          )}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="flex items-center gap-3 pt-6">
+                      <div className="rounded-xl bg-amber-500/10 p-2 text-amber-600">
+                        <Activity className="h-5 w-5" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">
+                          Tín hiệu cần xem xét
+                        </p>
+                        <p className="text-2xl font-semibold tabular-nums">
+                          {studentPerformance.reduce(
+                            (sum, student) => sum + student.reviewSignalCount,
+                            0,
+                          )}
+                        </p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Bài kiểm tra của khóa học</CardTitle>
+                    <CardDescription>
+                      Mỗi dòng liên kết nhanh tới kết quả, giám sát và phân tích.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Bài kiểm tra</TableHead>
+                            <TableHead>Trạng thái</TableHead>
+                            <TableHead>Lượt nộp</TableHead>
+                            <TableHead>Điểm TB</TableHead>
+                            <TableHead>Lịch</TableHead>
+                            <TableHead className="text-right">Thao tác</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {courseExams.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={6}
+                                className="py-10 text-center text-muted-foreground"
+                              >
+                                Chưa có bài kiểm tra nào liên kết với khóa học này.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            courseExams.map((exam) => (
+                              <TableRow key={exam.id}>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium text-foreground">
+                                      {exam.title}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {exam.duration || 0} phút
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell>
+                                  <StatusBadge
+                                    status={exam.status}
+                                    domain="exam"
+                                  />
+                                </TableCell>
+                                <TableCell className="tabular-nums">
+                                  {exam.submissionCount}
+                                </TableCell>
+                                <TableCell>
+                                  {formatPercent(exam.avgScorePct)}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {formatDateTime(exam.startTime)}
+                                </TableCell>
+                                <TableCell>
+                                  <div className="flex flex-wrap justify-end gap-2">
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      className="gap-2"
+                                      onClick={() =>
+                                        router.push(
+                                          `${basePath}/exam/${exam.id}/results`,
+                                        )
+                                      }
+                                    >
+                                      <Eye className="h-4 w-4" />
+                                      Xem kết quả
+                                    </Button>
+                                    <Button
+                                      variant="outline"
+                                      size="sm"
+                                      onClick={() =>
+                                        router.push(
+                                          `${basePath}/exam/${exam.id}/monitor`,
+                                        )
+                                      }
+                                    >
+                                      Theo dõi
+                                    </Button>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      className="gap-2"
+                                      onClick={() =>
+                                        router.push(
+                                          `${basePath}/analytics?examId=${exam.id}`,
+                                        )
+                                      }
+                                    >
+                                      <BarChart3 className="h-4 w-4" />
+                                      Phân tích
+                                    </Button>
+                                  </div>
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Theo từng sinh viên</CardTitle>
+                    <CardDescription>
+                      Tổng hợp lượt nộp, điểm trung bình và tín hiệu cần xem xét.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="p-0">
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Sinh viên</TableHead>
+                            <TableHead>Mã SV</TableHead>
+                            <TableHead>Đã nộp</TableHead>
+                            <TableHead>Điểm TB</TableHead>
+                            <TableHead>Bài gần nhất</TableHead>
+                            <TableHead>Tín hiệu cần xem xét</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {studentPerformance.length === 0 ? (
+                            <TableRow>
+                              <TableCell
+                                colSpan={6}
+                                className="py-10 text-center text-muted-foreground"
+                              >
+                                Chưa có sinh viên để tổng hợp thống kê.
+                              </TableCell>
+                            </TableRow>
+                          ) : (
+                            studentPerformance.map((student) => (
+                              <TableRow key={student.studentId}>
+                                <TableCell>
+                                  <div>
+                                    <p className="font-medium text-foreground">
+                                      {student.name}
+                                    </p>
+                                    <p className="text-xs text-muted-foreground">
+                                      {student.email}
+                                    </p>
+                                  </div>
+                                </TableCell>
+                                <TableCell className="font-mono">
+                                  {student.studentCode}
+                                </TableCell>
+                                <TableCell className="tabular-nums">
+                                  {student.submittedExamCount}/{courseExams.length}
+                                </TableCell>
+                                <TableCell>
+                                  {formatPercent(student.avgScorePct)}
+                                </TableCell>
+                                <TableCell className="text-sm text-muted-foreground">
+                                  {formatDateTime(student.latestSubmissionAt)}
+                                </TableCell>
+                                <TableCell>
+                                  {student.reviewSignalCount > 0 ? (
+                                    <StatusBadge tone="warning">
+                                      {student.reviewSignalCount} tín hiệu
+                                    </StatusBadge>
+                                  ) : (
+                                    <span className="text-sm text-muted-foreground">
+                                      Không có
+                                    </span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </TabsContent>
+        </Tabs>
       </div>
     </DashboardLayout>
   );

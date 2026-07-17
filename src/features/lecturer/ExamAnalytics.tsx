@@ -142,6 +142,7 @@ function toQuery(params?: Record<string, string>) {
 
 export default function ExamAnalytics() {
   const router = useRouter();
+  const [requestedExamId, setRequestedExamId] = useState("");
   const [examOptions, setExamOptions] = useState<ExamOption[]>([]);
   const [selectedExamId, setSelectedExamId] = useState<string>("");
   const [selectedAcademicYear, setSelectedAcademicYear] = useState<string>("");
@@ -149,6 +150,12 @@ export default function ExamAnalytics() {
   const [loading, setLoading] = useState(true);
   const [loadingIntelligence, setLoadingIntelligence] = useState(false);
   const [data, setData] = useState<IntelligencePayload | null>(null);
+
+  useEffect(() => {
+    setRequestedExamId(
+      new URLSearchParams(window.location.search).get("examId") || "",
+    );
+  }, []);
 
   // Derived: unique academic years from all exams (via course)
   const academicYears = useMemo(() => {
@@ -192,10 +199,16 @@ export default function ExamAnalytics() {
       return;
     }
     const stillValid = filteredExams.some((ex) => ex.id === selectedExamId);
+    const requestedStillValid =
+      requestedExamId && filteredExams.some((ex) => ex.id === requestedExamId);
+    if (requestedStillValid && selectedExamId !== requestedExamId) {
+      setSelectedExamId(requestedExamId);
+      return;
+    }
     if (!stillValid) {
       setSelectedExamId(filteredExams[0].id);
     }
-  }, [filteredExams, selectedExamId]);
+  }, [filteredExams, requestedExamId, selectedExamId]);
 
   useEffect(() => {
     const loadExams = async () => {
@@ -205,7 +218,8 @@ export default function ExamAnalytics() {
         const items = unwrapPaginatedData<ExamOption>(response);
         setExamOptions(items);
         if (items.length > 0) {
-          setSelectedExamId(items[0].id);
+          const requestedExam = items.find((item) => item.id === requestedExamId);
+          setSelectedExamId(requestedExam?.id || items[0].id);
         }
       } catch (error) {
         console.error("Failed to load exams for analytics:", error);
@@ -215,7 +229,7 @@ export default function ExamAnalytics() {
     };
 
     loadExams();
-  }, []);
+  }, [requestedExamId]);
 
   useEffect(() => {
     if (!selectedExamId) return;
@@ -674,6 +688,4 @@ export default function ExamAnalytics() {
     </DashboardLayout>
   );
 }
-
-
 

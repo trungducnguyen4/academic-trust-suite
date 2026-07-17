@@ -39,6 +39,8 @@ export default function Profile() {
   const [confirmPassword, setConfirmPassword] = useState("");
 
   useEffect(() => {
+    if (!user) return;
+
     setFullName(user.fullName || "");
     setEmail(user.email || "");
     setDepartment(user.department || "");
@@ -51,7 +53,23 @@ export default function Profile() {
     }
   }, [isAuthenticated, isLoading, router, user]);
 
-  if (isLoading || !isAuthenticated || !user) {
+  if (isLoading) {
+    return (
+      <main
+        id="main-content"
+        className="flex min-h-[100dvh] items-center justify-center bg-background px-6"
+        aria-busy="true"
+        aria-live="polite"
+      >
+        <div className="flex items-center gap-3 text-sm text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin text-primary" aria-hidden="true" />
+          Đang tải hồ sơ...
+        </div>
+      </main>
+    );
+  }
+
+  if (!isAuthenticated || !user) {
     return null;
   }
 

@@ -1,6 +1,13 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import {
+  useState,
+  useEffect,
+  useRef,
+  useCallback,
+  useMemo,
+  type MouseEvent,
+} from "react";
 import { useRouter } from "next/navigation";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
 import { AdminPageShell } from "@/components/admin/AdminPageShell";
@@ -78,7 +85,11 @@ import {
   AlertCircle,
   Download,
   Info,
+  BarChart3,
   ChevronRight,
+  ChevronDown,
+  Clock,
+  Eye,
 } from "lucide-react";
 import api, { unwrapPaginatedData } from "@/lib/api";
 import { toast } from "sonner";
@@ -124,6 +135,24 @@ interface APICourse {
   _count?: {
     enrollments?: number;
     exams?: number;
+  };
+}
+
+interface CourseExamPreview {
+  id: string;
+  title: string;
+  status: string;
+  duration?: number | null;
+  startTime?: string | null;
+  endTime?: string | null;
+  createdAt?: string | null;
+  _count?: {
+    submissions?: number;
+  };
+  course?: {
+    id?: string;
+    code?: string;
+    name?: string;
   };
 }
 
@@ -199,6 +228,15 @@ export default function CreateCourse() {
   const [editingCourseId, setEditingCourseId] = useState<string | null>(null);
   const [createCreditsError, setCreateCreditsError] = useState("");
   const [editCreditsError, setEditCreditsError] = useState("");
+  const [expandedCourseId, setExpandedCourseId] = useState<string | null>(null);
+  const [courseExamsByCourseId, setCourseExamsByCourseId] = useState<
+    Record<string, CourseExamPreview[]>
+  >({});
+  const [courseExamLoadingByCourseId, setCourseExamLoadingByCourseId] =
+    useState<Record<string, boolean>>({});
+  const [courseExamErrorByCourseId, setCourseExamErrorByCourseId] = useState<
+    Record<string, boolean>
+  >({});
 
   // Multi-step wizard
   const [step, setStep] = useState<1 | 2>(1);
@@ -438,6 +476,80 @@ export default function CreateCourse() {
     { field: "students", label: "Students" },
     { field: "status", label: "Status" },
   ];
+
+  const formatExamDateTime = (value?: string | null) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "";
+    return new Intl.DateTimeFormat("vi-VN", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    }).format(date);
+  };
+
+  const formatExamSchedule = (exam: CourseExamPreview) => {
+    const start = formatExamDateTime(exam.startTime);
+    const end = formatExamDateTime(exam.endTime);
+    if (start && end) return `${start} - ${end}`;
+    if (start) return `Từ ${start}`;
+    if (end) return `Đến ${end}`;
+    return "Chưa lên lịch";
+  };
+
+  const loadCourseExams = useCallback(async (courseId: string, force = false) => {
+    if (!force && courseExamsByCourseId[courseId]) return;
+
+    setCourseExamLoadingByCourseId((current) => ({
+      ...current,
+      [courseId]: true,
+    }));
+    setCourseExamErrorByCourseId((current) => ({
+      ...current,
+      [courseId]: false,
+    }));
+
+    try {
+      const data = unwrapPaginatedData(
+        await api.getExams({ courseId, limit: 100 }),
+      ) as CourseExamPreview[];
+      setCourseExamsByCourseId((current) => ({
+        ...current,
+        [courseId]: data,
+      }));
+    } catch (error) {
+      console.error("Failed to load course exams:", error);
+      setCourseExamErrorByCourseId((current) => ({
+        ...current,
+        [courseId]: true,
+      }));
+    } finally {
+      setCourseExamLoadingByCourseId((current) => ({
+        ...current,
+        [courseId]: false,
+      }));
+    }
+  }, [courseExamsByCourseId]);
+
+  const toggleCourseExams = (courseId: string) => {
+    if (expandedCourseId === courseId) {
+      setExpandedCourseId(null);
+      return;
+    }
+
+    setExpandedCourseId(courseId);
+    void loadCourseExams(courseId);
+  };
+
+  const goToNestedExamRoute = (
+    event: MouseEvent,
+    href: string,
+  ) => {
+    event.stopPropagation();
+    router.push(href);
+  };
 
   // Search students by name or email
   const handleStudentSearch = useCallback(
@@ -1872,35 +1984,42 @@ export default function CreateCourse() {
             </div>
 
             <div className="divide-y">
-              {displayedCourses.map((course, index) => (
-                <div
-                  key={course.id}
-                  role="link"
-                  tabIndex={0}
-                  className="group grid cursor-pointer gap-4 px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[minmax(260px,1.4fr)_80px_minmax(170px,.9fr)_90px_80px_110px_110px_24px] md:items-center"
-                  onClick={() => router.push(`/lecturer/course/${course.id}`)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      router.push(`/lecturer/course/${course.id}`);
-                    }
-                  }}
-                >
-                  <div className="flex min-w-0 items-center gap-3">
+              {displayedCourses.map((course, index) => {
+                const isExpanded = expandedCourseId === course.id;
+                const courseExams = courseExamsByCourseId[course.id] || [];
+                const isLoadingCourseExams =
+                  courseExamLoadingByCourseId[course.id];
+                const hasCourseExamError = courseExamErrorByCourseId[course.id];
+
+                return (
+                  <div key={course.id}>
                     <div
-                      className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow-sm ${getCourseGradientClass((page - 1) * ITEMS_PER_PAGE + index)}`}
+                      role="link"
+                      tabIndex={0}
+                      className="group grid cursor-pointer gap-4 px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[minmax(260px,1.4fr)_80px_minmax(170px,.9fr)_90px_80px_110px_110px_24px] md:items-center"
+                      onClick={() => router.push(`/lecturer/course/${course.id}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          router.push(`/lecturer/course/${course.id}`);
+                        }
+                      }}
                     >
-                      {course.code.slice(0, 2).toUpperCase()}
-                    </div>
-                    <div className="min-w-0">
-                      <p className="truncate font-semibold text-foreground">
-                        {course.code}
-                      </p>
-                      <p className="truncate text-sm text-muted-foreground">
-                        {course.name}
-                      </p>
-                    </div>
-                  </div>
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow-sm ${getCourseGradientClass((page - 1) * ITEMS_PER_PAGE + index)}`}
+                        >
+                          {course.code.slice(0, 2).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <p className="truncate font-semibold text-foreground">
+                            {course.code}
+                          </p>
+                          <p className="truncate text-sm text-muted-foreground">
+                            {course.name}
+                          </p>
+                        </div>
+                      </div>
 
                   <div className="grid grid-cols-2 gap-x-4 gap-y-3 text-sm sm:grid-cols-3 md:contents">
                     <div>
@@ -1931,9 +2050,27 @@ export default function CreateCourse() {
                       <span className="block text-xs text-muted-foreground md:hidden">
                         Exams
                       </span>
-                      <span className="font-semibold tabular-nums text-foreground">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="-ml-2 h-9 justify-start gap-1.5 px-2 font-semibold tabular-nums text-foreground"
+                        aria-expanded={isExpanded}
+                        aria-controls={`course-exams-${course.id}`}
+                        aria-label={`Mở danh sách bài kiểm tra của ${course.code}`}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          toggleCourseExams(course.id);
+                        }}
+                        onKeyDown={(event) => event.stopPropagation()}
+                      >
                         {course.exams}
-                      </span>
+                        {isExpanded ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                        )}
+                      </Button>
                     </div>
                     <div>
                       <span className="mb-1 block text-xs text-muted-foreground md:hidden">
@@ -1975,8 +2112,186 @@ export default function CreateCourse() {
                     </div>
                     <ChevronRight className="hidden h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground md:block" />
                   </div>
-                </div>
-              ))}
+                    </div>
+
+                    {isExpanded && (
+                      <div
+                        id={`course-exams-${course.id}`}
+                        className="border-t bg-muted/20 px-4 py-4"
+                        onClick={(event) => event.stopPropagation()}
+                      >
+                        <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                          <div>
+                            <h3 className="font-semibold text-foreground">
+                              Bài kiểm tra trong khóa học
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {course.code} · {course.name}
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            size="sm"
+                            onClick={(event) =>
+                              goToNestedExamRoute(
+                                event,
+                                `/lecturer/exams/create?courseId=${course.id}`,
+                              )
+                            }
+                          >
+                            <Plus className="mr-2 h-4 w-4" />
+                            Tạo bài kiểm tra cho khóa này
+                          </Button>
+                        </div>
+
+                        {isLoadingCourseExams && (
+                          <div className="space-y-2" aria-label="Đang tải bài kiểm tra">
+                            {[0, 1, 2].map((item) => (
+                              <div
+                                key={item}
+                                className="h-16 animate-pulse rounded-lg border bg-background/70"
+                              />
+                            ))}
+                          </div>
+                        )}
+
+                        {!isLoadingCourseExams && hasCourseExamError && (
+                          <div className="rounded-lg border border-destructive/30 bg-destructive/5 p-4">
+                            <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                              <p className="text-sm text-destructive">
+                                Không tải được bài kiểm tra của khóa học này.
+                              </p>
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void loadCourseExams(course.id, true);
+                                }}
+                              >
+                                Thử lại
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+
+                        {!isLoadingCourseExams &&
+                          !hasCourseExamError &&
+                          courseExams.length === 0 && (
+                            <div className="rounded-lg border border-dashed bg-background/70 p-6 text-center">
+                              <p className="font-medium text-foreground">
+                                Khóa học này chưa có bài kiểm tra.
+                              </p>
+                              <p className="mt-1 text-sm text-muted-foreground">
+                                Tạo bài kiểm tra đầu tiên và hệ thống sẽ tự gắn vào khóa học này.
+                              </p>
+                            </div>
+                          )}
+
+                        {!isLoadingCourseExams &&
+                          !hasCourseExamError &&
+                          courseExams.length > 0 && (
+                            <div className="space-y-2">
+                              {courseExams.map((exam) => {
+                                const submissionCount =
+                                  exam._count?.submissions ?? 0;
+                                const canMonitor =
+                                  exam.status === "ONGOING" ||
+                                  exam.status === "PUBLISHED";
+                                const canViewResults =
+                                  exam.status === "COMPLETED" ||
+                                  submissionCount > 0;
+
+                                return (
+                                  <div
+                                    key={exam.id}
+                                    className="grid gap-3 rounded-lg border bg-background/80 p-3 shadow-sm md:grid-cols-[minmax(220px,1.2fr)_minmax(220px,1fr)_120px_100px_minmax(260px,auto)] md:items-center"
+                                  >
+                                    <div className="min-w-0">
+                                      <p className="truncate font-semibold text-foreground">
+                                        {exam.title || "Bài kiểm tra chưa đặt tên"}
+                                      </p>
+                                      <p className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+                                        <Clock className="h-3.5 w-3.5" />
+                                        {exam.duration
+                                          ? `${exam.duration} phút`
+                                          : "Chưa đặt thời lượng"}
+                                      </p>
+                                    </div>
+                                    <div className="text-sm text-muted-foreground">
+                                      {formatExamSchedule(exam)}
+                                    </div>
+                                    <div>
+                                      <StatusBadge status={exam.status} domain="exam">
+                                        {exam.status}
+                                      </StatusBadge>
+                                    </div>
+                                    <div className="text-sm">
+                                      <span className="font-semibold tabular-nums text-foreground">
+                                        {submissionCount}
+                                      </span>{" "}
+                                      <span className="text-muted-foreground">
+                                        Lượt nộp
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-wrap gap-2 md:justify-end">
+                                      <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={(event) =>
+                                          goToNestedExamRoute(
+                                            event,
+                                            `/lecturer/exam/${exam.id}/preview`,
+                                          )
+                                        }
+                                      >
+                                        <Eye className="mr-1.5 h-4 w-4" />
+                                        Xem trước
+                                      </Button>
+                                      {canMonitor && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={(event) =>
+                                            goToNestedExamRoute(
+                                              event,
+                                              `/lecturer/exam/${exam.id}/monitor`,
+                                            )
+                                          }
+                                        >
+                                          Theo dõi
+                                        </Button>
+                                      )}
+                                      {canViewResults && (
+                                        <Button
+                                          type="button"
+                                          variant="outline"
+                                          size="sm"
+                                          onClick={(event) =>
+                                            goToNestedExamRoute(
+                                              event,
+                                              `/lecturer/exam/${exam.id}/results`,
+                                            )
+                                          }
+                                        >
+                                          <BarChart3 className="mr-1.5 h-4 w-4" />
+                                          Xem kết quả
+                                        </Button>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
 
               {filteredCourses.length === 0 && (
                 <div className="py-12 text-center text-muted-foreground">

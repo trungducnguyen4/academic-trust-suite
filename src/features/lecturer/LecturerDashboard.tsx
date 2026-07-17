@@ -21,6 +21,9 @@ import {
   Loader2,
   Sparkles,
   Zap,
+  Database,
+  Layers3,
+  BarChart3,
 } from "lucide-react";
 import { format, addHours } from "date-fns";
 import Link from "next/link";
@@ -47,10 +50,144 @@ interface CourseSummary {
   _count?: { enrollments?: number; exams?: number };
 }
 
+interface QuestionItem {
+  id: string;
+  type?: string | null;
+  difficulty?: number | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+  courseId?: string | null;
+  course?: {
+    id?: string | null;
+    code?: string | null;
+    name?: string | null;
+  } | null;
+}
+
+interface QuestionBankSummary {
+  courseId: string;
+  courseCode: string;
+  courseName: string;
+  questionCount: number;
+  avgDifficulty: number;
+  questionTypes: string[];
+  lastUpdatedAt: string | null;
+}
+
+const questionTypeLabels: Record<string, string> = {
+  MULTIPLE_CHOICE: "Trắc nghiệm",
+  TRUE_FALSE: "Đúng/sai",
+  SHORT_ANSWER: "Tự luận ngắn",
+  ESSAY: "Tự luận",
+  FILL_BLANK: "Điền khuyết",
+  MATCHING: "Ghép đôi",
+};
+
+const formatDifficulty = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return "Chưa có";
+  if (value < 1.8) return "Dễ";
+  if (value < 2.6) return "Trung bình";
+  return "Khó";
+};
+
+const formatRecentDate = (value: string | null) => {
+  if (!value) return "Chưa cập nhật";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa cập nhật";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+};
+
+const buildQuestionBankSummaries = (
+  questions: QuestionItem[],
+  courses: CourseSummary[],
+): QuestionBankSummary[] => {
+  const courseById = new Map(courses.map((course) => [course.id, course]));
+  const courseByCode = new Map(courses.map((course) => [course.code, course]));
+  const grouped = new Map<
+    string,
+    {
+      courseId: string;
+      courseCode: string;
+      courseName: string;
+      difficulties: number[];
+      questionTypes: Set<string>;
+      questionCount: number;
+      lastUpdatedAt: string | null;
+    }
+  >();
+
+  questions.forEach((question) => {
+    const course =
+      (question.courseId && courseById.get(question.courseId)) ||
+      (question.course?.id && courseById.get(question.course.id)) ||
+      (question.course?.code && courseByCode.get(question.course.code)) ||
+      null;
+    const courseId = course?.id || question.courseId || question.course?.id || "";
+    const courseCode = course?.code || question.course?.code || "Chung";
+    const courseName = course?.name || question.course?.name || "Chưa gán khóa học";
+    const key = courseId || courseCode;
+    const current =
+      grouped.get(key) ||
+      {
+        courseId,
+        courseCode,
+        courseName,
+        difficulties: [],
+        questionTypes: new Set<string>(),
+        questionCount: 0,
+        lastUpdatedAt: null,
+      };
+
+    current.questionCount += 1;
+    if (typeof question.difficulty === "number") {
+      current.difficulties.push(question.difficulty);
+    }
+    if (question.type) {
+      current.questionTypes.add(question.type);
+    }
+
+    const updatedAt = question.updatedAt || question.createdAt || null;
+    if (
+      updatedAt &&
+      (!current.lastUpdatedAt ||
+        new Date(updatedAt).getTime() > new Date(current.lastUpdatedAt).getTime())
+    ) {
+      current.lastUpdatedAt = updatedAt;
+    }
+
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values())
+    .map((item) => ({
+      courseId: item.courseId,
+      courseCode: item.courseCode,
+      courseName: item.courseName,
+      questionCount: item.questionCount,
+      avgDifficulty:
+        item.difficulties.length > 0
+          ? item.difficulties.reduce((sum, value) => sum + value, 0) /
+            item.difficulties.length
+          : 0,
+      questionTypes: Array.from(item.questionTypes),
+      lastUpdatedAt: item.lastUpdatedAt,
+    }))
+    .sort((a, b) => {
+      const aTime = a.lastUpdatedAt ? new Date(a.lastUpdatedAt).getTime() : 0;
+      const bTime = b.lastUpdatedAt ? new Date(b.lastUpdatedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+};
+
 export default function LecturerDashboard() {
   const { user } = useAuth();
   const [exams, setExams] = useState<Exam[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
+  const [questionBanks, setQuestionBanks] = useState<QuestionBankSummary[]>([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -63,13 +200,15 @@ export default function LecturerDashboard() {
           api.listQuestions(),
           api.getMyCourses(),
         ]);
+        const questions = unwrapPaginatedData<QuestionItem>(questionsData);
+        const normalizedCourses = Array.isArray(coursesData)
+          ? coursesData
+          : unwrapPaginatedData<CourseSummary>(coursesData);
+
         setExams(unwrapPaginatedData(examsData));
-        setQuestionCount(unwrapPaginatedData(questionsData).length);
-        setCourses(
-          Array.isArray(coursesData)
-            ? coursesData
-            : unwrapPaginatedData(coursesData),
-        );
+        setQuestionCount(questions.length);
+        setCourses(normalizedCourses);
+        setQuestionBanks(buildQuestionBankSummaries(questions, normalizedCourses));
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {
@@ -290,35 +429,75 @@ export default function LecturerDashboard() {
             <Card className="card-elevated">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-bold">
-                  Tổng quan khóa học
+                  Ngân hàng câu hỏi gần đây
                 </CardTitle>
-                <CardDescription>Các khóa học được quản lý gần đây</CardDescription>
+                <CardDescription>
+                  Các khóa học có câu hỏi được cập nhật gần nhất
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {courses.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    Chưa có khóa học.
+                {questionBanks.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 p-4 text-center">
+                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Database className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Chưa có câu hỏi trong ngân hàng
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Thêm câu hỏi hoặc dùng AI để chuẩn bị đề cho khóa học.
+                    </p>
+                    <Button asChild size="sm" className="mt-4 rounded-xl">
+                      <Link href="/lecturer/question-editor">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Thêm câu hỏi
+                      </Link>
+                    </Button>
                   </div>
                 ) : (
-                  courses.slice(0, 4).map((course) => (
+                  questionBanks.slice(0, 4).map((bank) => (
                     <div
-                      key={course.id}
-                      className="rounded-lg border border-border/60 p-3"
+                      key={bank.courseId || bank.courseCode}
+                      className="rounded-lg border border-border/60 p-3 transition-colors hover:border-primary/20 hover:bg-secondary/40"
                     >
-                      <p className="text-sm font-semibold text-foreground line-clamp-1">
-                        {course.code}
-                      </p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">
-                        {course.name}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>
-                          {course.enrolledStudents ??
-                            course._count?.enrollments ??
-                            0}{" "}
-                          sinh viên
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="line-clamp-1 text-sm font-semibold text-foreground">
+                            {bank.courseCode}
+                          </p>
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
+                            {bank.courseName}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold tabular-nums text-primary">
+                          {bank.questionCount}
                         </span>
-                        <span>{course._count?.exams ?? 0} bài thi</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <BarChart3 className="h-3.5 w-3.5" />
+                          {formatDifficulty(bank.avgDifficulty)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          {formatRecentDate(bank.lastUpdatedAt)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {bank.questionTypes.slice(0, 2).map((type) => (
+                          <span
+                            key={type}
+                            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground"
+                          >
+                            <Layers3 className="h-3 w-3" />
+                            {questionTypeLabels[type] || type}
+                          </span>
+                        ))}
+                        {bank.questionTypes.length > 2 ? (
+                          <span className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+                            +{bank.questionTypes.length - 2} loại
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   ))
@@ -329,7 +508,9 @@ export default function LecturerDashboard() {
                   size="sm"
                   className="w-full rounded-xl"
                 >
-                  <Link href="/lecturer/courses">Quản lý khóa học</Link>
+                  <Link href="/lecturer/question-bank">
+                    Quản lý ngân hàng câu hỏi
+                  </Link>
                 </Button>
               </CardContent>
             </Card>

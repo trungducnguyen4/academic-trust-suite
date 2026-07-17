@@ -420,13 +420,24 @@ export default function CreateExam() {
     const loadCourses = async () => {
       try {
         const data = unwrapPaginatedData(await api.getCourses());
-        setCourses(
-          data.map((course: any) => ({
-            id: course.id,
-            code: course.code,
-            name: course.name,
-          })),
-        );
+        const mappedCourses = data.map((course: any) => ({
+          id: course.id,
+          code: course.code,
+          name: course.name,
+        }));
+        setCourses(mappedCourses);
+
+        const requestedCourseId = new URLSearchParams(
+          window.location.search,
+        ).get("courseId");
+        if (
+          requestedCourseId &&
+          mappedCourses.some((course: CourseOption) => course.id === requestedCourseId)
+        ) {
+          setForm((current) =>
+            current.course ? current : { ...current, course: requestedCourseId },
+          );
+        }
       } catch (error) {
         console.error("Failed to load courses for exam creation:", error);
       }
