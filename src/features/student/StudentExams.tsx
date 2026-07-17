@@ -69,6 +69,13 @@ const statusText = (exam: StudentExamItem) => {
   return "Upcoming";
 };
 
+const statusLabel = (exam: StudentExamItem) => {
+  const status = statusText(exam);
+  if (status === "Completed") return "Đã hoàn thành";
+  if (status === "Ongoing") return "Đang diễn ra";
+  return "Sắp diễn ra";
+};
+
 const getExamStatusKey = (exam: StudentExamItem) => {
   if (exam.completed) return "completed";
   const status = String(exam.status || "").toUpperCase();
@@ -198,19 +205,19 @@ export default function StudentExams() {
     () => [
       {
         key: "status",
-        label: "Status",
+        label: "Trạng thái",
         type: "select",
-        allLabel: "All Status",
+        allLabel: "Tất cả trạng thái",
         options: [
-          { label: "Upcoming", value: "PUBLISHED" },
-          { label: "Ongoing", value: "ONGOING" },
+          { label: "Sắp diễn ra", value: "PUBLISHED" },
+          { label: "Đang diễn ra", value: "ONGOING" },
         ],
       },
       {
         key: "courseCode",
-        label: "Course",
+        label: "Khóa học",
         type: "select",
-        allLabel: "All Courses",
+        allLabel: "Tất cả khóa học",
         options: Array.from(
           new Set(exams.map((exam) => exam.course?.code).filter(Boolean)),
         ).map((code) => ({
@@ -220,7 +227,7 @@ export default function StudentExams() {
       },
       {
         key: "startTime",
-        label: "Start Time",
+        label: "Thời gian bắt đầu",
         type: "date-range",
       },
     ],
@@ -350,18 +357,18 @@ export default function StudentExams() {
         <BackToDashboardButton to="/student" className="-ml-2" />
 
         <div className="space-y-3">
-          <ListPageHeader title="Exams" />
+          <ListPageHeader title="Bài thi" />
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <div className={summaryCardClassByKey.upcoming}>
-              <p className="text-xs text-muted-foreground">Upcoming</p>
+              <p className="text-xs text-muted-foreground">Sắp diễn ra</p>
               <p className="text-xl font-semibold text-foreground">{examSummary.upcoming}</p>
             </div>
             <div className={summaryCardClassByKey.ongoing}>
-              <p className="text-xs text-muted-foreground">Ongoing</p>
+              <p className="text-xs text-muted-foreground">Đang diễn ra</p>
               <p className="text-xl font-semibold text-foreground">{examSummary.ongoing}</p>
             </div>
             <div className={summaryCardClassByKey.completed}>
-              <p className="text-xs text-muted-foreground">Completed</p>
+              <p className="text-xs text-muted-foreground">Đã hoàn thành</p>
               <p className="text-xl font-semibold text-foreground">{examSummary.completed}</p>
             </div>
           </div>
@@ -371,12 +378,12 @@ export default function StudentExams() {
               value={searchInput}
               onChange={setSearchInput}
               onSearch={runSearch}
-              placeholder="Search exam title or course"
+              placeholder="Tìm tên bài thi hoặc khóa học"
               className="flex-1"
             />
             <FilterPanel
-              title="Exam filters"
-              description="Filter by submission, status, course and start time."
+              title="Bộ lọc bài thi"
+              description="Lọc theo trạng thái, khóa học và thời gian bắt đầu."
               filters={examFilterDefinitions}
               value={draftFilters}
               onValueChange={(key, nextValue) =>
@@ -396,9 +403,9 @@ export default function StudentExams() {
 
         <Card>
           <CardHeader>
-            <CardTitle>My Exams</CardTitle>
+            <CardTitle>Bài thi của tôi</CardTitle>
             <CardDescription>
-              Upcoming, ongoing, and completed exams with clear course context.
+              Theo dõi bài thi sắp tới, đang diễn ra và đã hoàn thành theo từng khóa học.
             </CardDescription>
           </CardHeader>
           <CardContent>
@@ -417,7 +424,7 @@ export default function StudentExams() {
                       <Calendar className="h-6 w-6 text-muted-foreground" />
                     </div>
                     <p className="font-medium text-muted-foreground">
-                      No exams match current search/filter
+                      Không có bài thi phù hợp với tìm kiếm hoặc bộ lọc
                     </p>
                   </div>
                 ) : (
@@ -455,11 +462,11 @@ export default function StudentExams() {
                           {exam.title}
                         </h4>
                         <p className="text-sm text-muted-foreground">
-                          {(exam.course?.code || "-") + " - " + (exam.course?.name || "Course unavailable")}
+                          {(exam.course?.code || "-") + " - " + (exam.course?.name || "Chưa có thông tin khóa học")}
                         </p>
                         {exam.startTime && (
                           <p className="text-xs text-muted-foreground">
-                            {new Date(exam.startTime).toLocaleString()}
+                            {new Date(exam.startTime).toLocaleString("vi-VN")}
                           </p>
                         )}
                         <div className="mt-1 flex flex-wrap items-center gap-2">
@@ -468,11 +475,11 @@ export default function StudentExams() {
                             domain="exam"
                             className={getExamStatusKey(exam) === "ongoing" ? "animate-pulse" : ""}
                           >
-                            {statusText(exam)}
+                            {statusLabel(exam)}
                           </StatusBadge>
                           {exam.submitted ? (
                             <StatusBadge status="submitted" domain="submission">
-                              Submitted
+                              Đã nộp
                             </StatusBadge>
                           ) : null}
                         </div>
@@ -481,17 +488,17 @@ export default function StudentExams() {
                       <div className="flex items-center gap-2">
                         {canStartNewAttempt ? (
                           <Button asChild size="sm">
-                            <Link href={`/student/exam-ready?examId=${exam.id}`}>Start</Link>
+                            <Link href={`/student/exam-ready?examId=${exam.id}`}>Bắt đầu</Link>
                           </Button>
                         ) : null}
 
                         <Button asChild variant="outline" size="sm">
-                          <Link href={`/student/exams/${exam.id}`}>Detail</Link>
+                          <Link href={`/student/exams/${exam.id}`}>Chi tiết</Link>
                         </Button>
 
                         {hasResult ? (
                           <Button asChild variant="outline" size="sm">
-                            <Link href={resultUrl}>Result</Link>
+                            <Link href={resultUrl}>Kết quả</Link>
                           </Button>
                         ) : null}
                       </div>
@@ -507,7 +514,7 @@ export default function StudentExams() {
               totalPages={totalPages}
               totalItems={filteredExams.length}
               onPageChange={setPage}
-              itemLabel="exams"
+              itemLabel="bài thi"
               syncUrl={false}
             />
           </CardContent>

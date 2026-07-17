@@ -6,10 +6,10 @@ import { Button } from "@/components/ui/button";
 import type { ViolationLog, ViolationType } from "../../hooks/use-exam-security";
 
 const violationLabels: Record<ViolationType, string> = {
-  fullscreen_exit: "Fullscreen exited",
-  tab_switch: "Tab switched",
-  blur: "Window lost focus",
-  focus: "Window focused",
+  fullscreen_exit: "Đã thoát toàn màn hình",
+  tab_switch: "Đã chuyển tab",
+  blur: "Cửa sổ mất tiêu điểm",
+  focus: "Cửa sổ được lấy lại tiêu điểm",
 };
 
 interface ExamSecurityModalProps {
@@ -42,34 +42,35 @@ export function ExamSecurityModal({
       className="fixed inset-0 z-[120] bg-black flex items-center justify-center"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="exam-security-title"
     >
       <div className="bg-card rounded-xl p-8 max-w-sm text-center border shadow-xl">
         <AlertTriangle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h2 className="text-xl font-semibold mb-2">Fullscreen Required</h2>
-        <p className="text-muted-foreground mb-1">The exam is paused until fullscreen is restored.</p>
+        <h2 id="exam-security-title" className="text-xl font-semibold mb-2">Cần trở lại toàn màn hình</h2>
+        <p className="text-muted-foreground mb-1">Phiên thi tạm dừng cho đến khi chế độ toàn màn hình được khôi phục.</p>
         <p className="text-sm mb-2">
-          Return to fullscreen within <strong>{countdownSeconds}s</strong> or your exam will be submitted automatically.
+          Trở lại toàn màn hình trong <strong>{countdownSeconds} giây</strong>, nếu không bài thi sẽ được tự động nộp.
         </p>
         {reason && (
           <p className="text-muted-foreground text-sm mb-2">
-            Reason: <strong>{reason}</strong>
+            Tín hiệu ghi nhận: <strong>{reason}</strong>
           </p>
         )}
         <p className="text-muted-foreground text-sm mb-4">
-          Total violations: <strong>{violationCount}</strong> / {maxViolations}
+          Số tín hiệu cần xem xét: <strong>{violationCount}</strong> / {maxViolations}
         </p>
         {isEscalated && (
           <p className="text-red-600 text-sm mb-3">
-            Maximum violations reached. Your exam will be submitted.
+            Đã đạt ngưỡng tín hiệu của phiên thi. Bài thi sẽ được nộp tự động.
           </p>
         )}
         {!canFullscreen && (
           <p className="text-red-600 text-sm mb-3">
-            Fullscreen is not supported in this browser. Please switch to a supported browser.
+            Trình duyệt này không hỗ trợ toàn màn hình. Vui lòng chuyển sang trình duyệt được hỗ trợ.
           </p>
         )}
         <Button onClick={onReturnToExam} disabled={!canFullscreen}>
-          Return to Exam
+          Trở lại bài thi
         </Button>
       </div>
     </div>

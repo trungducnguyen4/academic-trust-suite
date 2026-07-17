@@ -66,14 +66,25 @@ class ApiClient {
     return this.request<T>(endpoint, { method: 'GET' });
   }
 
-  private async waitForAiJob<T>(jobId: string, timeoutMs = 180000, intervalMs = 1200): Promise<T> {
+
+  private async waitForAiJob<T>(jobId: string, timeoutMs = 120000, intervalMs = 2000): Promise<T> {
+    if (!jobId) {
+      throw new Error('Cannot wait for AI job: jobId is missing.');
+    }
+
     const startedAt = Date.now();
-    let lastStatus = 'UNKNOWN';
+    let attempts = 0;
+    let lastStatus = 'unknown';
+
 
     while (Date.now() - startedAt < timeoutMs) {
+      attempts++;
       const job = await this.getQuestionAIGenerationJob(jobId);
       const status = String(job?.status || '').toUpperCase();
-      lastStatus = status || lastStatus;
+      lastStatus = status;
+
+      console.log('[AI] Poll attempt:', { attempts, jobId, status, elapsedMs: Date.now() - startedAt });
+
 
       if (status === 'SUCCEEDED') {
         const output = job?.output || {};
@@ -87,7 +98,14 @@ class ApiClient {
       await new Promise((resolve) => setTimeout(resolve, intervalMs));
     }
 
-    throw new Error(`AI job timed out after ${Math.round(timeoutMs / 1000)}s (jobId: ${jobId}, last status: ${lastStatus})`);
+    throw new Error(
+      `AI job timed out after ${timeoutMs}ms. ` +
+      `Job ID: ${jobId}. ` +
+      `Last status: ${lastStatus}. ` +
+      `Poll attempts: ${attempts}. ` +
+      `Make sure the backend and AI worker are running.`,
+    );
+
   }
 
   // Auth endpoints
@@ -528,7 +546,7 @@ class ApiClient {
   }
 
   async getQuestionAIGenerationJob(jobId: string) {
-    return this.request<any>(`/questions/ai-jobs/${jobId}`);
+    return this.request<any>(`/questions/ai-jobs/${jobId}?t=${Date.now()}`);
   }
 
   async getQuestionHistory(filters?: { courseId?: string }) {

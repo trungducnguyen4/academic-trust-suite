@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { DashboardLayout } from "@/components/layout/DashboardLayout";
-import { AdminStatCard } from "@/components/admin/AdminStatCard";
 import { useAuth } from "@/contexts/AuthContext";
 import {
   Card,
@@ -16,21 +15,22 @@ import { StatusBadge } from "@/components/ui/status-badge";
 import {
   Plus,
   FileText,
-  Users,
-  BarChart3,
   Clock,
   ArrowRight,
   BookOpen,
-  GraduationCap,
   Loader2,
   Sparkles,
   Zap,
+  Database,
+  Layers3,
+  BarChart3,
 } from "lucide-react";
 import { format, addHours } from "date-fns";
 import Link from "next/link";
 import api, { unwrapPaginatedData } from "@/lib/api";
+import { AttentionSection } from "./attention/AttentionSection";
 
-interface Exam {
+export interface Exam {
   id: string;
   title: string;
   course: { code: string; name: string };
@@ -50,10 +50,144 @@ interface CourseSummary {
   _count?: { enrollments?: number; exams?: number };
 }
 
+interface QuestionItem {
+  id: string;
+  type?: string | null;
+  difficulty?: number | null;
+  updatedAt?: string | null;
+  createdAt?: string | null;
+  courseId?: string | null;
+  course?: {
+    id?: string | null;
+    code?: string | null;
+    name?: string | null;
+  } | null;
+}
+
+interface QuestionBankSummary {
+  courseId: string;
+  courseCode: string;
+  courseName: string;
+  questionCount: number;
+  avgDifficulty: number;
+  questionTypes: string[];
+  lastUpdatedAt: string | null;
+}
+
+const questionTypeLabels: Record<string, string> = {
+  MULTIPLE_CHOICE: "Trắc nghiệm",
+  TRUE_FALSE: "Đúng/sai",
+  SHORT_ANSWER: "Tự luận ngắn",
+  ESSAY: "Tự luận",
+  FILL_BLANK: "Điền khuyết",
+  MATCHING: "Ghép đôi",
+};
+
+const formatDifficulty = (value: number) => {
+  if (!Number.isFinite(value) || value <= 0) return "Chưa có";
+  if (value < 1.8) return "Dễ";
+  if (value < 2.6) return "Trung bình";
+  return "Khó";
+};
+
+const formatRecentDate = (value: string | null) => {
+  if (!value) return "Chưa cập nhật";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Chưa cập nhật";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(date);
+};
+
+const buildQuestionBankSummaries = (
+  questions: QuestionItem[],
+  courses: CourseSummary[],
+): QuestionBankSummary[] => {
+  const courseById = new Map(courses.map((course) => [course.id, course]));
+  const courseByCode = new Map(courses.map((course) => [course.code, course]));
+  const grouped = new Map<
+    string,
+    {
+      courseId: string;
+      courseCode: string;
+      courseName: string;
+      difficulties: number[];
+      questionTypes: Set<string>;
+      questionCount: number;
+      lastUpdatedAt: string | null;
+    }
+  >();
+
+  questions.forEach((question) => {
+    const course =
+      (question.courseId && courseById.get(question.courseId)) ||
+      (question.course?.id && courseById.get(question.course.id)) ||
+      (question.course?.code && courseByCode.get(question.course.code)) ||
+      null;
+    const courseId = course?.id || question.courseId || question.course?.id || "";
+    const courseCode = course?.code || question.course?.code || "Chung";
+    const courseName = course?.name || question.course?.name || "Chưa gán khóa học";
+    const key = courseId || courseCode;
+    const current =
+      grouped.get(key) ||
+      {
+        courseId,
+        courseCode,
+        courseName,
+        difficulties: [],
+        questionTypes: new Set<string>(),
+        questionCount: 0,
+        lastUpdatedAt: null,
+      };
+
+    current.questionCount += 1;
+    if (typeof question.difficulty === "number") {
+      current.difficulties.push(question.difficulty);
+    }
+    if (question.type) {
+      current.questionTypes.add(question.type);
+    }
+
+    const updatedAt = question.updatedAt || question.createdAt || null;
+    if (
+      updatedAt &&
+      (!current.lastUpdatedAt ||
+        new Date(updatedAt).getTime() > new Date(current.lastUpdatedAt).getTime())
+    ) {
+      current.lastUpdatedAt = updatedAt;
+    }
+
+    grouped.set(key, current);
+  });
+
+  return Array.from(grouped.values())
+    .map((item) => ({
+      courseId: item.courseId,
+      courseCode: item.courseCode,
+      courseName: item.courseName,
+      questionCount: item.questionCount,
+      avgDifficulty:
+        item.difficulties.length > 0
+          ? item.difficulties.reduce((sum, value) => sum + value, 0) /
+            item.difficulties.length
+          : 0,
+      questionTypes: Array.from(item.questionTypes),
+      lastUpdatedAt: item.lastUpdatedAt,
+    }))
+    .sort((a, b) => {
+      const aTime = a.lastUpdatedAt ? new Date(a.lastUpdatedAt).getTime() : 0;
+      const bTime = b.lastUpdatedAt ? new Date(b.lastUpdatedAt).getTime() : 0;
+      return bTime - aTime;
+    });
+};
+
 export default function LecturerDashboard() {
   const { user } = useAuth();
   const [exams, setExams] = useState<Exam[]>([]);
   const [courses, setCourses] = useState<CourseSummary[]>([]);
+  const [questionBanks, setQuestionBanks] = useState<QuestionBankSummary[]>([]);
   const [questionCount, setQuestionCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -66,13 +200,15 @@ export default function LecturerDashboard() {
           api.listQuestions(),
           api.getMyCourses(),
         ]);
+        const questions = unwrapPaginatedData<QuestionItem>(questionsData);
+        const normalizedCourses = Array.isArray(coursesData)
+          ? coursesData
+          : unwrapPaginatedData<CourseSummary>(coursesData);
+
         setExams(unwrapPaginatedData(examsData));
-        setQuestionCount(unwrapPaginatedData(questionsData).length);
-        setCourses(
-          Array.isArray(coursesData)
-            ? coursesData
-            : unwrapPaginatedData(coursesData),
-        );
+        setQuestionCount(questions.length);
+        setCourses(normalizedCourses);
+        setQuestionBanks(buildQuestionBankSummaries(questions, normalizedCourses));
       } catch (error) {
         console.error("Failed to fetch dashboard data:", error);
       } finally {
@@ -92,25 +228,11 @@ export default function LecturerDashboard() {
     {
       id: "1",
       type: "info",
-      title: "Dashboard Ready",
-      message: `You have ${courses.length} courses, ${exams.length} exams, and ${questionCount} questions in your bank`,
+      title: "Trang tổng quan đã sẵn sàng",
+      message: `Bạn có ${courses.length} khóa học, ${exams.length} bài thi và ${questionCount} câu hỏi trong ngân hàng`,
       time: addHours(new Date(), -2),
     },
   ];
-
-  const totalStudents = courses.reduce(
-    (acc, c) => acc + (c.enrolledStudents ?? c._count?.enrollments ?? 0),
-    0,
-  );
-
-  const stats = {
-    totalCourses: courses.length,
-    totalStudents,
-    activeExams: exams.filter(
-      (e) => e.status === "PUBLISHED" || e.status === "ONGOING",
-    ).length,
-    questionsInBank: questionCount,
-  };
 
   if (loading) {
     return (
@@ -119,7 +241,7 @@ export default function LecturerDashboard() {
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="h-8 w-8 animate-spin text-primary" />
             <p className="text-sm text-muted-foreground">
-              Loading dashboard...
+              Đang tải trang tổng quan...
             </p>
           </div>
         </div>
@@ -134,10 +256,10 @@ export default function LecturerDashboard() {
         <div className="flex items-start justify-between">
           <div className="animate-fade-in opacity-0">
             <h1 className="text-2xl font-bold text-foreground">
-              Welcome back, {user?.fullName.split(" ")[0]}
+              Chào mừng trở lại, {user?.fullName.split(" ")[0]}
             </h1>
             <p className="text-muted-foreground mt-1">
-              Here's an overview of your courses, exams, and question bank.
+              Tổng quan khóa học, bài thi và ngân hàng câu hỏi của bạn.
             </p>
           </div>
           <Button
@@ -147,69 +269,27 @@ export default function LecturerDashboard() {
           >
             <Link href="/lecturer/exams/create">
               <Plus className="h-4 w-4" />
-              Create Exam
+              Tạo bài thi
             </Link>
           </Button>
         </div>
 
-        {/* Quick Stats */}
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {[
-            {
-              label: "Courses",
-              value: stats.totalCourses,
-              icon: GraduationCap,
-              color: "text-blue-600",
-              bg: "bg-blue-500/10",
-            },
-            {
-              label: "Students",
-              value: stats.totalStudents,
-              icon: Users,
-              color: "text-violet-600",
-              bg: "bg-violet-500/10",
-            },
-            {
-              label: "Active Exams",
-              value: stats.activeExams,
-              icon: Clock,
-              color: "text-emerald-600",
-              bg: "bg-emerald-500/10",
-            },
-            {
-              label: "Questions",
-              value: stats.questionsInBank,
-              icon: BookOpen,
-              color: "text-amber-600",
-              bg: "bg-amber-500/10",
-            },
-          ].map((stat, i) => (
-            <div
-              key={stat.label}
-              className={`animate-fade-in-up opacity-0 stagger-${i + 1}`}
-            >
-              <AdminStatCard
-                icon={stat.icon}
-                value={stat.value}
-                label={stat.label}
-                iconWrapClassName={stat.bg}
-                iconClassName={stat.color}
-                className="card-elevated"
-              />
-            </div>
-          ))}
-        </div>
+        {/* Needs your attention */}
+        <AttentionSection
+          exams={exams}
+          examsLoading={loading}
+        />
 
-        <div className="grid gap-6 lg:grid-cols-3">
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(300px,1fr)]">
           {/* Recent Exams */}
-          <div className="lg:col-span-2">
+          <div>
             <Card className="card-elevated">
               <CardHeader className="flex flex-row items-center justify-between">
                 <div>
                   <CardTitle className="text-lg font-bold">
-                    Recent Exams
+                    Bài thi gần đây
                   </CardTitle>
-                  <CardDescription>Your latest examinations</CardDescription>
+                  <CardDescription>Các bài thi được cập nhật gần nhất</CardDescription>
                 </div>
                 <Button
                   variant="ghost"
@@ -218,7 +298,7 @@ export default function LecturerDashboard() {
                   asChild
                 >
                   <Link href="/lecturer/exams">
-                    View all
+                    Xem tất cả
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </Button>
@@ -231,15 +311,15 @@ export default function LecturerDashboard() {
                         <FileText className="h-6 w-6 text-muted-foreground" />
                       </div>
                       <p className="text-muted-foreground font-medium">
-                        No exams created yet
+                        Chưa có bài thi
                       </p>
                       <p className="text-sm text-muted-foreground mt-1">
-                        Create your first exam to get started
+                        Tạo bài thi đầu tiên để bắt đầu
                       </p>
                       <Button asChild className="mt-4 rounded-xl" size="sm">
                         <Link href="/lecturer/exams/create">
                           <Plus className="mr-2 h-4 w-4" />
-                          Create Exam
+                          Tạo bài thi
                         </Link>
                       </Button>
                     </div>
@@ -269,8 +349,8 @@ export default function LecturerDashboard() {
                       const actionLabel = shouldMonitor
                         ? "Monitor"
                         : shouldShowResults
-                          ? "View Results"
-                          : "Preview & Edit";
+                          ? "Xem kết quả"
+                          : "Xem trước và chỉnh sửa";
                       const actionHref = shouldMonitor
                         ? `/lecturer/exam/${exam.id}/monitor`
                         : shouldShowResults
@@ -300,11 +380,11 @@ export default function LecturerDashboard() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <BookOpen className="h-3 w-3" />
-                                {questionCount} questions
+                                {questionCount} câu hỏi
                               </span>
                               <span className="flex items-center gap-1">
                                 <Clock className="h-3 w-3" />
-                                {exam.duration} min
+                                {exam.duration} phút
                               </span>
                             </div>
                           </div>
@@ -342,71 +422,6 @@ export default function LecturerDashboard() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Quick Actions */}
-            <Card className="card-elevated">
-              <CardHeader>
-                <CardTitle className="text-lg font-bold">Quick Actions</CardTitle>
-                <CardDescription>Common tasks and shortcuts</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-4 md:grid-cols-4">
-                  {[
-                    {
-                      icon: Plus,
-                      label: "Create Exam",
-                      href: "/lecturer/exams/create",
-                      color: "text-blue-600",
-                      bg: "bg-blue-500/10",
-                    },
-                    {
-                      icon: GraduationCap,
-                      label: "Manage Courses",
-                      href: "/lecturer/courses",
-                      color: "text-fuchsia-600",
-                      bg: "bg-fuchsia-500/10",
-                    },
-                    {
-                      icon: BookOpen,
-                      label: "Question Bank",
-                      href: "/lecturer/question-bank",
-                      color: "text-violet-600",
-                      bg: "bg-violet-500/10",
-                    },
-                    {
-                      icon: FileText,
-                      label: "Manage Exams",
-                      href: "/lecturer/exams",
-                      color: "text-amber-600",
-                      bg: "bg-amber-500/10",
-                    },
-                    {
-                      icon: BarChart3,
-                      label: "View Analytics",
-                      href: "/lecturer/analytics",
-                      color: "text-emerald-600",
-                      bg: "bg-emerald-500/10",
-                    },
-                  ].map((action) => (
-                    <Button
-                      key={action.label}
-                      variant="outline"
-                      className="h-auto py-5 flex-col gap-3 rounded-xl border-border/50 hover:border-primary/20 hover:bg-secondary/50 transition-all"
-                      asChild
-                    >
-                      <Link href={action.href}>
-                        <div
-                          className={`h-10 w-10 rounded-xl ${action.bg} flex items-center justify-center`}
-                        >
-                          <action.icon className={`h-5 w-5 ${action.color}`} />
-                        </div>
-                        <span className="font-medium">{action.label}</span>
-                      </Link>
-                    </Button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
           </div>
 
           {/* Right panel */}
@@ -414,35 +429,75 @@ export default function LecturerDashboard() {
             <Card className="card-elevated">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base font-bold">
-                  Course Snapshot
+                  Ngân hàng câu hỏi gần đây
                 </CardTitle>
-                <CardDescription>Your recently managed courses</CardDescription>
+                <CardDescription>
+                  Các khóa học có câu hỏi được cập nhật gần nhất
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-3">
-                {courses.length === 0 ? (
-                  <div className="text-sm text-muted-foreground">
-                    No courses yet.
+                {questionBanks.length === 0 ? (
+                  <div className="rounded-xl border border-dashed border-border/70 bg-muted/30 p-4 text-center">
+                    <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-lg bg-primary/10 text-primary">
+                      <Database className="h-5 w-5" />
+                    </div>
+                    <p className="text-sm font-semibold text-foreground">
+                      Chưa có câu hỏi trong ngân hàng
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Thêm câu hỏi hoặc dùng AI để chuẩn bị đề cho khóa học.
+                    </p>
+                    <Button asChild size="sm" className="mt-4 rounded-xl">
+                      <Link href="/lecturer/question-editor">
+                        <Plus className="mr-2 h-4 w-4" />
+                        Thêm câu hỏi
+                      </Link>
+                    </Button>
                   </div>
                 ) : (
-                  courses.slice(0, 4).map((course) => (
+                  questionBanks.slice(0, 4).map((bank) => (
                     <div
-                      key={course.id}
-                      className="rounded-lg border border-border/60 p-3"
+                      key={bank.courseId || bank.courseCode}
+                      className="rounded-lg border border-border/60 p-3 transition-colors hover:border-primary/20 hover:bg-secondary/40"
                     >
-                      <p className="text-sm font-semibold text-foreground line-clamp-1">
-                        {course.code}
-                      </p>
-                      <p className="text-xs text-muted-foreground line-clamp-1">
-                        {course.name}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
-                        <span>
-                          {course.enrolledStudents ??
-                            course._count?.enrollments ??
-                            0}{" "}
-                          students
+                      <div className="flex items-start justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="line-clamp-1 text-sm font-semibold text-foreground">
+                            {bank.courseCode}
+                          </p>
+                          <p className="line-clamp-1 text-xs text-muted-foreground">
+                            {bank.courseName}
+                          </p>
+                        </div>
+                        <span className="shrink-0 rounded-md bg-primary/10 px-2 py-1 text-xs font-semibold tabular-nums text-primary">
+                          {bank.questionCount}
                         </span>
-                        <span>{course._count?.exams ?? 0} exams</span>
+                      </div>
+                      <div className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
+                        <span className="flex items-center gap-1.5">
+                          <BarChart3 className="h-3.5 w-3.5" />
+                          {formatDifficulty(bank.avgDifficulty)}
+                        </span>
+                        <span className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          {formatRecentDate(bank.lastUpdatedAt)}
+                        </span>
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {bank.questionTypes.slice(0, 2).map((type) => (
+                          <span
+                            key={type}
+                            className="inline-flex items-center gap-1 rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground"
+                          >
+                            <Layers3 className="h-3 w-3" />
+                            {questionTypeLabels[type] || type}
+                          </span>
+                        ))}
+                        {bank.questionTypes.length > 2 ? (
+                          <span className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground">
+                            +{bank.questionTypes.length - 2} loại
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   ))
@@ -453,7 +508,9 @@ export default function LecturerDashboard() {
                   size="sm"
                   className="w-full rounded-xl"
                 >
-                  <Link href="/lecturer/courses">Manage Courses</Link>
+                  <Link href="/lecturer/question-bank">
+                    Quản lý ngân hàng câu hỏi
+                  </Link>
                 </Button>
               </CardContent>
             </Card>
@@ -469,12 +526,12 @@ export default function LecturerDashboard() {
                   <div>
                     <h3 className="font-bold text-foreground">AI Assistant</h3>
                     <p className="text-xs text-muted-foreground">
-                      Generate questions with AI
+                      Tạo câu hỏi với AI
                     </p>
                   </div>
                 </div>
                 <p className="text-sm text-muted-foreground mb-4">
-                  Use AI to auto-generate exam questions from your course
+                  Dùng AI để đề xuất câu hỏi từ tài liệu khóa học, sau đó giảng viên xem xét trước khi sử dụng.
                   content.
                 </p>
                 <Button
@@ -485,7 +542,7 @@ export default function LecturerDashboard() {
                 >
                   <Link href="/lecturer/question-bank">
                     <Zap className="h-4 w-4" />
-                    Open Question Bank
+                    Mở ngân hàng câu hỏi
                   </Link>
                 </Button>
               </CardContent>

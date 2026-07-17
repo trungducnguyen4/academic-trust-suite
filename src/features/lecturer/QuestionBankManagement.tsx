@@ -61,6 +61,7 @@ import {
   ArrowUpDown,
   Database,
   Loader2,
+  ChevronRight,
 } from "lucide-react";
 import api from "@/lib/api";
 import { unwrapPaginatedData } from "@/lib/api";
@@ -69,11 +70,155 @@ interface Question {
   id: string;
   content: string;
   type: string;
-  course?: { code: string; name: string };
+  course?: { id?: string; code: string; name: string } | null;
+  courseId?: string | null;
   difficulty: number;
   points: number;
+  options?: unknown;
+  correctAnswer?: unknown;
+  explanation?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+// --- Utility helpers for preview modal ---
+
+function safeParseJson(value: unknown): unknown {
+  if (value == null) return null;
+  if (typeof value !== "string") return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+}
+
+function normalizeOptions(
+  options: unknown,
+): { id: string; text: string }[] {
+  const raw = safeParseJson(options);
+  if (!raw) return [];
+
+  // Array of strings: ["A", "B", "C"]
+  if (Array.isArray(raw) && raw.every((v) => typeof v === "string")) {
+    return raw.map((text, i) => ({
+      id: String.fromCharCode(65 + i),
+      text,
+    }));
+  }
+
+  // Array of objects: [{ id: "A", text: "..." }]
+  if (Array.isArray(raw) && raw.every((v) => typeof v === "object" && v !== null)) {
+    return raw.map((item: any, i) => ({
+      id: item.id ?? String.fromCharCode(65 + i),
+      text: item.text ?? item.label ?? JSON.stringify(item),
+    }));
+  }
+
+  // Object: { "A": "Option A", "B": "Option B" }
+  if (typeof raw === "object" && raw !== null && !Array.isArray(raw)) {
+    return Object.entries(raw).map(([id, text]) => ({
+      id,
+      text: String(text ?? ""),
+    }));
+  }
+
+  // Plain string
+  if (typeof raw === "string") {
+    return [{ id: "A", text: raw }];
+  }
+
+  return [];
+}
+
+function normalizeCorrectAnswer(
+  correctAnswer: unknown,
+): string[] {
+  const raw = safeParseJson(correctAnswer);
+  if (raw == null) return [];
+
+  // Already an array
+  if (Array.isArray(raw)) {
+    return raw.map((v) => String(v ?? ""));
+  }
+
+  // Object with optionId
+    // Object with optionId
+  if (typeof raw === "object" && raw !== null) {
+    const obj = raw as Record<string, unknown>;
+    if (obj.optionId) return [String(obj.optionId)];
+    // Format: { answer: "B" } or { answer: "A,B,C" }
+    if ("answer" in obj && obj.answer !== undefined && obj.answer !== null) {
+      const ans = String(obj.answer);
+      return ans.includes(",") ? ans.split(",").map((s) => s.trim()) : [ans];
+    }
+    // Could be a key-value mapping like { "A": true }
+    const keys = Object.entries(obj)
+      .filter(([, v]) => v === true || v === "true" || v === 1 || v === "1")
+      .map(([k]) => k);
+    if (keys.length > 0) return keys;
+  }
+
+  // Boolean (True/False questions)
+  if (typeof raw === "boolean") {
+    return [raw ? "True" : "False"];
+  }
+
+  // Plain string
+  return [String(raw)];
+}
+
+function formatDateSafe(value?: string | Date | null): string {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
+}
+
+// Types that don't use options
+const NO_OPTIONS_TYPES = new Set(["ESSAY", "SHORT_ANSWER"]);
+
+// --- Preview modal sub-components ---
+
+function Section({
+  title,
+  children,
+  className = "",
+}: {
+  title: string;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  return (
+    <div className={`rounded-lg border p-4 space-y-3 ${className}`}>
+      <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+      {children}
+    </div>
+  );
+}
+
+function InfoCard({
+  label,
+  value,
+  valueClassName = "",
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
+  return (
+    <div className="rounded-lg border bg-card p-4 text-center">
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className={`text-lg font-semibold ${valueClassName}`}>{value}</p>
+    </div>
+  );
 }
 
 const typeLabels: Record<string, string> = {
@@ -92,6 +237,20 @@ const difficultyLabel = (d: number) => {
   if (normalized <= 1) return { text: "Easy", color: "text-green-600" };
   if (normalized === 2) return { text: "Medium", color: "text-yellow-600" };
   return { text: "Hard", color: "text-red-600" };
+};
+
+const formatUpdatedAt = (value?: string | Date | null) => {
+  if (!value) return "—";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "—";
+  return new Intl.DateTimeFormat("vi-VN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).format(date);
 };
 
 const EMPTY_COURSE_FILTERS: FilterValues = {
@@ -129,9 +288,12 @@ export default function QuestionBankManagement() {
     useState<FilterValues>(EMPTY_QUESTION_FILTERS);
   const [appliedQuestionFilters, setAppliedQuestionFilters] =
     useState<FilterValues>(EMPTY_QUESTION_FILTERS);
-  const [sortBy, setSortBy] = useState<"difficulty" | "points">("difficulty");
+  const [sortBy, setSortBy] = useState<"difficulty" | "points" | "updatedAt">("updatedAt");
   const [sortDir, setSortDir] = useState<"asc" | "desc">("desc");
   const [previewQuestion, setPreviewQuestion] = useState<Question | null>(null);
+  const [detailQuestion, setDetailQuestion] = useState<Question | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState(false);
   const [selectedCourse, setSelectedCourse] = useState<string | null>(null);
   const [questionPage, setQuestionPage] = useState(1);
   const QUESTIONS_PER_PAGE = 12;
@@ -291,6 +453,11 @@ export default function QuestionBankManagement() {
       const mul = sortDir === "asc" ? 1 : -1;
       if (sortBy === "difficulty")
         return ((a.difficulty || 1) - (b.difficulty || 1)) * mul;
+      if (sortBy === "updatedAt") {
+        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return (aTime - bTime) * mul;
+      }
       return ((a.points || 1) - (b.points || 1)) * mul;
     });
 
@@ -555,7 +722,7 @@ export default function QuestionBankManagement() {
               />
             </div>
 
-            {/* Course Card Pagination */}
+            {/* Course row pagination */}
             {(() => {
               const courseTotalPages = Math.max(
                 1,
@@ -567,7 +734,15 @@ export default function QuestionBankManagement() {
               );
               return (
                 <>
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  <div className="overflow-hidden rounded-xl border bg-card shadow-sm">
+                    <div className="hidden border-b bg-muted/40 px-4 py-2.5 text-xs font-medium uppercase tracking-wide text-muted-foreground md:grid md:grid-cols-[minmax(240px,1.35fr)_120px_140px_minmax(220px,1fr)_24px] md:items-center md:gap-4">
+                      <span>Course</span>
+                      <span>Questions</span>
+                      <span>Avg. difficulty</span>
+                      <span>Question types</span>
+                      <span className="sr-only">Open</span>
+                    </div>
+                    <div className="divide-y">
                     {paginatedCourses.map((course, index) => {
                       const courseQuestions = questions.filter(
                         (q) => q.course?.code === course.code,
@@ -584,63 +759,76 @@ export default function QuestionBankManagement() {
                           : 0;
                       const diffInfo = difficultyLabel(avgDiff);
                       return (
-                        <Card
+                        <button
+                          type="button"
                           key={course.id}
-                          className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group"
+                          className="group grid w-full gap-4 px-4 py-4 text-left transition-colors hover:bg-muted/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring md:grid-cols-[minmax(240px,1.35fr)_120px_140px_minmax(220px,1fr)_24px] md:items-center"
                           onClick={() => setSelectedCourse(course.code)}
+                          aria-label={`Open question bank for ${course.code}`}
                         >
-                          <div className={`h-32 ${getGradientClass((coursePage - 1) * COURSES_PER_PAGE + index)} relative`}>
-                            <div className="absolute inset-0 bg-black/10 group-hover:bg-black/20 transition-colors" />
-                            <div className="absolute bottom-4 left-4 text-white">
-                              <p className="text-2xl font-bold">{course.code}</p>
-                              <p className="text-sm text-white/80 line-clamp-1">
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div
+                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-lg text-sm font-bold text-white shadow-sm ${getGradientClass((coursePage - 1) * COURSES_PER_PAGE + index)}`}
+                            >
+                              {course.code.slice(0, 2).toUpperCase()}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="truncate font-semibold text-foreground">
+                                {course.code}
+                              </p>
+                              <p className="truncate text-sm text-muted-foreground">
                                 {course.name}
                               </p>
                             </div>
-                            <div className="absolute top-4 right-4">
-                              <span className="bg-white/20 backdrop-blur-sm text-white text-xs font-medium px-2.5 py-1 rounded-full">
-                                {courseQuestions.length} questions
-                              </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 text-sm md:block">
+                            <span className="text-muted-foreground md:hidden">
+                              Questions
+                            </span>
+                            <span className="font-semibold tabular-nums text-foreground">
+                              {courseQuestions.length}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between gap-3 text-sm md:block">
+                            <span className="text-muted-foreground md:hidden">
+                              Avg. difficulty
+                            </span>
+                            <span className={`font-medium ${diffInfo.color}`}>
+                              {courseQuestions.length > 0 ? diffInfo.text : "—"}
+                            </span>
+                          </div>
+
+                          <div className="flex min-w-0 items-start justify-between gap-3 md:block">
+                            <span className="shrink-0 text-sm text-muted-foreground md:hidden">
+                              Question types
+                            </span>
+                            <div className="flex flex-wrap justify-end gap-1.5 md:justify-start">
+                              {questionTypes.length === 0 && (
+                                <span className="text-sm text-muted-foreground">—</span>
+                              )}
+                              {questionTypes.slice(0, 3).map((type) => (
+                                <span
+                                  key={type}
+                                  className="rounded-md bg-muted px-2 py-1 text-[11px] text-muted-foreground"
+                                >
+                                  {typeLabels[type] || type}
+                                </span>
+                              ))}
+                              {questionTypes.length > 3 && (
+                                <span className="self-center text-xs text-muted-foreground">
+                                  +{questionTypes.length - 3} more
+                                </span>
+                              )}
                             </div>
                           </div>
-                          <CardContent className="p-4">
-                            <div className="space-y-3">
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground">
-                                  Avg Difficulty
-                                </span>
-                                <span className={`font-medium ${diffInfo.color}`}>
-                                  {diffInfo.text}
-                                </span>
-                              </div>
-                              <div className="flex items-center justify-between text-sm">
-                                <span className="text-muted-foreground">
-                                  Question Types
-                                </span>
-                                <span className="font-medium">
-                                  {questionTypes.length}
-                                </span>
-                              </div>
-                              <div className="flex flex-wrap gap-1 pt-1">
-                                {questionTypes.slice(0, 3).map((t) => (
-                                  <span
-                                    key={t}
-                                    className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground"
-                                  >
-                                    {typeLabels[t] || t}
-                                  </span>
-                                ))}
-                                {questionTypes.length > 3 && (
-                                  <span className="text-[10px] text-muted-foreground">
-                                    +{questionTypes.length - 3} more
-                                  </span>
-                                )}
-                              </div>
-                            </div>
-                          </CardContent>
-                        </Card>
+
+                          <ChevronRight className="hidden h-4 w-4 text-muted-foreground transition-transform group-hover:translate-x-0.5 group-hover:text-foreground md:block" />
+                        </button>
                       );
                     })}
+                    </div>
                   </div>
                   <DataPagination
                     currentPage={coursePage}
@@ -769,7 +957,15 @@ export default function QuestionBankManagement() {
                     <Table>
                       <TableHeader>
                         <TableRow className="bg-muted/50">
-                          <TableHead className="w-24">ID</TableHead>
+                          <TableHead className="w-[180px] whitespace-nowrap">
+                            <button
+                              onClick={() => toggleSort("updatedAt")}
+                              className="flex items-center gap-1 hover:text-foreground"
+                            >
+                              Updated At
+                              <ArrowUpDown className="h-3 w-3" />
+                            </button>
+                          </TableHead>
                           <TableHead className="flex-1 min-w-48">Content</TableHead>
                           <TableHead className="w-28">Type</TableHead>
                           <TableHead className="w-24 text-center">
@@ -789,8 +985,8 @@ export default function QuestionBankManagement() {
                           const diff = difficultyLabel(question.difficulty || 1);
                           return (
                             <TableRow key={question.id} className="hover:bg-muted/50">
-                              <TableCell className="font-mono text-xs text-muted-foreground">
-                                {question.id.slice(0, 8)}
+                              <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                                {formatUpdatedAt(question.updatedAt)}
                               </TableCell>
                               <TableCell className="text-sm line-clamp-2">
                                 {question.content}
@@ -809,7 +1005,20 @@ export default function QuestionBankManagement() {
                                     variant="ghost"
                                     size="sm"
                                     className="h-8 w-8 p-0"
-                                    onClick={() => setPreviewQuestion(question)}
+                                    onClick={async () => {
+                                      setPreviewQuestion(question);
+                                      setDetailLoading(true);
+                                      setDetailError(false);
+                                      try {
+                                        const detail = await api.getQuestionById(question.id);
+                                        setDetailQuestion(detail as Question);
+                                      } catch {
+                                        setDetailError(true);
+                                        setDetailQuestion(null);
+                                      } finally {
+                                        setDetailLoading(false);
+                                      }
+                                    }}
                                   >
                                     <Eye className="h-4 w-4" />
                                   </Button>
@@ -878,70 +1087,243 @@ export default function QuestionBankManagement() {
         {/* Preview Dialog */}
         <Dialog
           open={!!previewQuestion}
-          onOpenChange={() => setPreviewQuestion(null)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPreviewQuestion(null);
+              setDetailQuestion(null);
+              setDetailError(false);
+            }
+          }}
         >
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle className="flex items-center gap-2">
-                <span className="font-mono text-sm text-muted-foreground">
-                  {previewQuestion?.id.slice(0, 8)}
-                </span>
-                Question Preview
-              </DialogTitle>
-              <DialogDescription>Full question details</DialogDescription>
-            </DialogHeader>
-            {previewQuestion && (
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm font-medium mb-1">Content</p>
-                  <p className="text-sm text-muted-foreground">
-                    {previewQuestion.content}
-                  </p>
-                </div>
-                <Separator />
-                <div className="grid grid-cols-2 gap-4 text-center">
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">
-                      Difficulty
-                    </p>
-                    <div className="space-y-1">
-                      <p className={`text-lg font-semibold ${difficultyLabel(previewQuestion.difficulty || 1).color}`}>
-                        {difficultyLabel(previewQuestion.difficulty || 1).text}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        Level {previewQuestion.difficulty || 1}
-                      </p>
-                    </div>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground mb-1">Points</p>
-                    <p className="text-lg font-semibold">
-                      {previewQuestion.points || 1}
-                    </p>
-                  </div>
-                </div>
-                <Separator />
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-muted-foreground">Course:</span>{" "}
-                    {previewQuestion.course?.code || "-"}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Type:</span>{" "}
-                    {typeLabels[previewQuestion.type] || previewQuestion.type}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Created:</span>{" "}
-                    {new Date(previewQuestion.createdAt).toLocaleDateString()}
-                  </div>
-                  <div>
-                    <span className="text-muted-foreground">Updated:</span>{" "}
-                    {new Date(previewQuestion.updatedAt).toLocaleDateString()}
-                  </div>
-                </div>
-                {/* Tags removed from questions */}
+          <DialogContent className="w-[950px] max-w-[95vw] max-h-[85vh] overflow-hidden p-0 gap-0">
+            {detailLoading && (
+              <div className="flex items-center justify-center h-64">
+                <Loader2 className="h-8 w-8 animate-spin text-primary" />
               </div>
             )}
+
+            {detailError && !detailLoading && (
+              <div className="flex flex-col items-center justify-center h-64 gap-3 px-6">
+                <AlertTriangle className="h-10 w-10 text-destructive" />
+                <p className="text-lg font-medium">Unable to load question details</p>
+                <p className="text-sm text-muted-foreground text-center">
+                  An error occurred while fetching the full question data.
+                </p>
+                <Button
+                  variant="outline"
+                  onClick={async () => {
+                    if (!previewQuestion) return;
+                    setDetailLoading(true);
+                    setDetailError(false);
+                    try {
+                      const detail = await api.getQuestionById(previewQuestion.id);
+                      setDetailQuestion(detail as Question);
+                    } catch {
+                      setDetailError(true);
+                      setDetailQuestion(null);
+                    } finally {
+                      setDetailLoading(false);
+                    }
+                  }}
+                >
+                  Retry
+                </Button>
+              </div>
+            )}
+
+            {!detailLoading && !detailError && detailQuestion && (() => {
+              const q = detailQuestion;
+              const diff = difficultyLabel(q.difficulty || 1);
+              const typeLabel = typeLabels[q.type] || q.type;
+              const options = normalizeOptions(q.options);
+              const correctAnswers = normalizeCorrectAnswer(q.correctAnswer);
+              const hasOptions = !NO_OPTIONS_TYPES.has(q.type);
+
+              return (
+                <>
+                  {/* Fixed Header */}
+                  <div className="flex items-center justify-between px-6 py-4 border-b shrink-0">
+                    <div className="flex items-center gap-3">
+                      <h2 className="text-lg font-semibold">Question Preview</h2>
+                      <span className="text-xs font-medium px-2.5 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20">
+                        {typeLabel}
+                      </span>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-8 w-8 p-0"
+                      onClick={() => {
+                        setPreviewQuestion(null);
+                        setDetailQuestion(null);
+                        setDetailError(false);
+                      }}
+                    >
+                      <span className="sr-only">Close</span>
+                      <svg
+                        className="h-4 w-4"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M18 6 6 18" />
+                        <path d="m6 6 12 12" />
+                      </svg>
+                    </Button>
+                  </div>
+
+                  {/* Scrollable Body */}
+                  <div className="max-h-[calc(85vh-73px)] overflow-y-auto p-6 space-y-6">
+
+                    {/* 1. Question Content */}
+                    <Section title="Question Content">
+                      <p className="text-sm whitespace-pre-wrap break-words text-foreground">
+                        {q.content}
+                      </p>
+                    </Section>
+
+                    {/* 2. Answer Options */}
+                    {hasOptions ? (
+                      <Section title="Answer Options">
+                        {options.length > 0 ? (
+                          <div className="space-y-2">
+                            {options.map((opt) => {
+                              const isCorrect = correctAnswers.some(
+                                (ca) => ca.toUpperCase() === opt.id.toUpperCase() || ca === opt.text,
+                              );
+                              return (
+                                <div
+                                  key={opt.id}
+                                  className={`flex items-start gap-3 rounded-lg border p-3 text-sm ${
+                                    isCorrect
+                                      ? "border-green-300 bg-green-50 dark:bg-green-950/30 dark:border-green-700"
+                                      : "border-border bg-card"
+                                  }`}
+                                >
+                                  <span
+                                    className={`flex-shrink-0 flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold ${
+                                      isCorrect
+                                        ? "bg-green-500 text-white"
+                                        : "bg-muted text-muted-foreground"
+                                    }`}
+                                  >
+                                    {isCorrect ? "✓" : opt.id}
+                                  </span>
+                                  <span className="flex-1 whitespace-pre-wrap break-words pt-0.5">
+                                    {opt.text}
+                                  </span>
+                                  {isCorrect && (
+                                    <span className="flex-shrink-0 text-[10px] font-medium px-2 py-0.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-400 border border-green-200 dark:border-green-700">
+                                      Correct answer
+                                    </span>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-sm text-muted-foreground italic">
+                            This question type does not use answer options
+                          </p>
+                        )}
+                      </Section>
+                    ) : (
+                      <Section title="Answer Options">
+                        <p className="text-sm text-muted-foreground italic">
+                          This question type does not use answer options
+                        </p>
+                      </Section>
+                    )}
+
+                    {/* 3. Correct Answer */}
+                    <Section
+                      title="Correct Answer"
+                      className="border-green-200 dark:border-green-800 bg-green-50/50 dark:bg-green-950/20"
+                    >
+                      {correctAnswers.length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {correctAnswers.map((ans, i) => (
+                            <span
+                              key={i}
+                              className="inline-flex items-center gap-1.5 text-sm font-medium px-3 py-1.5 rounded-full bg-green-100 dark:bg-green-900/40 text-green-800 dark:text-green-300 border border-green-200 dark:border-green-700"
+                            >
+                              <svg
+                                className="h-3.5 w-3.5"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.5"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              {ans}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">
+                          No correct answer provided
+                        </p>
+                      )}
+                    </Section>
+
+                    {/* 4. Explanation */}
+                    <Section title="Explanation">
+                      {q.explanation ? (
+                        <p className="text-sm whitespace-pre-wrap break-words text-foreground">
+                          {q.explanation}
+                        </p>
+                      ) : (
+                        <p className="text-sm text-muted-foreground italic">
+                          No explanation provided
+                        </p>
+                      )}
+                    </Section>
+
+                    <Separator />
+
+                    {/* 5. Difficulty, Points, Type */}
+                    <div className="grid grid-cols-3 gap-4">
+                      <InfoCard
+                        label="Difficulty"
+                        value={diff.text}
+                        valueClassName={diff.color}
+                      />
+                      <InfoCard
+                        label="Points"
+                        value={String(q.points ?? 1)}
+                      />
+                      <InfoCard
+                        label="Type"
+                        value={typeLabel}
+                      />
+                    </div>
+
+                    {/* 6. Metadata */}
+                    <div className="rounded-lg border bg-muted/30 p-4 space-y-2 text-sm">
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-medium min-w-[100px]">Course:</span>
+                        <span>{q.course?.code || q.course?.name || "—"}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-medium min-w-[100px]">Created:</span>
+                        <span>{formatDateSafe(q.createdAt)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-muted-foreground font-medium min-w-[100px]">Last updated:</span>
+                        <span>{formatDateSafe(q.updatedAt)}</span>
+                      </div>
+                    </div>
+
+                  </div>
+                </>
+              );
+            })()}
           </DialogContent>
         </Dialog>
       </AdminPageShell>

@@ -98,17 +98,17 @@ export default function AdminDashboard() {
 
   const userBreakdown = [
     {
-      role: "Students",
+      role: "Sinh viên",
       count: studentCount,
       percentage: totalUsers ? (studentCount / totalUsers) * 100 : 0,
     },
     {
-      role: "Lecturers",
+      role: "Giảng viên",
       count: lecturerCount,
       percentage: totalUsers ? (lecturerCount / totalUsers) * 100 : 0,
     },
     {
-      role: "Administrators",
+      role: "Quản trị viên",
       count: adminCount,
       percentage: totalUsers ? (adminCount / totalUsers) * 100 : 0,
     },
@@ -118,15 +118,15 @@ export default function AdminDashboard() {
   const recentActivity = [
     ...submissions.slice(0, 2).map((s) => ({
       id: s.id,
-      action: `Exam submission: ${s.exam?.title || "Unknown"}`,
-      user: s.student?.fullName || "Student",
-      time: new Date(s.startedAt).toLocaleDateString(),
+      action: `Nộp bài thi: ${s.exam?.title || "Không xác định"}`,
+      user: s.student?.fullName || "Sinh viên",
+      time: new Date(s.startedAt).toLocaleDateString("vi-VN"),
     })),
     ...users.slice(0, 2).map((u) => ({
       id: u.id,
-      action: `User registered: ${u.role}`,
+      action: `Người dùng đã đăng ký: ${u.role}`,
       user: u.fullName,
-      time: new Date(u.createdAt).toLocaleDateString(),
+      time: new Date(u.createdAt).toLocaleDateString("vi-VN"),
     })),
   ].slice(0, 4);
 
@@ -146,10 +146,10 @@ export default function AdminDashboard() {
         {/* Header */}
         <div>
           <h1 className="text-2xl font-semibold text-foreground">
-            System Administration
+            Quản trị hệ thống
           </h1>
           <p className="text-muted-foreground mt-1">
-            Monitor and manage the examination platform
+            Theo dõi và quản lý nền tảng khảo thí
           </p>
         </div>
 
@@ -158,26 +158,26 @@ export default function AdminDashboard() {
           <AdminStatCard
             icon={Users}
             value={totalUsers.toLocaleString()}
-            label="Total Users"
+            label="Tổng người dùng"
           />
           <AdminStatCard
             icon={Activity}
             value={activeExams}
-            label="Active Exams"
+            label="Bài thi đang hoạt động"
             iconWrapClassName="bg-info/10"
             iconClassName="text-info"
           />
           <AdminStatCard
             icon={Shield}
             value={submissions.length}
-            label="Submissions"
+            label="Bài nộp"
             iconWrapClassName="bg-warning/10"
             iconClassName="text-warning"
           />
           <AdminStatCard
             icon={Database}
             value={courses.length}
-            label="Total Courses"
+            label="Tổng khóa học"
             iconWrapClassName="bg-success/10"
             iconClassName="text-success"
           />
@@ -187,8 +187,8 @@ export default function AdminDashboard() {
           {/* User Distribution */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">User Distribution</CardTitle>
-              <CardDescription>Breakdown by role</CardDescription>
+              <CardTitle className="text-lg">Phân bổ người dùng</CardTitle>
+              <CardDescription>Thống kê theo vai trò</CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               {userBreakdown.map((item) => (
@@ -206,8 +206,8 @@ export default function AdminDashboard() {
           {/* Recent Activity */}
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Recent Activity</CardTitle>
-              <CardDescription>Latest system events</CardDescription>
+              <CardTitle className="text-lg">Hoạt động gần đây</CardTitle>
+              <CardDescription>Các sự kiện hệ thống mới nhất</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -232,8 +232,8 @@ export default function AdminDashboard() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between">
               <div>
-                <CardTitle className="text-lg">Recent Submissions</CardTitle>
-                <CardDescription>Latest exam submissions</CardDescription>
+                <CardTitle className="text-lg">Bài nộp gần đây</CardTitle>
+                <CardDescription>Các lượt nộp bài mới nhất</CardDescription>
               </div>
               <Button
                 variant="ghost"
@@ -242,7 +242,7 @@ export default function AdminDashboard() {
                 asChild
               >
                 <Link href="/admin/integrity">
-                  View all
+                  Xem tất cả
                   <ArrowRight className="ml-1 h-4 w-4" />
                 </Link>
               </Button>
@@ -251,7 +251,7 @@ export default function AdminDashboard() {
               <div className="space-y-4">
                 {submissions.length === 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-4">
-                    No submissions yet
+                    Chưa có bài nộp
                   </p>
                 ) : (
                   submissions.slice(0, 3).map((sub) => (
@@ -262,21 +262,21 @@ export default function AdminDashboard() {
                       <div className="flex items-start justify-between">
                         <div>
                           <p className="text-sm font-medium text-foreground">
-                            {sub.exam?.title || "Unknown Exam"}
+                            {sub.exam?.title || "Bài thi không xác định"}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {sub.student?.fullName || "Unknown Student"}
+                            {sub.student?.fullName || "Sinh viên không xác định"}
                           </p>
                         </div>
                         <StatusBadge
                           status={sub.score !== null ? "graded" : "pending"}
                           domain="submission"
                         >
-                          {sub.score !== null ? `${sub.score}%` : "Pending"}
+                          {sub.score !== null ? `${sub.score}%` : "Đang chờ"}
                         </StatusBadge>
                       </div>
                       <p className="text-xs text-muted-foreground">
-                        Started: {new Date(sub.startedAt).toLocaleString()}
+                        Bắt đầu: {new Date(sub.startedAt).toLocaleString("vi-VN")}
                       </p>
                     </div>
                   ))
@@ -289,8 +289,8 @@ export default function AdminDashboard() {
         {/* Quick Actions */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-lg">Administration</CardTitle>
-            <CardDescription>System management options</CardDescription>
+            <CardTitle className="text-lg">Tác vụ quản trị</CardTitle>
+            <CardDescription>Các lựa chọn quản lý hệ thống</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid gap-4 md:grid-cols-4">
@@ -301,7 +301,7 @@ export default function AdminDashboard() {
               >
                 <Link href="/admin/users">
                   <Users className="h-5 w-5" />
-                  <span>Manage Users</span>
+                  <span>Quản lý người dùng</span>
                 </Link>
               </Button>
               <Button
@@ -311,7 +311,7 @@ export default function AdminDashboard() {
               >
                 <Link href="/admin/exams">
                   <FileText className="h-5 w-5" />
-                  <span>Manage Exams</span>
+                  <span>Quản lý bài thi</span>
                 </Link>
               </Button>
               <Button
@@ -321,7 +321,7 @@ export default function AdminDashboard() {
               >
                 <Link href="/admin/integrity">
                   <Shield className="h-5 w-5" />
-                  <span>Review Integrity</span>
+                  <span>Xem xét tính toàn vẹn</span>
                 </Link>
               </Button>
               <Button
@@ -331,7 +331,7 @@ export default function AdminDashboard() {
               >
                 <Link href="/admin/settings">
                   <Settings className="h-5 w-5" />
-                  <span>System Settings</span>
+                  <span>Thiết lập hệ thống</span>
                 </Link>
               </Button>
               <Button
@@ -341,7 +341,7 @@ export default function AdminDashboard() {
               >
                 <Link href="/admin/courses">
                   <BarChart3 className="h-5 w-5" />
-                  <span>Manage Courses</span>
+                  <span>Quản lý khóa học</span>
                 </Link>
               </Button>
               <Button
@@ -351,7 +351,7 @@ export default function AdminDashboard() {
               >
                 <Link href="/admin/question-bank">
                   <BookOpen className="h-5 w-5" />
-                  <span>Question Bank</span>
+                  <span>Ngân hàng câu hỏi</span>
                 </Link>
               </Button>
             </div>

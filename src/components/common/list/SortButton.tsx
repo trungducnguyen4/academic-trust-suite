@@ -35,7 +35,7 @@ export function SortButton({
   order,
   onSortChange,
   className,
-  label = "Sort",
+  label = "Sắp xếp",
 }: SortButtonProps) {
   const [open, setOpen] = useState(false);
 
@@ -49,7 +49,7 @@ export function SortButton({
         <DropdownMenuTrigger asChild>
           <Button
             variant="outline"
-            className="h-10 gap-2 rounded-lg border-border bg-white shadow-sm hover:bg-muted/40"
+            className="h-11 gap-2 rounded-lg border-border bg-card shadow-sm hover:bg-muted/40"
           >
             <ArrowUpDown className="h-4 w-4" />
             {label}
@@ -91,7 +91,7 @@ export function SortButton({
                 className="cursor-pointer rounded-md text-sm text-foreground transition-colors hover:bg-muted/40 hover:text-foreground focus:bg-muted/40 focus:text-foreground data-[highlighted]:bg-muted/40 data-[highlighted]:text-foreground"
               >
                 <span className="flex-1">
-                  Order: {order === "asc" ? "Ascending" : "Descending"}
+                  Thứ tự: {order === "asc" ? "Tăng dần" : "Giảm dần"}
                 </span>
                 <span className="ml-2 text-xs">
                   {order === "asc" ? "↑" : "↓"}

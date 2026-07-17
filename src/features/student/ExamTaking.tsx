@@ -394,14 +394,14 @@ const typeBadgeColor: Record<QType, string> = {
 };
 
 const typeLabel: Record<QType, string> = {
-  "single-choice": "Single Choice",
-  "multi-choice": "Multiple Choice",
-  "true-false": "True / False",
-  "fill-blank": "Fill in the Blank",
-  matching: "Matching",
-  "find-error": "Find the Error",
-  ordering: "Ordering",
-  "short-answer": "Short Answer",
+  "single-choice": "Một đáp án",
+  "multi-choice": "Nhiều đáp án",
+  "true-false": "Đúng / Sai",
+  "fill-blank": "Điền vào chỗ trống",
+  matching: "Ghép cặp",
+  "find-error": "Tìm lỗi",
+  ordering: "Sắp xếp",
+  "short-answer": "Trả lời ngắn",
 };
 
 // ─── Main component ───────────────────────────────────────────────
@@ -412,7 +412,7 @@ export default function ExamTaking() {
   const isPreviewMode = searchParams.get("mode") === "preview";
 
   const [questions, setQuestions] = useState<Question[]>([]);
-  const [examTitle, setExamTitle] = useState("Exam Session");
+  const [examTitle, setExamTitle] = useState("Phiên thi");
   const [isLoadingExam, setIsLoadingExam] = useState(true);
 
   const [orderState, setOrderState] = useState<Record<number, string[]>>({});
@@ -448,7 +448,7 @@ export default function ExamTaking() {
             return q;
           });
           if (!mounted) return;
-          setExamTitle("Practice Exam");
+          setExamTitle("Bài thi luyện tập");
           setQuestions(fallback);
           return;
         }
@@ -466,7 +466,7 @@ export default function ExamTaking() {
         });
 
         if (!mounted) return;
-        setExamTitle(exam?.title || "Exam Session");
+        setExamTitle(exam?.title || "Phiên thi");
         setQuestions(mapped.length > 0 ? mapped : []);
       } catch (err) {
         console.error("Failed to load exam questions:", err);
@@ -563,7 +563,7 @@ export default function ExamTaking() {
       } catch {}
     } catch (err) {
       console.error("Failed to submit to server:", err);
-      toast.error("Submit failed. Please try again.");
+      toast.error("Nộp bài không thành công. Vui lòng thử lại.");
       setIsSubmitting(false);
       return;
     }
@@ -717,7 +717,7 @@ export default function ExamTaking() {
   if (isLoadingExam) {
     return (
       <div className="min-h-screen flex items-center justify-center text-muted-foreground">
-        Loading exam...
+        Đang tải bài thi...
       </div>
     );
   }
@@ -727,10 +727,10 @@ export default function ExamTaking() {
       <div className="min-h-screen flex items-center justify-center px-6 text-center">
         <div>
           <p className="text-lg font-semibold">
-            No questions found for this exam.
+            Không tìm thấy câu hỏi cho bài thi này.
           </p>
           <p className="text-sm text-muted-foreground mt-1">
-            Please contact your instructor or try again later.
+            Vui lòng liên hệ giảng viên hoặc thử lại sau.
           </p>
           <BackToDashboardButton
             to="/student"
@@ -775,13 +775,13 @@ export default function ExamTaking() {
   const renderAnswerPreview = (question: Question) => {
     const answer = answers[question.id];
     if (!isAnswered(question, answers)) {
-      return <span className="text-red-600 font-medium">Unanswered</span>;
+      return <span className="font-medium text-red-600 dark:text-red-300">Chưa trả lời</span>;
     }
 
     if (question.type === "single-choice") {
       const idx = Number(answer);
       const opt = question.options[idx];
-      return <span>{opt ? `${String.fromCharCode(65 + idx)}. ${opt}` : "Answered"}</span>;
+      return <span>{opt ? `${String.fromCharCode(65 + idx)}. ${opt}` : "Đã trả lời"}</span>;
     }
 
     if (question.type === "multi-choice") {
@@ -796,7 +796,7 @@ export default function ExamTaking() {
     }
 
     if (question.type === "true-false") {
-      return <span>{answer ? "True" : "False"}</span>;
+      return <span>{answer ? "Đúng" : "Sai"}</span>;
     }
 
     if (question.type === "fill-blank") {
@@ -808,7 +808,7 @@ export default function ExamTaking() {
       return <span>{String(answer)}</span>;
     }
 
-    return <span>Answered</span>;
+    return <span>Đã trả lời</span>;
   };
 
   // ─── Dispatch to sub-renderers ────────────────────────────────
@@ -856,22 +856,22 @@ export default function ExamTaking() {
   return (
     <div className="min-h-screen bg-background">
       {/* ── Top Bar ─────────────────────────────────────────────── */}
-      <header className="fixed top-0 left-0 right-0 z-50 h-14 bg-card border-b flex items-center px-4 justify-between shadow-sm">
-        <div className="flex items-center gap-3">
+      <header className="fixed inset-x-0 top-0 z-50 flex h-16 items-center justify-between border-b bg-card/95 px-3 shadow-sm backdrop-blur sm:px-4">
+        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
           <Shield className="h-5 w-5 text-primary" />
-          <span className="font-semibold text-sm">Database Systems Quiz</span>
-          <span className="font-semibold text-sm">{examTitle}</span>
+          <span className="truncate text-sm font-semibold">{examTitle}</span>
           {violationCount > 0 && (
             <StatusBadge status="critical" domain="severity">
-              {violationCount} violation{violationCount > 1 ? "s" : ""}
+              {violationCount} tín hiệu cần xem xét
             </StatusBadge>
           )}
         </div>
         <div className="flex items-center gap-3">
           <div
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full font-mono text-sm font-semibold ${
+            aria-label="Thời gian còn lại"
+            className={`flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-sm font-semibold ${
               isTimeLow
-                ? "bg-red-100 text-red-700 animate-pulse"
+                ? "bg-red-500/10 text-red-700 dark:text-red-300"
                 : "bg-secondary text-foreground"
             }`}
           >
@@ -882,6 +882,7 @@ export default function ExamTaking() {
             size="sm"
             onClick={returnToExam}
             disabled={!canFullscreen}
+            aria-label="Trở lại chế độ toàn màn hình"
           >
             <Maximize className="h-4 w-4" />
           </Button>
@@ -899,18 +900,18 @@ export default function ExamTaking() {
         onReturnToExam={returnToExam}
       />
 
-      <div className="flex pt-14 min-h-screen">
+      <div className="flex min-h-screen pt-16">
         {/* ── Navigator Sidebar ────────────────────────────────── */}
-        <aside className={`fixed left-0 top-14 bottom-0 w-60 bg-card border-r flex-col p-4 overflow-y-auto hidden ${isPreviewMode ? "md:hidden" : "md:flex"}`}>
+        <aside className={`fixed bottom-0 left-0 top-16 w-60 overflow-y-auto border-r bg-card p-4 ${isPreviewMode ? "hidden" : "hidden md:flex md:flex-col"}`}>
           <h3 className="text-xs font-semibold text-muted-foreground uppercase mb-2">
-            Progress
+            Tiến độ
           </h3>
           <Progress
             value={(answeredCount / total) * 100}
             className="h-1.5 mb-1"
           />
           <p className="text-xs text-muted-foreground mb-3">
-            {answeredCount}/{total} answered
+            Đã trả lời {answeredCount}/{total}
           </p>
 
           <div className="grid grid-cols-4 md:grid-cols-5 gap-1 mb-4">
@@ -922,7 +923,7 @@ export default function ExamTaking() {
                 <button
                   key={qItem.id}
                   onClick={() => setCurrent(idx)}
-                  title={`Q${idx + 1}: ${typeLabel[qItem.type]}`}
+                  title={`Câu ${idx + 1}: ${typeLabel[qItem.type]}`}
                   className={[
                     "h-8 w-8 rounded text-xs font-medium border transition-all",
                     cur ? "ring-2 ring-primary ring-offset-1" : "",
@@ -944,30 +945,30 @@ export default function ExamTaking() {
           <div className="space-y-1.5 text-xs text-muted-foreground border-t pt-3 mb-4">
             <div className="flex gap-2 items-center">
               <span className="w-3 h-3 rounded bg-green-100 border border-green-300 shrink-0" />{" "}
-              Answered
+              Đã trả lời
             </div>
             <div className="flex gap-2 items-center">
               <span className="w-3 h-3 rounded bg-yellow-100 border border-yellow-300 shrink-0" />{" "}
-              Flagged
+              Đánh dấu xem lại
             </div>
             <div className="flex gap-2 items-center">
               <span className="w-3 h-3 rounded bg-secondary border shrink-0" />{" "}
-              Unanswered
+              Chưa trả lời
             </div>
           </div>
 
           <div className="grid grid-cols-3 gap-2 mb-3 text-center text-xs">
-            <div className="rounded-md border bg-green-50 text-green-700 py-2">
+            <div className="rounded-md border bg-green-500/10 py-2 text-green-700 dark:text-green-300">
               <div className="font-semibold text-sm">{answeredCount}</div>
-              <div>Answered</div>
+              <div>Đã trả lời</div>
             </div>
-            <div className="rounded-md border bg-yellow-50 text-yellow-700 py-2">
+            <div className="rounded-md border bg-yellow-500/10 py-2 text-yellow-700 dark:text-yellow-300">
               <div className="font-semibold text-sm">{flaggedCount}</div>
-              <div>Flagged</div>
+              <div>Đánh dấu</div>
             </div>
-            <div className="rounded-md border bg-red-50 text-red-700 py-2">
+            <div className="rounded-md border bg-red-500/10 py-2 text-red-700 dark:text-red-300">
               <div className="font-semibold text-sm">{total - answeredCount}</div>
-              <div>Unanswered</div>
+              <div>Chưa trả lời</div>
             </div>
           </div>
 
@@ -977,29 +978,29 @@ export default function ExamTaking() {
               onClick={isPreviewMode ? leavePreview : goToPreview}
             >
               <Send className="h-4 w-4" />
-              {isPreviewMode ? "Back to Questions" : "Finish and Preview"}
+              {isPreviewMode ? "Quay lại câu hỏi" : "Kiểm tra trước khi nộp"}
             </Button>
           </div>
         </aside>
 
         {/* ── Main Question Area ────────────────────────────────── */}
-        <main className={`${isPreviewMode ? "ml-0" : "md:ml-60"} flex-1 p-4 sm:p-6 flex justify-center`}>
+        <main id="main-content" className={`${isPreviewMode ? "ml-0" : "md:ml-60"} flex min-w-0 flex-1 justify-center p-4 sm:p-6`}>
           <div className={`w-full ${isPreviewMode ? "max-w-7xl" : "max-w-3xl"}`}>
             {isPreviewMode ? (
-              <Card className="overflow-hidden border-slate-200 bg-white shadow-medium">
-                <CardHeader className="border-b border-slate-100 bg-slate-50/80 pb-5">
+              <Card className="overflow-hidden shadow-medium">
+                <CardHeader className="border-b border-border bg-muted/30 pb-5">
                   <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                     <div>
-                      <h2 className="text-2xl font-semibold text-slate-900">
-                        Preview Mode
+                      <h2 className="text-2xl font-semibold text-foreground">
+                        Kiểm tra bài làm
                       </h2>
                       <p className="mt-2 text-sm text-muted-foreground">
-                        Review your selected answers before returning to the exam.
+                        Xem lại các đáp án đã chọn trước khi nộp bài.
                       </p>
                     </div>
                     <Button variant="outline" onClick={leavePreview}>
                       <ChevronLeft className="mr-2 h-4 w-4" />
-                      Back to Questions
+                      Quay lại câu hỏi
                     </Button>
                   </div>
                 </CardHeader>
@@ -1007,15 +1008,15 @@ export default function ExamTaking() {
                   {questions.map((item, idx) => {
                     const answered = isAnswered(item, answers);
                     const isFlagged = Boolean(flagged[item.id]);
-                    const displayTitle = item.title.trim() || `Question ${idx + 1}`;
+                    const displayTitle = item.title.trim() || `Câu ${idx + 1}`;
                     return (
                       <div
                         key={item.id}
-                        className="rounded-xl border border-slate-200 bg-slate-50/60 p-5 transition-colors hover:border-primary/30 hover:bg-white"
+                        className="rounded-xl border border-border bg-muted/25 p-5 transition-colors hover:border-primary/30 hover:bg-muted/40"
                       >
                         <div className="flex items-center justify-between gap-2 flex-wrap">
-                          <div className="text-base font-semibold text-slate-900">
-                            Q{idx + 1}. {displayTitle}
+                          <div className="text-base font-semibold text-foreground">
+                            Câu {idx + 1}. {displayTitle}
                           </div>
                           <div className="flex items-center gap-2">
                             <span
@@ -1025,25 +1026,25 @@ export default function ExamTaking() {
                             </span>
                             {isFlagged && (
                               <StatusBadge status="flagged" domain="submission">
-                                Flagged
+                                Đánh dấu xem lại
                               </StatusBadge>
                             )}
                             {!answered && (
-                              <StatusBadge tone="warning">Unanswered</StatusBadge>
+                              <StatusBadge tone="warning">Chưa trả lời</StatusBadge>
                             )}
                           </div>
                         </div>
                         {item.type === "multi-choice" && (
                           <div className="mt-3 inline-flex items-center gap-2 rounded-full border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-violet-800">
                             <CheckCircle2 className="h-3.5 w-3.5" />
-                            Select all that apply
+                            Chọn tất cả đáp án phù hợp
                           </div>
                         )}
-                        <div className="mt-4 rounded-lg border border-slate-200 bg-white p-4">
+                        <div className="mt-4 rounded-lg border border-border bg-card p-4">
                           <p className="text-xs font-medium uppercase text-muted-foreground">
-                            Your Answer
+                            Câu trả lời của bạn
                           </p>
-                          <p className="mt-2 text-base text-slate-900">
+                          <p className="mt-2 text-base text-foreground">
                             {renderAnswerPreview(item)}
                           </p>
                         </div>
@@ -1051,16 +1052,16 @@ export default function ExamTaking() {
                     );
                   })}
 
-                  <div className="rounded-lg border border-amber-200 bg-amber-50 text-amber-800 p-3 text-sm">
-                    Please review all information carefully before submitting your exam.
+                  <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-200">
+                    Vui lòng kiểm tra kỹ tất cả câu trả lời trước khi nộp bài.
                   </div>
 
                   <div className="flex items-center justify-between gap-3">
                     <Button variant="outline" onClick={leavePreview}>
-                      Continue Editing
+                      Tiếp tục chỉnh sửa
                     </Button>
                     <Button variant="destructive" onClick={doSubmit} disabled={isSubmitting}>
-                      {isSubmitting ? "Submitting…" : "Submit Exam"}
+                      {isSubmitting ? "Đang nộp bài..." : "Nộp bài"}
                     </Button>
                   </div>
                 </CardContent>
@@ -1079,17 +1080,17 @@ export default function ExamTaking() {
                         {typeLabel[q.type]}
                       </span>
                       <span className="text-[11px] text-muted-foreground">
-                        {q.points} pts
+                        {q.points} điểm
                       </span>
                     </div>
                     {flagged[q.id] && (
                       <StatusBadge status="flagged" domain="submission">
-                        Flagged
+                        Đánh dấu xem lại
                       </StatusBadge>
                     )}
                   </div>
                   <h2 className="text-lg font-semibold mt-2">
-                    {q.title.trim() || `Question ${current + 1}`}
+                    {q.title.trim() || `Câu ${current + 1}`}
                   </h2>
                 </CardHeader>
 
@@ -1098,7 +1099,7 @@ export default function ExamTaking() {
                     <div className="mb-4 flex items-center gap-3 p-3 rounded-lg bg-secondary/50 border">
                       <Volume2 className="h-5 w-5 text-primary shrink-0" />
                       <span className="text-sm flex-1">
-                        Audio resource attached
+                        Có tệp âm thanh đính kèm
                       </span>
                       <Button
                         size="sm"
@@ -1113,7 +1114,7 @@ export default function ExamTaking() {
                             setIsAudioPlaying(false);
                         }}
                       >
-                        {isAudioPlaying ? "Playing…" : "Play Audio"}
+                        {isAudioPlaying ? "Đang phát..." : "Phát âm thanh"}
                       </Button>
                     </div>
                   )}
@@ -1128,7 +1129,7 @@ export default function ExamTaking() {
                       className="gap-1.5"
                     >
                       <Flag className="h-3.5 w-3.5" />
-                      {flagged[q.id] ? "Unflag" : "Flag for Review"}
+                      {flagged[q.id] ? "Bỏ đánh dấu" : "Đánh dấu xem lại"}
                     </Button>
                     {q.type !== "ordering" && (
                       <Button
@@ -1137,7 +1138,7 @@ export default function ExamTaking() {
                         onClick={handleClear}
                         className="gap-1.5"
                       >
-                        <X className="h-3.5 w-3.5" /> Clear Answer
+                        <X className="h-3.5 w-3.5" /> Xóa câu trả lời
                       </Button>
                     )}
                   </div>
@@ -1151,7 +1152,7 @@ export default function ExamTaking() {
                       disabled={current === 0}
                       className="gap-2"
                     >
-                      <ChevronLeft className="h-4 w-4" /> Previous
+                      <ChevronLeft className="h-4 w-4" /> Câu trước
                     </Button>
                     <Button
                       onClick={() =>
@@ -1161,7 +1162,7 @@ export default function ExamTaking() {
                       }
                       className="gap-2"
                     >
-                      Next <ChevronRight className="h-4 w-4" />
+                      Câu tiếp <ChevronRight className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardContent>

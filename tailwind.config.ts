@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import tailwindcssAnimate from "tailwindcss-animate";
 
 export default {
   darkMode: ["class"],
@@ -77,7 +78,7 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ['"Source Sans 3"', "system-ui", "sans-serif"],
+        sans: ["var(--font-be-vietnam-pro)", "system-ui", "sans-serif"],
       },
       fontSize: {
         'xs': '12px',
@@ -92,9 +93,9 @@ export default {
         '6xl': '48px',
       },
       boxShadow: {
-        'soft': '0 2px 8px -2px rgba(0,0,0,0.05), 0 4px 20px -4px rgba(0,0,0,0.05)',
-        'medium': '0 4px 12px -2px rgba(0,0,0,0.08), 0 8px 32px -4px rgba(0,0,0,0.06)',
-        'heavy': '0 8px 24px -4px rgba(0,0,0,0.12), 0 16px 48px -8px rgba(0,0,0,0.08)',
+        'soft': '0 1px 2px hsl(215 32% 17% / 0.04), 0 8px 24px -16px hsl(195 72% 22% / 0.16)',
+        'medium': '0 2px 6px hsl(215 32% 17% / 0.06), 0 18px 42px -24px hsl(195 72% 22% / 0.28)',
+        'heavy': '0 4px 12px hsl(215 32% 17% / 0.08), 0 28px 64px -28px hsl(195 72% 18% / 0.34)',
         'glow-blue': '0 0 32px -8px hsl(221 83% 53% / 0.3)',
         'glow-violet': '0 0 32px -8px hsl(262 83% 58% / 0.3)',
         'inner-glow': 'inset 0 1px 0 0 rgba(255,255,255,0.1)',
@@ -164,5 +165,5 @@ export default {
       },
     },
   },
-  plugins: [require("tailwindcss-animate")],
+  plugins: [tailwindcssAnimate],
 } satisfies Config;

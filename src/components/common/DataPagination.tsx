@@ -41,7 +41,7 @@ export function DataPagination({
   totalPages,
   totalItems,
   onPageChange,
-  itemLabel = "items",
+  itemLabel = "mục",
   className,
   syncUrl = true,
   urlParamKey = "page",
@@ -118,13 +118,13 @@ export function DataPagination({
   return (
     <div
       className={cn(
-        "flex items-center justify-between px-4 py-4 border-t border-border",
+        "flex flex-col gap-3 border-t border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between",
         className,
       )}
     >
       {/* Left: page info */}
       <p className="text-sm text-muted-foreground whitespace-nowrap">
-        Page {currentPage} / {effectiveTotalPages}
+        Trang {currentPage} / {effectiveTotalPages}
         {totalItems !== undefined && (
           <span>
             {" "}
@@ -143,7 +143,7 @@ export function DataPagination({
           className="gap-1"
         >
           <ChevronLeft className="h-4 w-4" />
-          Previous
+          Trước
         </Button>
 
         {/* Page jump input */}
@@ -168,7 +168,7 @@ export function DataPagination({
           onClick={() => changePage(currentPage + 1)}
           className="gap-1"
         >
-          Next
+          Sau
           <ChevronRight className="h-4 w-4" />
         </Button>
       </div>

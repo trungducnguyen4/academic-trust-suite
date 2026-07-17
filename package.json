@@ -8,6 +8,7 @@
     "build": "next build",
     "build:dev": "next build",
     "lint": "eslint .",
+    "lint:frontend": "eslint src tailwind.config.ts",
     "preview": "next start",
     "test": "vitest run",
     "test:watch": "vitest"
